@@ -19,6 +19,9 @@ export const task: EvalTask = {
   check(_dir, result) {
     const text = result.finalText ?? "";
     if (!text.includes(TARGET)) return fail(`final answer does not name ${TARGET}: ${JSON.stringify(text.slice(0, 120))}`);
+    // Listing every file would otherwise pass.
+    const others = FILES.filter((f) => f !== TARGET && text.includes(f));
+    if (others.length) return fail(`final answer also names other files: ${others.join(", ")}`);
     return pass();
   },
 };

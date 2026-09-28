@@ -20,7 +20,27 @@ export function requireString(args: Record<string, unknown>, key: string): strin
   return value;
 }
 
+export const TRUNCATE_HEAD = 6_000;
+export const TRUNCATE_TAIL = 2_000;
+
+/** Number of lines, not counting an empty line after a trailing newline. */
+const countLines = (s: string) => (s === "" ? 0 : s.split("\n").length - (s.endsWith("\n") ? 1 : 0));
+
+/**
+ * Keep the first TRUNCATE_HEAD and last TRUNCATE_TAIL characters of long output, with a
+ * marker in between saying how much was cut. The tail often holds the interesting part
+ * (summaries, errors, the end of a listing) that a head-only cut would lose.
+ */
 export function truncate(s: string, max = MAX_OUTPUT): string {
   if (s.length <= max) return s;
-  return `${s.slice(0, max)}\n[truncated, original length ${s.length}]`;
+  const head = s.slice(0, TRUNCATE_HEAD);
+  const tail = s.slice(-TRUNCATE_TAIL);
+  const omittedChars = s.length - TRUNCATE_HEAD - TRUNCATE_TAIL;
+  const totalLines = countLines(s);
+  // Lines with no character visible in the head or the tail (lines cut in half count as visible).
+  const omittedLines = Math.max(0, totalLines - countLines(head) - countLines(tail));
+  const marker =
+    `[... truncated: ${omittedChars.toLocaleString("en-US")} chars / ` +
+    `${omittedLines.toLocaleString("en-US")} lines omitted (${totalLines.toLocaleString("en-US")} lines total) ...]`;
+  return `${head}\n${marker}\n${tail}`;
 }

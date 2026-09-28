@@ -41,6 +41,13 @@ export const task: EvalTask = {
     if (run.status !== 0) {
       return fail(`node check.js exited ${run.status}: ${(run.stderr || run.stdout).split("\n").find((l) => l.trim()) ?? ""}`);
     }
+    // Hidden cases the agent never saw, so hard-coding check.js's values does not pass.
+    const hidden = spawnSync(
+      process.execPath,
+      ["-e", 'const {sumTo}=require("./sum.js");for(const[n,e]of[[3,6],[7,28],[100,5050],[2,3]])if(sumTo(n)!==e)throw new Error(`sumTo(${n}) returned ${sumTo(n)}, expected ${e}`)'],
+      { cwd: dir, encoding: "utf8", timeout: 10_000 },
+    );
+    if (hidden.status !== 0) return fail(`hidden cases failed: ${hidden.stderr.split("\n").find((l) => l.startsWith("Error")) ?? hidden.stderr.slice(0, 120)}`);
     return pass();
   },
 };

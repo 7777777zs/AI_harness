@@ -13,6 +13,8 @@ export const task: EvalTask = {
       if (!isDir(dir, d)) return fail(`directory ${d} is missing`);
     }
     if (!exists(dir, "project/README.md")) return fail("project/README.md is missing");
+    // "empty file": allow a stray newline/space from shell redirection, but no content.
+    if (fs.readFileSync(`${dir}/project/README.md`, "utf8").trim() !== "") return fail("project/README.md is not empty");
     const log = fs.readFileSync(result.logFile, "utf8");
     if (!log.includes('"name":"run_shell"')) return fail("run_shell was never used");
     if (!/utils/.test(result.finalText ?? "")) return fail("final answer does not report the structure");

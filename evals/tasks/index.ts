@@ -9,6 +9,8 @@ import { task as missingFile } from "./07-missing-file.js";
 import { task as pathEscape } from "./08-path-escape.js";
 import { task as longContext } from "./09-long-context.js";
 import { task as shellTree } from "./10-shell-tree.js";
+import { task as multiFileSummary } from "./11-multi-file-summary.js";
+import { task as trustworthySummary } from "./12-trustworthy-summary.js";
 
 export const tasks: EvalTask[] = [
   createFile,
@@ -21,4 +23,6 @@ export const tasks: EvalTask[] = [
   pathEscape,
   longContext,
   shellTree,
+  multiFileSummary,
+  trustworthySummary,
 ];

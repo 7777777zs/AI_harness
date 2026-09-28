@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { runAgent } from "../src/agent.js";
+import { loadEnv } from "../src/config.js";
 import { missingEnv } from "../src/llm/index.js";
 import { tasks } from "./tasks/index.js";
 import type { CheckResult, EvalTask } from "./types.js";
@@ -20,6 +21,13 @@ interface RunRecord {
   outputTokens: number;
   durationMs: number;
   compactions: number;
+  level2Accepted: number;
+  level2Rejected: number;
+  repeatedCalls: number;
+  missingFileReads: number;
+  descriptionRejected: number;
+  /** Total harness nudges (note-taking + missing-file + repeat). */
+  nudges: number;
   logFile?: string;
   sandbox?: string;
 }
@@ -32,6 +40,12 @@ interface TaskSummary {
   avgTokens: number;
   avgSeconds: number;
   avgCompactions: number;
+  avgRepeatedCalls: number;
+  level2Accepted: number;
+  level2Rejected: number;
+  missingFileReads: number;
+  descriptionRejected: number;
+  nudges: number;
   failures: string[];
 }
 
@@ -57,11 +71,7 @@ function positiveInt(name: string, raw: string): number {
   return n;
 }
 
-try {
-  process.loadEnvFile();
-} catch {
-  // No .env file: rely on the real environment.
-}
+loadEnv();
 const missing = missingEnv();
 if (missing) {
   console.error(`Error: ${missing}`);
@@ -93,6 +103,12 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
     outputTokens: 0,
     durationMs: 0,
     compactions: 0,
+    level2Accepted: 0,
+    level2Rejected: 0,
+    repeatedCalls: 0,
+    missingFileReads: 0,
+    descriptionRejected: 0,
+    nudges: 0,
     ...(args.keep && { sandbox: dir }),
   };
   try {
@@ -121,6 +137,12 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       outputTokens: result.usage.outputTokens,
       durationMs: result.durationMs,
       compactions: result.compactions,
+      level2Accepted: result.compactionStats.level2Accepted,
+      level2Rejected: result.compactionStats.level2Rejected,
+      repeatedCalls: result.repeatedCalls,
+      missingFileReads: result.missingFileReads,
+      descriptionRejected: result.compactionStats.descriptionRejected,
+      nudges: result.nudges.notes + result.nudges.missingFile + result.nudges.repeat,
       logFile: path.relative(process.cwd(), result.logFile),
     });
 
@@ -159,13 +181,19 @@ function summarize(records: RunRecord[]): TaskSummary[] {
       avgTokens: avg((r) => r.inputTokens + r.outputTokens),
       avgSeconds: avg((r) => r.durationMs) / 1000,
       avgCompactions: avg((r) => r.compactions),
+      avgRepeatedCalls: avg((r) => r.repeatedCalls),
+      level2Accepted: rs.reduce((n, r) => n + r.level2Accepted, 0),
+      level2Rejected: rs.reduce((n, r) => n + r.level2Rejected, 0),
+      missingFileReads: rs.reduce((n, r) => n + r.missingFileReads, 0),
+      descriptionRejected: rs.reduce((n, r) => n + r.descriptionRejected, 0),
+      nudges: rs.reduce((n, r) => n + r.nudges, 0),
       failures: [...new Set(rs.filter((r) => !r.pass).map((r) => r.reason ?? "unknown"))],
     };
   });
 }
 
 function printTable(summaries: TaskSummary[]): void {
-  const header = ["task", "pass", "steps", "tokens", "secs", "compact", "failure reasons"];
+  const header = ["task", "pass", "steps", "tokens", "secs", "compact", "L2 a/r", "repeats", "missing", "desc rej", "nudges", "failure reasons"];
   const rows = summaries.map((s) => [
     s.taskId,
     `${s.passes}/${s.runs}`,
@@ -173,6 +201,11 @@ function printTable(summaries: TaskSummary[]): void {
     Math.round(s.avgTokens).toLocaleString("en-US"),
     s.avgSeconds.toFixed(1),
     s.avgCompactions.toFixed(1),
+    `${s.level2Accepted}/${s.level2Rejected}`,
+    s.avgRepeatedCalls.toFixed(1),
+    String(s.missingFileReads),
+    String(s.descriptionRejected),
+    String(s.nudges),
     s.failures.map((f) => (f.length > 70 ? f.slice(0, 70) + "…" : f)).join(" | "),
   ]);
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]!.length)));
@@ -230,6 +263,7 @@ await Promise.all(
       console.log(
         `${mark} ${r.taskId} #${r.run}  ${r.steps} steps  ${(r.inputTokens + r.outputTokens).toLocaleString("en-US")} tokens  ` +
           `${(r.durationMs / 1000).toFixed(1)}s${r.compactions ? `  ${r.compactions} compaction(s)` : ""}` +
+          `${r.repeatedCalls ? `  ${r.repeatedCalls} repeated call(s)` : ""}` +
           (r.reason ? `  — ${r.reason}` : ""),
       );
     }

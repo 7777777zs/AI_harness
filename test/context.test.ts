@@ -1,35 +1,44 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Message } from "../src/llm/types.js";
-import { compact, elideToolResults, summarizeOlder, SUMMARY_PREFIX, type Summarizer } from "../src/context/compact.js";
+import {
+  compact,
+  elideToolResults,
+  ELIDED_PREFIX,
+  summarizeOlder,
+  SUMMARY_PREFIX,
+  type Summarizer,
+} from "../src/context/compact.js";
 import { ContextTracker, estimateTokens } from "../src/context/tokens.js";
 import { splitTurns, validatePairing } from "../src/context/turns.js";
 
 const SYSTEM: Message = { role: "system", content: "system prompt" };
 const TASK: Message = { role: "user", content: "the original task" };
-const big = (tag: string) => `${tag}:` + "x".repeat(5_000);
+const big = (tag: string) => `${tag}:` + "x".repeat(5_000); // ~1,252 tokens each
 
-/** One turn group: an assistant message plus a tool result for each call. */
-function group(turn: number, calls = 1): Message[] {
+/** One turn group: an assistant message (with optional notes) plus a tool result for each call. */
+function group(turn: number, calls = 1, note?: string): Message[] {
   const ids = Array.from({ length: calls }, (_, i) => `t${turn}c${i}`);
   return [
     {
       role: "assistant",
-      content: `turn ${turn}`,
+      content: note ?? `turn ${turn}`,
       toolCalls: ids.map((id) => ({ id, name: "read_file", args: { path: `${id}.txt` } })),
     },
     ...ids.map((id): Message => ({ role: "tool", toolCallId: id, name: "read_file", content: big(id) })),
   ];
 }
 
-/** system + task + `turns` groups; alternating groups make multiple parallel calls. */
-function conversation(turns: number): Message[] {
+/** system + task + `turns` groups; even turns make 2 parallel calls. */
+function conversation(turns: number, note?: (t: number) => string): Message[] {
   const msgs: Message[] = [SYSTEM, TASK];
-  for (let t = 1; t <= turns; t++) msgs.push(...group(t, t % 2 === 0 ? 2 : 1));
+  for (let t = 1; t <= turns; t++) msgs.push(...group(t, t % 2 === 0 ? 2 : 1, note?.(t)));
   return msgs;
 }
 
-const lastGroups = (msgs: Message[], n: number) => splitTurns(msgs, n).recent;
+/** Tool results whose content is still the original. */
+const fullIds = (msgs: Message[]) =>
+  msgs.filter((m): m is Extract<Message, { role: "tool" }> => m.role === "tool" && !m.content.startsWith(ELIDED_PREFIX)).map((m) => m.toolCallId);
 
 test("validatePairing accepts valid conversations and rejects broken ones", () => {
   const msgs = conversation(5);
@@ -40,9 +49,9 @@ test("validatePairing accepts valid conversations and rejects broken ones", () =
   assert.match(validatePairing(stray)!, /no matching tool call/);
 });
 
-test("Level 1 keeps every tool call/result pair and never adds or removes messages", () => {
+test("Level 1 keeps every tool call/result pair and never adds or removes messages", async () => {
   const msgs = conversation(6);
-  const { messages, elided } = elideToolResults(msgs, 3);
+  const { messages, elided } = await elideToolResults(msgs, { budgetTokens: 5_100 });
   assert.equal(validatePairing(messages), null);
   assert.equal(messages.length, msgs.length);
   messages.forEach((m, i) => {
@@ -50,23 +59,25 @@ test("Level 1 keeps every tool call/result pair and never adds or removes messag
     assert.equal(m.role, orig.role);
     if (m.role === "tool" && orig.role === "tool") assert.equal(m.toolCallId, orig.toolCallId);
   });
-  // Turns 1-3 are old: 1 + 2 + 1 tool results.
-  assert.equal(elided, 4);
+  // Kept by budget: t6c0, t6c1 (unseen), t5c0, t4c1 = ~5,008 tokens. Elided: t4c0, t3c0, t2c0, t2c1, t1c0.
+  assert.equal(elided, 5);
 });
 
-test("Level 1 leaves the most recent 3 turns untouched and elides older results", () => {
+test("Level 1 keeps the newest results within budget and elides everything older", async () => {
   const msgs = conversation(6);
-  const { messages } = elideToolResults(msgs, 3);
-  assert.deepEqual(lastGroups(messages, 3), lastGroups(msgs, 3));
-  const old = splitTurns(messages, 3).middle.filter((m) => m.role === "tool");
-  assert.ok(old.length > 0);
-  for (const m of old) assert.match(m.content, /^\[Tool result elided to save context: read_file, 5,\d{3} chars\]$/);
+  const { messages } = await elideToolResults(msgs, { budgetTokens: 5_100 });
+  assert.deepEqual(fullIds(messages), ["t4c1", "t5c0", "t6c0", "t6c1"]);
+  for (const m of messages) {
+    if (m.role === "tool" && !fullIds(messages).includes(m.toolCallId)) {
+      assert.match(m.content, /^\[Elided: read_file \(5,00\d chars\)\. This is a lossy summary/);
+    }
+  }
 });
 
-test("Level 1 is idempotent and does not touch short results", () => {
+test("Level 1 is idempotent and does not touch short results", async () => {
   const msgs = conversation(5);
-  const once = elideToolResults(msgs, 3).messages;
-  const twice = elideToolResults(once, 3);
+  const once = (await elideToolResults(msgs, { budgetTokens: 3_000 })).messages;
+  const twice = await elideToolResults(once, { budgetTokens: 3_000 });
   assert.equal(twice.elided, 0);
   assert.deepEqual(twice.messages, once);
 
@@ -77,13 +88,13 @@ test("Level 1 is idempotent and does not touch short results", () => {
       { role: "tool", toolCallId: `s${t}`, name: "run_shell", content: "ok" },
     );
   }
-  assert.equal(elideToolResults(short, 3).elided, 0);
+  assert.equal((await elideToolResults(short, { budgetTokens: 0 })).elided, 0);
 });
 
 test("system prompt and original task are always kept", async () => {
   const summarize: Summarizer = async () => "summary";
   const msgs = conversation(8);
-  const l1 = elideToolResults(msgs, 3).messages;
+  const l1 = (await elideToolResults(msgs, { budgetTokens: 0 })).messages;
   assert.deepEqual(l1.slice(0, 2), [SYSTEM, TASK]);
 
   const l2 = (await summarizeOlder(l1, summarize, 3))!;
@@ -137,7 +148,7 @@ test("compact stops after Level 1 when that is enough", async () => {
   let called = false;
   const summarize: Summarizer = async () => ((called = true), "s");
   const current = estimateTokens(msgs);
-  // Budget sits between the Level 1 result and the current size.
+  // Threshold budget sits between the Level 1 result and the current size.
   const r = await compact(msgs, { currentTokens: current, limit: current, threshold: 0.9, summarize });
   assert.deepEqual(r.events.map((e) => e.level), [1]);
   assert.equal(called, false);
@@ -145,20 +156,27 @@ test("compact stops after Level 1 when that is enough", async () => {
   assert.equal(validatePairing(r.messages), null);
 });
 
+// Old turns carry ~1,500-char notes, so the span stays above Level 2's 1,000-token minimum after Level 1.
+const withNotes = (turns: number) => conversation(turns, (t) => `notes for turn ${t}: ` + "n".repeat(1_500));
+
 test("compact escalates to Level 2 when Level 1 is not enough", async () => {
-  const msgs = conversation(8);
+  const msgs = withNotes(8);
   const summarize: Summarizer = async () => "short summary";
   const current = estimateTokens(msgs);
   const r = await compact(msgs, { currentTokens: current, limit: 100, threshold: 0.7, summarize });
   assert.deepEqual(r.events.map((e) => e.level), [1, 2]);
+  assert.equal(r.level2.status, "accepted");
   assert.equal(validatePairing(r.messages), null);
   assert.deepEqual(r.messages.slice(0, 2), [SYSTEM, TASK]);
-  assert.deepEqual(lastGroups(r.messages, 3), lastGroups(msgs, 3));
+  // The last 3 turn groups are kept as messages (Level 1 may have elided their older results).
+  const recentShape = (ms: Message[]) => splitTurns(ms, 3).recent.map((m) => (m.role === "tool" ? m.toolCallId : m.role));
+  assert.deepEqual(recentShape(r.messages), recentShape(msgs));
+  assert.deepEqual(r.messages.at(-1), msgs.at(-1), "the newest result is untouched");
   for (const e of r.events) assert.ok(e.afterTokens < e.beforeTokens);
 });
 
 test("compact keeps the Level 1 result if the summarizer fails", async () => {
-  const msgs = conversation(8);
+  const msgs = withNotes(8);
   const summarize: Summarizer = async () => {
     throw new Error("boom");
   };

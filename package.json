@@ -9,16 +9,19 @@
   },
   "scripts": {
     "start": "tsx src/index.ts",
-    "test": "node --import tsx --test test/context.test.ts test/agent.test.ts",
+    "test": "node --import tsx --import ./test/setup.ts --test test/context.test.ts test/compaction.test.ts test/trust.test.ts test/agent.test.ts test/security.test.ts test/recovery.test.ts test/openai-adapter.test.ts",
     "eval": "tsx evals/run.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "openai": "^5.0.0"
+    "openai": "^5.0.0",
+    "tsx": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "tsx": "^4.0.0",
     "typescript": "^5.0.0"
+  },
+  "bin": {
+    "harness": "bin/harness.js"
   }
 }

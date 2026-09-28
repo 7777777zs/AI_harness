@@ -3,9 +3,10 @@ import { fail, pass, read, write } from "../helpers.js";
 
 const LINE_COUNT = 137;
 const WORDS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf"];
+// No digits in the fixture: the count can't be copied from a line label like "record 137".
 const CONTENT = Array.from(
   { length: LINE_COUNT },
-  (_, i) => `record ${i + 1}: ${WORDS[i % WORDS.length]} ${WORDS[(i * 3) % WORDS.length]}`,
+  (_, i) => `${WORDS[i % WORDS.length]} ${WORDS[(i * 3) % WORDS.length]} ${WORDS[(i * 5 + 1) % WORDS.length]}`,
 ).join("\n") + "\n";
 
 export const task: EvalTask = {
@@ -21,6 +22,8 @@ export const task: EvalTask = {
     if (!new RegExp(`\\b${LINE_COUNT}\\b`).test(text)) {
       return fail(`final answer does not contain ${LINE_COUNT}: ${JSON.stringify(text.slice(0, 120))}`);
     }
+    // Hedged answers ("136 or 137", "137 or 138") are not a count.
+    if (/\b(136|138)\b/.test(text)) return fail(`final answer also mentions an off-by-one count: ${JSON.stringify(text.slice(0, 120))}`);
     return pass();
   },
 };
