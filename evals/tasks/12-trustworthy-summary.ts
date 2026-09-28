@@ -198,8 +198,9 @@ export const task: EvalTask = {
     const problems: string[] = [];
 
     // 1. The InsightAgent methods, looked for in the text around the first mention of the class.
-    const at = text.indexOf("InsightAgent");
-    const window = at === -1 ? "" : text.slice(at, at + 1_200);
+    // Text following each mention of the class (answers often describe files first and list
+    // the methods further down, after a later "InsightAgent class methods:" heading).
+    const window = [...text.matchAll(/InsightAgent/g)].map((m) => text.slice(m.index!, m.index! + 1_500)).join("\n");
     const missing = TARGET_METHODS.filter((m) => !new RegExp(`(^|[^\\w])${m}\\b`).test(window));
     if (missing.length) problems.push(`methods not listed: ${missing.join(", ")}`);
 
@@ -221,7 +222,8 @@ export const task: EvalTask = {
     const real = Object.keys(FILES);
     const bogus = pathTokens(text).filter((tok) => {
       const norm = tok.replace(/\\/g, "/").replace(/^\.\//, "");
-      return !real.includes(norm) && !real.some((r) => path.posix.basename(r) === norm) && !fs.existsSync(path.join(dir, norm));
+      // Fine if it is a real path or a suffix of one ("tests/test_db.py", "test_db.py").
+      return !real.some((r) => r === norm || r.endsWith(`/${norm}`)) && !fs.existsSync(path.join(dir, norm));
     });
     if (bogus.length) problems.push(`references non-existent files: ${[...new Set(bogus)].join(", ")}`);
 

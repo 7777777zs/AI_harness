@@ -66,6 +66,8 @@ export interface CompactOptions {
   /** Compact regardless of the threshold (after a context-length error). */
   force?: boolean;
   keepTurns?: number;
+  /** Harness-computed remaining work (e.g. unread files), appended to Level 2 summaries. */
+  remainingWork?: () => string;
 }
 
 export interface CompactResult {
@@ -200,6 +202,15 @@ export async function elideToolResults(
 
   let describeError: string | undefined;
   const rejected: { id: string; token: string; description: string }[] = [];
+  const contentKey = (t: (typeof targets)[number]) =>
+    store.contentKey(t.message.name, store.label(t.message.toolCallId), t.original);
+  // Same tool, same label, same content as an earlier result: reuse its description.
+  for (const t of targets) {
+    const cached = store.descriptionsByContent.get(contentKey(t));
+    if (!t.listing && cached !== undefined && !store.descriptions.has(t.message.toolCallId)) {
+      store.descriptions.set(t.message.toolCallId, cached);
+    }
+  }
   const missing = targets.filter((t) => !t.listing && !store.descriptions.has(t.message.toolCallId));
   if (opts.describe && missing.length > 0) {
     try {
@@ -220,6 +231,7 @@ export async function elideToolResults(
         const token = unknownIdentifier(d, t.original, store.label(id));
         if (token) rejected.push({ id, token, description: d });
         store.descriptions.set(id, token ? "" : d);
+        store.descriptionsByContent.set(contentKey(t), token ? "" : d);
       }
       const undescribed = missing.filter((t) => !store.descriptions.has(t.message.toolCallId)).length;
       if (undescribed > 0) describeError = `no description returned for ${undescribed} result(s)`;
@@ -262,14 +274,13 @@ export async function summarizeOlder(
   summarize: Summarizer,
   keepTurns = KEEP_TURNS,
   store?: ContextStore,
+  remainingWork?: () => string,
 ) {
   const { pinned, middle, recent } = splitTurns(messages, keepTurns);
   if (!middle.some((m) => m.role === "assistant")) return null;
-  const restored = middle.map((m): Message => {
-    const original = m.role === "tool" ? store?.originals.get(m.toolCallId) : undefined;
-    return original ? { ...m, content: original.content } : m;
-  });
-  const text = await summarize(restored, pinned[1]?.content ?? "");
+  const input = middle.map((m): Message => (m.role === "tool" ? { ...m, content: level2Input(m, store) } : m));
+  const raw = await summarize(input, pinned[1]?.content ?? "");
+  const text = sanitizeSummary(raw, remainingWork?.());
   const summary: Message = { role: "user", content: `${SUMMARY_PREFIX}\n${text}` };
   return {
     messages: [...pinned, summary, ...recent],
@@ -277,7 +288,52 @@ export async function summarizeOlder(
     summary: text,
     spanTokens: estimateTokens(middle),
     summaryTokens: estimateTokens([summary]),
+    inputTokens: estimateTokens(input),
   };
+}
+
+/**
+ * What Level 2 sees for a tool result: a Level 1 placeholder that carries information
+ * (symbols, a description, or paths) is passed as is, which keeps Level 2 input small.
+ * Only results never described (not elided, or a plain placeholder) use the original.
+ */
+export function level2Input(m: Extract<Message, { role: "tool" }>, store?: ContextStore): string {
+  if (m.content.startsWith(ELIDED_PREFIX)) {
+    if (/\. (?:Symbols|Description): |\. Paths \(\d+\)/.test(m.content)) return m.content;
+    return store?.originals.get(m.toolCallId)?.content ?? m.content;
+  }
+  return m.content;
+}
+
+/** Claims the summary must never make: the agent, not the summarizer, decides when work is done. */
+const COMPLETION_CLAIM =
+  /[^.\n]*\b(?:no (?:open |outstanding |remaining |further )?(?:issues?|work|tasks?|problems?) (?:remains?|left|outstanding)|nothing (?:else )?(?:remains|is left|left to do)|(?:the )?task (?:is|has been) (?:fully |now )?(?:complete|completed|finished|done)|all (?:files|work|tasks) (?:have|has) been (?:covered|read|reviewed|completed|done)|all (?:files|work) (?:are|is) (?:covered|done|complete))\b[^.\n]*(?:[.\n]|$)/gi;
+const REMAINING_HEADING = /^[#*\s\d.)-]*remaining work\b[^\n]*$/im;
+/** A line that is only one or more file paths (optionally a bullet): the harness owns those. */
+const PATH_ONLY_LINE = /^\s*(?:[-*•]|\d+[.)])?\s*[`'"]?[\w.@-]*[\w@-][\/\\][\w.\/\\@-]*[`'"]?(?:\s*[,;]\s*[`'"]?[\w.\/\\@-]+[`'"]?)*\s*$|^\s*(?:[-*•]|\d+[.)])?\s*[`'"]?[\w@-]+\.[A-Za-z0-9]{1,8}[`'"]?(?:\s*[,;]\s*[`'"]?[\w.\/\\@-]+[`'"]?)*\s*$/;
+
+/**
+ * Enforce the Level 2 rules on a model-written summary: remove completion claims, drop
+ * file-path lists the model wrote under "Remaining work", and append the harness-computed
+ * unread-files list there instead.
+ */
+export function sanitizeSummary(text: string, harnessRemaining?: string): string {
+  let out = text.replace(COMPLETION_CLAIM, "").replace(/\n{3,}/g, "\n\n").trim();
+  const heading = REMAINING_HEADING.exec(out);
+  if (heading) {
+    const start = heading.index + heading[0].length;
+    const kept = out
+      .slice(start)
+      .split("\n")
+      .filter((line) => !PATH_ONLY_LINE.test(line))
+      .join("\n")
+      .trim();
+    out = `${out.slice(0, start).trimEnd()}${kept ? `\n${kept}` : ""}`;
+  } else {
+    out += "\n\nRemaining work:";
+  }
+  if (harnessRemaining) out += `\n${harnessRemaining}`;
+  return out;
 }
 
 /** Apply Level 1, then Level 2 if still needed. Pure except for the describer/summarizer calls. */
@@ -332,7 +388,7 @@ export async function compact(messages: Message[], opts: CompactOptions): Promis
 
   let l2;
   try {
-    l2 = await summarizeOlder(result.messages, opts.summarize, keepTurns, opts.store);
+    l2 = await summarizeOlder(result.messages, opts.summarize, keepTurns, opts.store, opts.remainingWork);
   } catch (err) {
     result.notes.push(`Level 2 summarization failed: ${err instanceof Error ? err.message : String(err)}`);
     return result;

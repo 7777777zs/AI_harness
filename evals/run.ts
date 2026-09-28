@@ -26,8 +26,12 @@ interface RunRecord {
   repeatedCalls: number;
   missingFileReads: number;
   descriptionRejected: number;
-  /** Total harness nudges (note-taking + missing-file + repeat). */
+  /** Total harness nudges (note-taking + missing-file + repeat + coverage). */
   nudges: number;
+  /** Input tokens spent on compaction calls (Level 1 descriptions + Level 2 summaries). */
+  compactionInputTokens?: number;
+  /** Listed files never read, at the end of the run. */
+  unreadAtEnd?: number;
   logFile?: string;
   sandbox?: string;
 }
@@ -142,7 +146,9 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       repeatedCalls: result.repeatedCalls,
       missingFileReads: result.missingFileReads,
       descriptionRejected: result.compactionStats.descriptionRejected,
-      nudges: result.nudges.notes + result.nudges.missingFile + result.nudges.repeat,
+      nudges: result.nudges.notes + result.nudges.missingFile + result.nudges.repeat + result.nudges.coverage,
+      compactionInputTokens: result.compactionUsage.inputTokens,
+      unreadAtEnd: result.coverage.unread.length,
       logFile: path.relative(process.cwd(), result.logFile),
     });
 

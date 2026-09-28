@@ -124,7 +124,13 @@ test("Level 2 removes only complete turn groups and keeps pairing valid", async 
   assert.equal(received[0]!.role, "assistant", "removed slice starts at a group boundary");
   assert.equal(validatePairing([SYSTEM, TASK, ...received]), null, "removed slice is made of whole groups");
 
-  assert.deepEqual(result.messages, [SYSTEM, TASK, { role: "user", content: `${SUMMARY_PREFIX}\nSUMMARY TEXT` }, ...recent]);
+  // Every summary ends with a "Remaining work" section (the harness appends its list there).
+  assert.deepEqual(result.messages, [
+    SYSTEM,
+    TASK,
+    { role: "user", content: `${SUMMARY_PREFIX}\nSUMMARY TEXT\n\nRemaining work:` },
+    ...recent,
+  ]);
   assert.equal(validatePairing(result.messages), null);
   assert.equal(result.removed, middle.length);
 });

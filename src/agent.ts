@@ -10,6 +10,7 @@ import { truncate } from "./tools/util.js";
 import { createTerminalConfirm } from "./confirm.js";
 import { logsDir } from "./config.js";
 import { compact, RECENT_BUDGET_FRACTION } from "./context/compact.js";
+import { Coverage, isWholeProjectTask } from "./context/coverage.js";
 import { ContextStore } from "./context/store.js";
 import { ContextTracker } from "./context/tokens.js";
 import { makeDescriber, makeSummarizer } from "./context/summarize.js";
@@ -38,6 +39,12 @@ export interface RunAgentOptions {
   tools?: Tool[];
   /** Suppress terminal output. */
   quiet?: boolean;
+  /**
+   * Before accepting a final answer to a whole-project task while listed files are unread,
+   * ask the model once to read them or state what it skipped. Defaults to env COVERAGE_CHECK
+   * ("on" unless set to "off").
+   */
+  coverageCheck?: boolean;
 }
 
 export interface AgentResult {
@@ -56,6 +63,10 @@ export interface AgentResult {
   missingFileReads: number;
   /** Hints the harness appended to tool results. */
   nudges: NudgeStats;
+  /** Tokens spent on compaction calls (Level 1 descriptions + Level 2 summaries); included in `usage`. */
+  compactionUsage: Usage & { calls: number };
+  /** Harness-computed file coverage at the end of the run. */
+  coverage: { known: number; read: number; unread: string[] };
   logFile: string;
 }
 
@@ -73,7 +84,13 @@ export interface NudgeStats {
   notes: number;
   missingFile: number;
   repeat: number;
+  /** Coverage check before accepting a final answer (at most once per run). */
+  coverage: number;
 }
+
+export const coverageCheckMessage = (unread: string) =>
+  `You have not read these files: ${unread}. Either read the relevant ones, or state in your final answer ` +
+  "which files/directories you did not cover.";
 
 /** Steps in a row with tool calls but no reply text before the note-taking reminder fires. */
 export const SILENT_STEPS_BEFORE_NUDGE = 3;
@@ -183,7 +200,11 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     describeFailures: 0,
     descriptionRejected: 0,
   };
-  const nudges: NudgeStats = { notes: 0, missingFile: 0, repeat: 0 };
+  const nudges: NudgeStats = { notes: 0, missingFile: 0, repeat: 0, coverage: 0 };
+  const compactionUsage = { inputTokens: 0, outputTokens: 0, calls: 0 };
+  const coverage = new Coverage(cwd);
+  const coverageCheck = opts.coverageCheck ?? process.env.COVERAGE_CHECK?.toLowerCase() !== "off";
+  let coverageChecked = false;
   const callCounts = new Map<string, number>();
   let repeatedCalls = 0;
   let missingFileReads = 0;
@@ -224,6 +245,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       repeatedCalls,
       missingFileReads,
       nudges,
+      compactionUsage,
+      coverage: { known: coverage.known.size, read: coverage.known.size - coverage.unread().length, unread: coverage.unread() },
       logFile,
     };
     log({ type: "result", ...result });
@@ -235,8 +258,18 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
 
   try {
     const client = opts.client ?? createClientFromEnv();
-    const summarize = makeSummarizer(client, addUsage);
-    const describe = makeDescriber(client, addUsage);
+    // Compaction calls count toward total usage and are also tracked (and logged) separately.
+    const compactionCall = (kind: "describe_call" | "level2_call") => (u: Usage) => {
+      addUsage(u);
+      compactionUsage.inputTokens += u.inputTokens;
+      compactionUsage.outputTokens += u.outputTokens;
+      compactionUsage.calls++;
+      log({ type: kind, step, inputTokens: u.inputTokens, outputTokens: u.outputTokens });
+    };
+    const summarize = makeSummarizer(client, compactionCall("level2_call"));
+    const describe = makeDescriber(client, compactionCall("describe_call"));
+    const remainingWork = () =>
+      coverage.known.size ? `Unread files (harness-computed): ${coverage.unreadText() || "none"}` : "";
 
     const maybeCompact = async (force: boolean) => {
       const r = await compact(messages, {
@@ -248,6 +281,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         describe,
         store,
         force,
+        remainingWork,
       });
       if (r.describeError) {
         stats.describeFailures++;
@@ -288,18 +322,26 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
 
       await maybeCompact(false);
 
+      // The known-files status is attached to each request instead of stored in history,
+      // so it is never elided or summarized and is always current.
+      const withStatus = () => {
+        const status = coverage.statusBlock(opts.task);
+        return status ? [...messages, { role: "user" as const, content: status }] : messages;
+      };
+      let request = withStatus();
       let response: LLMResponse;
       let sentCount = messages.length;
       try {
-        response = await client.chat(messages, toolDefs);
+        response = await client.chat(request, toolDefs);
       } catch (err) {
         if (!(err instanceof ContextLengthError)) throw err;
         out(c.red(`Context length exceeded; forcing compaction and retrying once.`));
         log({ type: "context_length_error", step, error: err.message });
         await maybeCompact(true);
         sentCount = messages.length;
+        request = withStatus();
         try {
-          response = await client.chat(messages, toolDefs);
+          response = await client.chat(request, toolDefs);
         } catch (retryErr) {
           if (retryErr instanceof ContextLengthError) {
             return finish("error", null, `Context length exceeded even after compaction: ${retryErr.message}`);
@@ -310,11 +352,21 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
 
       addUsage(response.usage);
       tracker.record(response.usage.inputTokens, sentCount);
-      log({ type: "step", step, request: { messages, tools: toolDefs }, response });
+      log({ type: "step", step, request: { messages: request, tools: toolDefs }, response });
 
       messages.push({ role: "assistant", content: response.text, toolCalls: response.toolCalls });
 
       if (response.toolCalls.length === 0) {
+        // Coverage check: once per run, don't accept a whole-project answer while listed files are unread.
+        const unread = coverage.unread();
+        if (coverageCheck && !coverageChecked && unread.length > 0 && isWholeProjectTask(opts.task)) {
+          coverageChecked = true;
+          nudges.coverage++;
+          out(c.yellow(`  ⚑ coverage check: ${unread.length} listed file(s) not read; asking the model once more`));
+          log({ type: "nudge", kind: "coverage", step, unread });
+          messages.push({ role: "user", content: coverageCheckMessage(coverage.unreadText()) });
+          continue;
+        }
         out(c.green("\nFinal answer:\n") + (response.text ?? "(empty response)"));
         return finish("done", response.text);
       }
@@ -329,7 +381,15 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         const count = (callCounts.get(key) ?? 0) + 1;
         callCounts.set(key, count);
 
-        let result = truncate(await executeTool(call, toolMap, ctx));
+        const raw = await executeTool(call, toolMap, ctx);
+        // Coverage uses the full output (a truncated listing would lose paths).
+        if (!raw.startsWith("Error:")) {
+          coverage.addListing(call.name, call.args, raw);
+          if (call.name === "read_file" && typeof call.args?.path === "string") {
+            coverage.markRead(call.args.path, call.args.offset !== undefined || call.args.limit !== undefined);
+          }
+        }
+        let result = truncate(raw);
         // The store keeps the result without harness hints, for descriptions and summaries.
         store.record(call.id, call.name, call.args, result);
         // Hints are appended after truncation so they are never cut off.

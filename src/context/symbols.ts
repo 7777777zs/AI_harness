@@ -41,10 +41,29 @@ function indentOf(line: string): number {
   return n;
 }
 
+/**
+ * Route from a web-framework decorator, e.g. `@app.get("/chat")` -> "GET /chat",
+ * `@bp.route("/x", methods=["POST"])` -> "POST /x". Null for other decorators.
+ */
+export function routeOf(decorator: string): string | null {
+  const m = /^@[\w.]*?\.(get|post|put|delete|patch|head|options|websocket|route|api_route)\(\s*["']([^"']*)["'](.*)$/i.exec(decorator.trim());
+  if (!m) return null;
+  const kind = m[1]!.toLowerCase();
+  const route = m[2]!;
+  if (kind === "websocket") return `WS ${route}`;
+  if (kind === "route" || kind === "api_route") {
+    const methods = /methods\s*=\s*\[([^\]]*)\]/.exec(m[3]!)?.[1]?.match(/[A-Za-z]+/g);
+    return `${methods?.length ? methods.map((x) => x.toUpperCase()).join("|") : kind === "route" ? "GET" : "ANY"} ${route}`;
+  }
+  return `${kind.toUpperCase()} ${route}`;
+}
+
 function extractPython(content: string): Symbols {
   const out: Symbols = { classes: [], functions: [] };
   // Open scopes, innermost last. Only scopes that can contain definitions we care about.
-  const scopes: { kind: "class" | "def"; indent: number; cls?: ClassSymbols }[] = [];
+  const scopes: { kind: "class" | "def"; indent: number; name: string; cls?: ClassSymbols }[] = [];
+  // Decorator lines seen directly above the next def/class, with their indentation.
+  let decorators: { indent: number; text: string }[] = [];
   let inString: string | null = null;
 
   for (const line of content.split(/\r?\n/)) {
@@ -57,20 +76,31 @@ function extractPython(content: string): Symbols {
     if (trimmed === "" || trimmed.startsWith("#")) continue;
 
     const indent = indentOf(line);
+    if (trimmed.startsWith("@")) {
+      decorators.push({ indent, text: trimmed });
+      continue;
+    }
     while (scopes.length && scopes.at(-1)!.indent >= indent) scopes.pop();
 
     const cls = /^class\s+([A-Za-z_]\w*)/.exec(trimmed);
     const fn = /^(?:async\s+)?def\s+([A-Za-z_]\w*)/.exec(trimmed);
     const inner = scopes.at(-1);
+    const own = decorators.filter((d) => d.indent === indent);
+    decorators = [];
     if (cls) {
       // Classes inside functions are local helpers; skip them (but still track the scope).
       const record: ClassSymbols | undefined = inner?.kind === "def" ? undefined : { name: cls[1]!, methods: [] };
       if (record) out.classes.push(record);
-      scopes.push({ kind: "class", indent, ...(record && { cls: record }) });
+      scopes.push({ kind: "class", indent, name: cls[1]!, ...(record && { cls: record }) });
     } else if (fn) {
-      if (!inner) out.functions.push(fn[1]!);
-      else if (inner.kind === "class" && inner.cls && !SKIP_METHODS.has(fn[1]!)) inner.cls.methods.push(fn[1]!);
-      scopes.push({ kind: "def", indent });
+      const name = fn[1]!;
+      const routes = own.map((d) => routeOf(d.text)).filter((r): r is string => r !== null);
+      const suffix = routes.length ? ` [${routes.join(", ")}]` : "";
+      if (!inner) out.functions.push(name + suffix);
+      else if (inner.kind === "class" && inner.cls && !SKIP_METHODS.has(name)) inner.cls.methods.push(name + suffix);
+      // Nested functions are skipped unless decorated (e.g. FastAPI routes inside create_app()).
+      else if (inner.kind === "def" && own.length) out.functions.push(`${inner.name} > ${name}${suffix}`);
+      scopes.push({ kind: "def", indent, name });
     }
 
     // Enter a triple-quoted string that does not close on this line.

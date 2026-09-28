@@ -9,6 +9,16 @@ const DIR_LINE =
   /^\s*\d{1,4}[\/.-]\d{1,2}[\/.-]\d{2,4}\s+\d{1,2}:\d{2}(?:\s*[AP]M)?\s+(<DIR>|<JUNCTION>|[\d,.]+)\s+(.+?)\s*$/i;
 export const LISTING_MAX_CHARS = 3_000;
 
+/**
+ * run_shell results are wrapped as "exit code: N\nstdout:\n<out>\nstderr:\n<err>"; a listing
+ * lives in stdout. Without unwrapping, "stdout:" looks like an `ls -R` directory header and
+ * every path would get a bogus "stdout/" prefix. Other content is returned unchanged.
+ */
+export function shellStdout(content: string): string {
+  const m = /^(?:exit code: -?\d+|killed: [^\n]*|error: [^\n]*)\r?\nstdout:\r?\n([\s\S]*?)\r?\nstderr:\r?\n[\s\S]*$/.exec(content);
+  return m ? m[1]! : content;
+}
+
 /** A line that is plausibly a single file or directory path. */
 function isPathLike(line: string): boolean {
   const t = line.replace(TREE_GLYPHS, "").trim();
@@ -18,7 +28,7 @@ function isPathLike(line: string): boolean {
 
 export function isListing(toolName: string, args: Record<string, unknown> | null | undefined, content: string): boolean {
   if (toolName === "run_shell" && typeof args?.command === "string" && LISTING_COMMAND.test(args.command)) return true;
-  const lines = content.split(/\r?\n/).filter((l) => l.trim());
+  const lines = shellStdout(content).split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 5) return false;
   return lines.filter(isPathLike).length / lines.length >= 0.7;
 }
@@ -30,7 +40,7 @@ export function parseListing(content: string): string[] {
   let currentDir = ""; // from `dir` "Directory of X" or `ls -R` "X:" headers
   let sawTree = false;
 
-  for (const raw of content.split(/\r?\n/)) {
+  for (const raw of shellStdout(content).split(/\r?\n/)) {
     const line = raw.replace(/\s+$/, "");
     if (!line.trim()) continue;
 

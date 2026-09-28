@@ -13,8 +13,13 @@ const MAX_DESCRIPTION_CHARS = 300;
 
 const SYSTEM_PROMPT =
   "You compress the history of an AI coding agent's session so it can continue with less context. " +
-  "Write a concise summary with these sections: Task progress, Files touched (paths and what changed), " +
-  "Key findings (facts, values, and results the agent will still need), Open issues. " +
+  "Write these sections, in this order:\n" +
+  "1. Assistant notes: the assistant's own findings and notes from its replies, kept as close to verbatim as " +
+  "the space allows. These matter more than tool output; shorten tool output first.\n" +
+  "2. Files touched: paths and what was done with them.\n" +
+  "3. Key findings from tool output that the agent will still need (facts, values, results).\n" +
+  "4. Remaining work: what is still left to do for the task. Do not list unread files here; the harness adds that list.\n" +
+  "Never state that the task is complete, that nothing remains, or that no issues remain: the agent decides that later. " +
   "Keep exact file names, identifiers, numbers and codes. Do not invent anything; only mention names " +
   "that appear verbatim in the conversation.";
 

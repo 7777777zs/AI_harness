@@ -11,6 +11,7 @@ import { task as longContext } from "./09-long-context.js";
 import { task as shellTree } from "./10-shell-tree.js";
 import { task as multiFileSummary } from "./11-multi-file-summary.js";
 import { task as trustworthySummary } from "./12-trustworthy-summary.js";
+import { task as projectOverview } from "./17-project-overview.js";
 
 export const tasks: EvalTask[] = [
   createFile,
@@ -25,4 +26,5 @@ export const tasks: EvalTask[] = [
   shellTree,
   multiFileSummary,
   trustworthySummary,
+  projectOverview,
 ];
