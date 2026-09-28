@@ -1,0 +1,24 @@
+{
+  "name": "ai-harness",
+  "version": "0.1.0",
+  "description": "Minimal AI agent harness: an LLM loop with local file and shell tools",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "node --import tsx --test test/context.test.ts test/agent.test.ts",
+    "eval": "tsx evals/run.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "openai": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
