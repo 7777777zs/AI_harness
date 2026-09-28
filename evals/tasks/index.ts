@@ -11,6 +11,10 @@ import { task as longContext } from "./09-long-context.js";
 import { task as shellTree } from "./10-shell-tree.js";
 import { task as multiFileSummary } from "./11-multi-file-summary.js";
 import { task as trustworthySummary } from "./12-trustworthy-summary.js";
+import { task as findCallSites } from "./13-find-call-sites.js";
+import { task as renameFunction } from "./14-rename-function.js";
+import { task as largeFileEdit } from "./15-large-file-edit.js";
+import { task as ignoredDirSearch } from "./16-ignored-dir-search.js";
 import { task as projectOverview } from "./17-project-overview.js";
 
 export const tasks: EvalTask[] = [
@@ -26,5 +30,9 @@ export const tasks: EvalTask[] = [
   shellTree,
   multiFileSummary,
   trustworthySummary,
+  findCallSites,
+  renameFunction,
+  largeFileEdit,
+  ignoredDirSearch,
   projectOverview,
 ];
