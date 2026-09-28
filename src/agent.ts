@@ -221,10 +221,17 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         "Use the provided tools to inspect and change files or run commands. " +
         "All file paths must be relative to the working directory; paths outside it are rejected. " +
         "If a tool returns an error or the user denies an action, adapt your approach. " +
+        "Use the dedicated tools instead of run_shell to explore and edit code: list_dir for the project structure " +
+        "(it skips .gitignore'd paths, .git, node_modules, virtualenvs, dist and build), glob to find files by name " +
+        "(e.g. **/*.py), grep to find definitions and usages (results are path:line: text), and read_file with offset " +
+        "and limit for the relevant part of a large file. Change existing files with edit_file: old_str must match " +
+        "exactly and be unique, so include a few surrounding lines. Use write_file only for new files or complete " +
+        "rewrites, and run_shell for running programs, tests and builds, not for listing or searching files. " +
+        "Tool output paths are relative to the working directory and use forward slashes. " +
         "When reading multiple files, briefly write down the key findings for each file in your reply text before moving on, " +
         "since old tool results may be removed from context. " +
-        "To list project files, prefer `git ls-files` (or listing specific subdirectories) over recursive listings " +
-        "that include .git, virtualenvs, or node_modules. " +
+        'A "[Harness status]" message lists the project files known from your listings and which ones you have not read yet; ' +
+        "use it instead of listing the files again. " +
         "If you could not cover everything the task asked for (e.g. files or directories you did not read), " +
         "say so explicitly in your final answer and list what was skipped. " +
         "When the task is complete, reply with a concise final answer and no tool calls.",

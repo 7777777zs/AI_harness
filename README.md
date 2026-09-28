@@ -1,6 +1,18 @@
 # AI Harness (MVP)
 
-A minimal CLI agent. You give it a task. It calls an OpenAI model that can use three local tools: `read_file`, `write_file`, and `run_shell`. The harness runs each tool the model asks for, sends the result back, and repeats until the model gives a final answer (max 20 steps).
+A minimal CLI agent. You give it a task. It calls an OpenAI model that can use local tools. The harness runs each tool the model asks for, sends the result back, and repeats until the model gives a final answer (max 20 steps).
+
+| Tool | What it does | Confirmation |
+|---|---|---|
+| `read_file` | Read a file; optional `offset`/`limit` for a numbered line range | no |
+| `list_dir` | Directory tree (`depth` 1–5) with sizes | no |
+| `glob` | Find files by pattern, e.g. `**/*.py` | no |
+| `grep` | Regex search, `path:line: text`, optional `glob` filter and context lines | no |
+| `edit_file` | Exact, unique `old_str` → `new_str` replacement (or `replace_all`), shows a diff | yes |
+| `write_file` | Create or overwrite a file | yes |
+| `run_shell` | Run a command (30 s timeout) | yes |
+
+`list_dir`, `glob` and `grep` are implemented in Node, so they behave the same on Windows, macOS and Linux. They respect `.gitignore` and always skip `.git`, `node_modules`, `.venv`, `venv`, `__pycache__`, `dist` and `build`. All tool paths are relative to the working directory and use forward slashes.
 
 ## Install
 
@@ -53,12 +65,12 @@ Type-check: `npm run typecheck` (same as `npx tsc --noEmit`).
 
 ## Safety model
 
-- **Path restriction:** `read_file` and `write_file` resolve every path against the working directory and reject anything outside it.
-- **Confirmation:** `write_file` and `run_shell` show what they are about to do and wait for `y`. Any other input (or a non-interactive stdin) sends `User denied this action` to the model.
+- **Path restriction:** every file tool resolves paths against the working directory and rejects anything outside it. Symlinks and Windows junctions are resolved too, so a link inside the working directory can't be used to reach files outside it.
+- **Confirmation:** `edit_file`, `write_file` and `run_shell` show what they are about to do and wait for `y`. Any other input (or a non-interactive stdin) sends `User denied this action` to the model.
 - **Shell caveat:** `run_shell` starts in the working directory, but a shell command can still reach any path. The confirmation prompt is the only safeguard, so read commands before approving.
   - It uses `cmd.exe` on Windows and `/bin/sh` elsewhere.
   - Commands time out after 30 s. On Windows, processes the command itself started may keep running after the timeout.
-- **Output limit:** Tool output over 10,000 characters is cut off, with a `[truncated, original length N]` note added.
+- **Output limit:** tool output over 10,000 characters keeps the first 6,000 and last 2,000 characters, with a `[... truncated: N chars / M lines omitted ...]` marker in between.
 - **Errors don't crash the agent:** tool errors, invalid JSON arguments, and unknown tool names go back to the model as `Error: ...` strings so it can recover.
 
 ## Architecture

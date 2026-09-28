@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "tsx src/index.ts",
-    "test": "node --import tsx --import ./test/setup.ts --test test/context.test.ts test/compaction.test.ts test/trust.test.ts test/coverage.test.ts test/agent.test.ts test/security.test.ts test/tools.test.ts test/recovery.test.ts test/openai-adapter.test.ts",
+    "test": "node --import tsx --import ./test/setup.ts --test test/context.test.ts test/compaction.test.ts test/trust.test.ts test/coverage.test.ts test/agent.test.ts test/security.test.ts test/tools.test.ts test/integration.test.ts test/recovery.test.ts test/openai-adapter.test.ts",
     "eval": "tsx evals/run.ts",
     "typecheck": "tsc --noEmit"
   },

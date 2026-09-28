@@ -26,7 +26,15 @@ function isPathLike(line: string): boolean {
   return /[\/\\]/.test(t) || /^[\w.@-]+\.[A-Za-z0-9]{1,8}$/.test(t) || /^[\w.@-]+\/?$/.test(t);
 }
 
+/** Tools whose output is always a file listing (cwd-relative paths, "/" for directories). */
+const LISTING_TOOLS = new Set(["list_dir", "glob"]);
+/** list_dir size / link suffix, e.g. "src/app.ts (4.1 KB)" or "linked/ (link, not followed)". */
+const LIST_DIR_SUFFIX = / \((?:\d+ B|\d+(?:\.\d+)? [KM]B|link, not followed)\)$/;
+/** Notes that are not paths: list_dir/glob footers, "(empty directory)", truncation markers. */
+const NOTE_LINE = /^(?:\[|\(empty directory\)|No files match\b)/;
+
 export function isListing(toolName: string, args: Record<string, unknown> | null | undefined, content: string): boolean {
+  if (LISTING_TOOLS.has(toolName)) return true;
   if (toolName === "run_shell" && typeof args?.command === "string" && LISTING_COMMAND.test(args.command)) return true;
   const lines = shellStdout(content).split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 5) return false;
@@ -41,8 +49,8 @@ export function parseListing(content: string): string[] {
   let sawTree = false;
 
   for (const raw of shellStdout(content).split(/\r?\n/)) {
-    const line = raw.replace(/\s+$/, "");
-    if (!line.trim()) continue;
+    const line = raw.replace(/\s+$/, "").replace(LIST_DIR_SUFFIX, "");
+    if (!line.trim() || NOTE_LINE.test(line.trim())) continue;
 
     const dirOf = /^\s*Directory of\s+(.+)$/i.exec(line);
     if (dirOf) {

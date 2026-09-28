@@ -28,11 +28,26 @@ export class ContextStore {
     this.originals.set(toolCallId, { name, args, content });
   }
 
-  /** Short argument label for placeholders, e.g. the file path or the start of a shell command. */
+  /**
+   * Short argument label for placeholders: the file path (with the line range for a partial
+   * read_file), the start of a shell command, or the pattern for glob/grep.
+   */
   label(toolCallId: string): string {
     const args = this.originals.get(toolCallId)?.args;
     if (!args) return "";
-    const value = typeof args.path === "string" ? args.path : typeof args.command === "string" ? args.command : "";
-    return value.length > 60 ? `${value.slice(0, 60)}…` : value;
+    let value =
+      typeof args.path === "string" && typeof args.pattern !== "string"
+        ? args.path
+        : typeof args.command === "string"
+          ? args.command
+          : typeof args.pattern === "string"
+            ? typeof args.path === "string" && args.path !== "." ? `${args.pattern} in ${args.path}` : args.pattern
+            : "";
+    if (value.length > 60) value = `${value.slice(0, 60)}…`;
+    if (typeof args.offset === "number" || typeof args.limit === "number") {
+      const from = typeof args.offset === "number" ? args.offset : 1;
+      value += typeof args.limit === "number" ? ` (lines ${from}-${from + args.limit - 1})` : ` (from line ${from})`;
+    }
+    return value;
   }
 }

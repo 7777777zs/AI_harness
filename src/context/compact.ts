@@ -156,6 +156,18 @@ export function unknownIdentifier(description: string, original: string, label =
   return null;
 }
 
+/**
+ * read_file with offset/limit returns "<line no, width 6>\t<text>" lines plus an optional
+ * "[lines A-B of T; ...]" footer. Strip both to get the source text (for symbol extraction).
+ */
+export function stripLineNumbers(content: string): string {
+  return content
+    .split("\n")
+    .filter((l) => !/^\[lines \d+-\d+ of \d+/.test(l))
+    .map((l) => l.replace(/^\s*\d+\t/, ""))
+    .join("\n");
+}
+
 interface PlaceholderParts {
   name: string;
   label: string;
@@ -194,8 +206,9 @@ export async function elideToolResults(
     // Listings keep their paths (never a model description); code files get extracted symbols.
     const paths = isListing(m.name, args, original) ? parseListing(original) : [];
     const listing = paths.length ? { text: compressListing(paths), count: paths.length } : undefined;
-    const symbols =
-      m.name === "read_file" && typeof args?.path === "string" ? extractSymbols(args.path, original) : null;
+    const ranged = args?.offset !== undefined || args?.limit !== undefined;
+    const code = ranged ? stripLineNumbers(original) : original;
+    const symbols = m.name === "read_file" && typeof args?.path === "string" ? extractSymbols(args.path, code) : null;
     const symbolText = symbols ? formatSymbols(symbols) : "";
     return { index: i, message: m, original, listing, symbols: symbolText };
   });

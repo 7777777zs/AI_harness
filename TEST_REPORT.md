@@ -234,7 +234,7 @@ On Windows, Node's `kill("SIGINT")` terminates the process outright. The runner 
 
 ## Problems found
 
-### P1: Sandbox escape through symlinks and directory junctions (HIGH)
+### P1: Sandbox escape through symlinks and directory junctions (HIGH) — FIXED in Phase 3 (Workstream B)
 
 **Where:** `src/tools/util.ts` `resolveInCwd`. It checks the *lexical* path only (`path.resolve` + `path.relative`), so a link inside the sandbox that points outside passes the check.
 
@@ -586,3 +586,102 @@ Cost of the behaviour change: this task now takes 4 steps and about 2.1k tokens 
 **New:** `src/context/symbols.ts`, `src/context/listing.ts`, `evals/tasks/12-trustworthy-summary.ts`, `test/trust.test.ts`.
 
 **API usage this round:** about 209k tokens (202,333 in / 6,500 out), roughly $0.09 at gpt-4.1-mini list prices.
+
+
+---
+
+# Phase 3: parallel workstreams and integration (2026-09-28)
+
+Two workstreams ran in parallel:
+- **A, compaction fixes:** branch `compaction-fix`, done by the main session.
+- **B, new built-in tools:** branch `phase3-tools`, done by a sub-agent in a separate worktree.
+
+Each wrote its report to `notes/report-A.md` and `notes/report-B.md` (full detail there), and they were integrated on `main`.
+
+## Workstream A: compaction fixes
+
+- **Pinned known files:** paths from every listing-type result are merged, restricted to real files under cwd, and shown in a `[Harness status]` message attached to **each request**. It isn't stored in history, so it can't be elided or summarized.
+- **Harness-computed coverage:** `Read: N / Not yet read: M` plus the unread paths. `read_file` with offset/limit counts as a partial read.
+- **Coverage check:** before accepting a final answer to a whole-project task while listed files are unread, the harness sends one follow-up (`COVERAGE_CHECK=on|off`).
+- **Level 2 rules:**
+  - notes first, kept nearly verbatim;
+  - completion claims are stripped in code;
+  - model-written path lists under "Remaining work" are removed, and the harness appends its own unread list.
+  - Level 2 input uses the Level 1 placeholder for described results, and compaction calls are logged with their tokens.
+- **Description cache by (tool, path, content hash).**
+- **Python symbols:** decorated nested functions are extracted with their routes, e.g. `create_app > chat [GET /chat]`.
+- **Bug fixed:** `run_shell` listings had been parsed with a bogus `stdout/` prefix. Unit tests missed it because they used stub output; they now use the real format.
+
+**A's evals** (3 runs each, 8k context):
+- `multi-file-summary`: 3/3.
+- `trustworthy-summary`: 2/3. The failure: the model read all files but left the test files out of its answer.
+- `project-overview` (new task 17, about 30 files): 3/3. The coverage check fired once per run, and every run ended with 0 unread files.
+
+## Workstream B: new tools
+
+- **New tools:** `list_dir`, `glob`, `grep` and `edit_file`, all implemented in Node. The only new dependency is `ignore`; globbing is a 70-line `globMatch.ts`.
+- **`read_file`** gains `offset`/`limit`, with numbered output.
+- **P1 symlink/junction escape fixed** in `resolveInCwd` (realpath of the deepest existing ancestor must be inside realpath(cwd); dangling links refused). C4b and C5 are no longer `todo`, and C8–C11 check every new tool.
+- **`truncate(s, max)` fixed for small `max`:** `write_file`'s preview had shown mid-sized content twice.
+- **B's evals** (1 run each): 13 find-call-sites, 14 rename-function, 15 large-file-edit, 16 ignored-dir-search, plus a `find-string` sanity run, 5/5.
+- **Accepted limitations:** the check-then-use race window, grep ReDoS, and backslashes being converted on POSIX. `run_shell` is still unrestricted by design.
+
+## Integration
+
+**Merge:**
+- `compaction-fix` was fast-forwarded into `main`.
+- `phase3-tools` was rebased onto it. Two trivial conflicts, both resolved by keeping both sides: the `npm test` file list in `package.json` and the task registry in `evals/tasks/index.ts`.
+- The result was fast-forwarded into `main`.
+
+**Integration changes:**
+- **Listings:** `list_dir` and `glob` are listing results by tool name. `parseListing` strips `list_dir`'s size and `(link, not followed)` suffixes and skips footer lines (`[…`, `(empty directory)`, `No files match`). Their output now feeds the known-files list.
+- **Ranged reads:** `read_file` with offset/limit counts as a partial read. Symbols are extracted after stripping the line-number prefix and the `[lines …]` footer, and the placeholder label shows the range, e.g. `app/agent.py (lines 1-200)`.
+- **Labels:** placeholders for `glob`/`grep` fall back to the pattern (`def ask in app`).
+- **System prompt:** B's tool guidance replaces the old "prefer `git ls-files`" sentence, and A's sentence explains the `[Harness status]` message.
+- **New `test/integration.test.ts` (5 tests):** uses the **real** `list_dir`/`glob`/`read_file` output rather than hand-written strings.
+- **Docs:** README updated with the tool table and safety model; B's report saved as `notes/report-B.md` with your approval.
+
+**Not integrated** (suggested in B's notes, not required by the integration spec): extending the missing-file hint to the other tools, and not counting edit/search steps as "silent" for the note-taking nudge.
+
+## Integration validation
+
+- **Tests:** `npx tsc --noEmit` passes. `npm test` has 120 tests: 119 pass, 0 fail, 0 todo, 1 skipped (C4, file symlinks need admin rights on this machine).
+- **Full suite:** 1 run each, 17 tasks, `--concurrency 3`, `gpt-4.1-mini`. **This run is the baseline for Phase 4** (`evals/results/2026-09-28T08-30-28-062Z.json`).
+
+| Task | Pass | Steps | Tokens | Note |
+|---|---|---|---|---|
+| create-file | 1/1 | 2 | 2,576 | |
+| edit-line | 1/1 | 3 | 3,998 | |
+| count-lines | 0/1 | 2 | 3,272 | known capability gap (P3): answers "120", unchanged |
+| fix-bug | 1/1 | 4 | 6,455 | |
+| find-string | 1/1 | 2 | 2,583 | |
+| json-config | 1/1 | 3 | 4,142 | |
+| missing-file | 1/1 | 4 | 5,574 | |
+| path-escape | 1/1 | 2 | 2,602 | |
+| long-context | **0/1** | 7 | 13,200 | regression, explained below |
+| shell-tree | 1/1 | 4 | 5,977 | |
+| multi-file-summary | 1/1 | 6 | 15,725 | used `list_dir`; coverage check fired once; 0 unread at end |
+| trustworthy-summary | 1/1 | 13 | 60,731 | 5 compactions |
+| find-call-sites | 1/1 | 3 | 4,565 | |
+| rename-function | 1/1 | 7 | 17,386 | |
+| large-file-edit | 1/1 | 18 | 92,328 | efficiency outlier, explained below |
+| ignored-dir-search | 1/1 | 3 | 4,263 | |
+| project-overview | 1/1 | 16 | 115,616 | used `list_dir`; 31 known files, 0 unread; compaction 22.9% of input; 8 Level 2 summaries accepted |
+
+**Total:** 15/17. About 361k tokens (348,867 in / 12,126 out), roughly $0.16.
+
+**Tool usage across the suite:**
+- `read_file` 90, `edit_file` 12, `list_dir` 7, `grep` 6, `write_file` 3, `run_shell` 3.
+- **0 shell listing or search commands.** Earlier suites used `dir /s /b`, `findstr` and similar several times per run.
+
+**Explained regression: `long-context` (previously passed).** The model now reads only the first 5 lines of each chain file with `read_file` offset/limit; the prompt says "only the first lines of each file matter". The answer is correct, and the run used 13.2k tokens instead of about 40k. But the task's second requirement, that compaction triggers, can't be met when the model doesn't load the 40k-char files: the task was designed around whole-file reads. **Proposed:** make the chain pointer appear only at the end of each file, so reading the whole file is necessary, or drop the compaction requirement now that `project-overview` exercises compaction. The task was left unchanged here; this needs your decision.
+
+**Efficiency outlier: `large-file-edit`.** The run passed, but took 18 steps and 92k tokens (B's single run: 7 steps, 14k). The model paged through the 600-line file with 15 ranged `read_file` calls before trying `grep` at step 13. The system prompt recommends `grep`; this looks like single-run strategy variance, and the `--runs 3` comparison in Phase 4 will show whether it recurs.
+
+**Integration metrics for `multi-file-summary`** (8k context, from the baseline run):
+- The model used `list_dir` (no shell listing).
+- The coverage check fired once and the model read the remaining file: 0 unread at the end.
+- Compaction share 0% (no compaction needed at 3 files per step).
+- The final answer covers all files, so it has no coverage statement to make.
+
+The `--runs 3` re-run is scheduled for the end of Phase 4, as agreed.
