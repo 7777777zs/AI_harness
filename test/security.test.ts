@@ -1,7 +1,8 @@
 // Path-restriction tests: call the tools directly with a temp directory as cwd. No API calls.
 // Note: run_shell is not path-restricted by design and is not covered here.
-// Tests marked KNOWN_BUG document a real sandbox escape (see TEST_REPORT.md). They run and
-// report "# TODO" without failing the suite; remove the marker once resolveInCwd is fixed.
+// C4/C4b/C5 cover the symlink/junction escape (TEST_REPORT.md P1), fixed in resolveInCwd by
+// resolving links before the containment check. C8-C11 apply the restriction to the Phase 3
+// tools (list_dir, glob, grep, edit_file, read_file offset/limit).
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -9,6 +10,10 @@ import os from "node:os";
 import path from "node:path";
 import { readFile } from "../src/tools/readFile.js";
 import { writeFile } from "../src/tools/writeFile.js";
+import { listDir } from "../src/tools/listDir.js";
+import { glob } from "../src/tools/glob.js";
+import { grep } from "../src/tools/grep.js";
+import { editFile } from "../src/tools/editFile.js";
 import type { ToolContext } from "../src/types.js";
 
 const SECRET = "outside-secret-content";
@@ -102,9 +107,7 @@ test("C3b: an absolute path that is inside cwd is allowed", async () => {
   assert.equal(await readFile.execute({ path: path.join(s.cwd, "in.txt") }, s.ctx), "inside");
 });
 
-const KNOWN_BUG = { todo: "KNOWN BUG (TEST_REPORT.md P1): resolveInCwd does not resolve symlinks/junctions" };
-
-test("C4: a file symlink inside cwd pointing outside is refused by read_file and write_file", KNOWN_BUG, async (t) => {
+test("C4: a file symlink inside cwd pointing outside is refused by read_file and write_file", async (t) => {
   const s = setup();
   const link = path.join(s.cwd, "link.txt");
   if (!trySymlink(s.outsideFile, link, "file")) {
@@ -116,14 +119,14 @@ test("C4: a file symlink inside cwd pointing outside is refused by read_file and
   assert.equal(fs.readFileSync(s.outsideFile, "utf8"), SECRET);
 });
 
-test("C4b: reading an outside file through a linked directory inside cwd is refused", KNOWN_BUG, async () => {
+test("C4b: reading an outside file through a linked directory inside cwd is refused", async () => {
   const s = setup();
   fs.writeFileSync(path.join(s.outsideDir, "secret.txt"), SECRET);
   dirLink(s.outsideDir, path.join(s.cwd, "linked"));
   await assert.rejects(readFile.execute({ path: "linked/secret.txt" }, s.ctx), OUTSIDE_ERROR);
 });
 
-test("C5: writing a file through a linked directory inside cwd that points outside is refused", KNOWN_BUG, async () => {
+test("C5: writing a file through a linked directory inside cwd that points outside is refused", async () => {
   const s = setup();
   dirLink(s.outsideDir, path.join(s.cwd, "linked"));
   await assert.rejects(writeFile.execute({ path: "linked/new.txt", content: "pwned" }, s.ctx), OUTSIDE_ERROR);
@@ -144,4 +147,67 @@ test("C7: a denied write_file does not touch the disk", async () => {
   const ctx: ToolContext = { cwd: s.cwd, confirm: async () => false };
   assert.equal(await writeFile.execute({ path: "a/b/denied.txt", content: "x" }, ctx), "User denied this action");
   assert.equal(fs.existsSync(path.join(s.cwd, "a")), false);
+});
+
+// ---- Phase 3 tools -------------------------------------------------------------------------
+
+/** Every path-taking tool call that must be refused for `p` (`p` as a file or directory). */
+function pathCalls(p: string, ctx: ToolContext) {
+  return [
+    ["read_file", () => readFile.execute({ path: p }, ctx)],
+    ["read_file offset", () => readFile.execute({ path: p, offset: 1, limit: 5 }, ctx)],
+    ["list_dir", () => listDir.execute({ path: p }, ctx)],
+    ["glob", () => glob.execute({ pattern: "**/*", path: p }, ctx)],
+    ["grep", () => grep.execute({ pattern: "secret", path: p }, ctx)],
+    ["edit_file", () => editFile.execute({ path: p, old_str: "outside", new_str: "pwned" }, ctx)],
+  ] as const;
+}
+
+async function assertAllRefused(p: string, s: ReturnType<typeof setup>) {
+  for (const [name, run] of pathCalls(p, s.ctx)) {
+    await assert.rejects(run(), OUTSIDE_ERROR, `${name}("${p}") must be refused`);
+  }
+  assert.equal(fs.readFileSync(s.outsideFile, "utf8"), SECRET, "outside file unchanged");
+  assert.equal(s.confirms(), 0, "refused before asking for confirmation");
+}
+
+test("C8: every new tool refuses relative, backslash and absolute escapes", async () => {
+  const s = setup();
+  fs.writeFileSync(path.join(s.outsideDir, "secret.txt"), SECRET);
+  for (const p of ["..", "../outside.txt", "sub/../../outside-dir", "..\\outside.txt", s.outsideFile, s.outsideDir]) {
+    await assertAllRefused(p, s);
+  }
+});
+
+test("C9: every new tool refuses paths through a directory link pointing outside", async () => {
+  const s = setup();
+  fs.writeFileSync(path.join(s.outsideDir, "secret.txt"), SECRET);
+  dirLink(s.outsideDir, path.join(s.cwd, "linked"));
+  await assertAllRefused("linked", s);
+  await assertAllRefused("linked/secret.txt", s);
+  await assertAllRefused("linked\\secret.txt", s);
+  assert.equal(fs.readFileSync(path.join(s.outsideDir, "secret.txt"), "utf8"), SECRET);
+});
+
+test("C10: walking cwd never follows a directory link to outside content", async () => {
+  const s = setup();
+  fs.writeFileSync(path.join(s.outsideDir, "secret.txt"), SECRET);
+  fs.writeFileSync(path.join(s.cwd, "inside.txt"), "inside");
+  dirLink(s.outsideDir, path.join(s.cwd, "linked"));
+  const listing = await listDir.execute({ depth: 5 }, s.ctx);
+  assert.match(listing, /^linked\/ \(link, not followed\)$/m);
+  assert.doesNotMatch(listing, /secret/);
+  assert.doesNotMatch(await glob.execute({ pattern: "**/*" }, s.ctx), /secret/);
+  const g = await grep.execute({ pattern: "outside-secret" }, s.ctx);
+  assert.match(g, /^No matches/);
+});
+
+test("C11: a dangling link inside cwd is refused (writing through it could create a file outside)", async () => {
+  const s = setup();
+  const target = path.join(s.outsideDir, "gone");
+  fs.mkdirSync(target);
+  dirLink(target, path.join(s.cwd, "dangling"));
+  fs.rmdirSync(target);
+  await assert.rejects(writeFile.execute({ path: "dangling/new.txt", content: "pwned" }, s.ctx), OUTSIDE_ERROR);
+  assert.equal(fs.existsSync(target), false, "nothing created outside cwd");
 });
