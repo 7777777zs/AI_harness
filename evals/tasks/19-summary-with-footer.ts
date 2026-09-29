@@ -35,6 +35,7 @@ function source(purpose: string, fn: string, i: number): string {
 export const task: EvalTask = {
   id: "summary-with-footer",
   description: "Per-file summary under an 8k context; answer keeps the summaries and ends with the harness coverage footer",
+  // Reading the files with offset/limit or leaving data/ unread both produce a footer.
   prompt: "Summarize each source file under src/ in one sentence.",
   contextLimit: 8_000,
   compactThreshold: 0.7,
@@ -57,7 +58,12 @@ export const task: EvalTask = {
     const footer = text.slice(at);
     const missing = SOURCES.map(([p]) => path.posix.basename(p)).filter((b) => !body.includes(b));
     if (missing.length) return fail(`per-file summaries missing for: ${missing.join(", ")}`);
-    if (!/Not read: .*data\/fixtures\//.test(footer)) return fail(`footer does not list the unread data files: ${footer.slice(0, 160)}`);
+    // The footer is computed from what the model listed and read, so its exact content depends on
+    // the model's strategy (e.g. listing only src/ leaves the fixtures unknown). Require that it is
+    // the harness footer and reports counts; don't require specific paths.
+    if (!/^--- Coverage \(reported by harness\): read \d+ of \d+ known files/.test(footer)) {
+      return fail(`malformed coverage footer: ${footer.slice(0, 160)}`);
+    }
     return pass();
   },
 };

@@ -203,6 +203,9 @@ Options:
 - `--concurrency N`: run N jobs in parallel.
 - `--keep`: keep the temp directories.
 - `--verbose`: show the agent's output.
+- `--compact-model <model>`: use a different model for compaction calls (default: the model under test).
+
+All harness settings are passed to each run explicitly, so your environment and `~/.harness/.env` don't affect eval results. With large tasks, keep `--concurrency` low: parallel jobs can hit your organization's tokens-per-minute limit (HTTP 429).
 
 The runner prints a summary table and saves full results to `evals/results/<timestamp>.json`. It also lists any tasks whose pass rate changed since the previous results file. Per-run agent logs go to `evals/results/logs/`.
 
