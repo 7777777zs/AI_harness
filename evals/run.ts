@@ -1,4 +1,4 @@
-// Eval runner: npm run eval -- [--task id] [--runs N] [--concurrency N] [--keep] [--verbose]
+// Eval runner: npm run eval -- [--task id] [--runs N] [--concurrency N] [--without-mcp] [--keep] [--verbose]
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -7,9 +7,12 @@ import { parseArgs } from "node:util";
 import { runAgent } from "../src/agent.js";
 import { loadEnv } from "../src/config.js";
 import { missingEnv } from "../src/llm/index.js";
+import { installShutdownHandlers } from "../src/process.js";
 import { tasks } from "./tasks/index.js";
 import { classifyOutcome, evalSettings } from "./options.js";
-import type { CheckResult, EvalTask } from "./types.js";
+import { maxRequestTokens } from "./helpers.js";
+import type { CheckResult, EvalTask, WebContext } from "./types.js";
+import { CHROME_DEVTOOLS_MCP, prewarmChromeDevtools, serveSite, type SiteServer } from "./web.js";
 
 interface RunRecord {
   taskId: string;
@@ -42,6 +45,15 @@ interface RunRecord {
   unreadAtEnd?: number;
   logFile?: string;
   sandbox?: string;
+  /** Tool calls the model emitted, by tool name. */
+  toolCalls?: Record<string, number>;
+  mcpCalls?: number;
+  /** Side-effecting calls after MCP content: the guard asked (and the runner denied). */
+  guardFired?: number;
+  /** Largest actual input token count of any main request (from the API usage). */
+  maxRequestTokens?: number;
+  /** Task-specific observations from the check. */
+  details?: Record<string, unknown>;
 }
 
 interface TaskSummary {
@@ -74,6 +86,8 @@ const { values: args } = parseArgs({
     keep: { type: "boolean", default: false },
     verbose: { type: "boolean", default: false },
     "compact-model": { type: "string" },
+    /** Skip tasks that need an MCP server (e.g. to check the core suite alone). */
+    "without-mcp": { type: "boolean", default: false },
   },
 });
 
@@ -95,7 +109,7 @@ if (missing) {
 
 const runs = positiveInt("runs", args.runs!);
 const concurrency = positiveInt("concurrency", args.concurrency!);
-const selected = args.task ? tasks.filter((t) => t.id === args.task) : tasks;
+const selected = (args.task ? tasks.filter((t) => t.id === args.task) : tasks).filter((t) => !(args["without-mcp"] && t.mcpServers));
 if (selected.length === 0) {
   console.error(`Error: unknown task "${args.task}". Available: ${tasks.map((t) => t.id).join(", ")}`);
   process.exit(1);
@@ -108,6 +122,7 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "ai-harness-eval-"));
   const dir = path.join(base, "work");
   fs.mkdirSync(dir);
+  let site: SiteServer | undefined;
   const record: RunRecord = {
     taskId: task.id,
     run,
@@ -135,15 +150,27 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       return record;
     }
 
+    let web: WebContext | undefined;
+    if (task.site) {
+      const siteDir = path.join(base, "site");
+      fs.mkdirSync(siteDir);
+      await task.site(siteDir);
+      site = await serveSite(siteDir);
+      web = { baseUrl: site.baseUrl, requests: site.requests };
+    }
+    const prompt = typeof task.prompt === "function" ? task.prompt({ baseUrl: web?.baseUrl ?? "" }) : task.prompt;
+
     if (args.verbose) console.log(`\n===== ${task.id} #${run} =====`);
     const result = await runAgent({
-      task: task.prompt,
+      task: prompt,
       cwd: dir,
       autoApprove: true,
       quiet: !args.verbose,
       logDir: path.join(logsRoot, `${task.id}-${run}`),
       // Every setting explicit: ~/.harness/.env and env vars can't change eval behavior (A8).
       ...evalSettings(task, { mainModel: process.env.OPENAI_MODEL, compactModel: args["compact-model"] }),
+      // Nobody can answer: the untrusted-content guard is recorded (result.untrustedGuard) and denied.
+      confirmUntrusted: async () => false,
     });
     Object.assign(record, {
       stopReason: result.stopReason,
@@ -166,6 +193,10 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       answerMerged: result.answerHistory.length > 1 && result.finalText?.includes("--- (continued after the harness coverage check) ---"),
       unreadAtEnd: result.coverage.unread.length,
       logFile: path.relative(process.cwd(), result.logFile),
+      toolCalls: result.toolCalls,
+      mcpCalls: result.mcp.calls,
+      guardFired: result.untrustedGuard.length,
+      maxRequestTokens: maxRequestTokens(result.logFile),
     });
 
     let check: CheckResult;
@@ -173,7 +204,7 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       check = { pass: false, reason: `agent error: ${result.error}` };
     } else {
       try {
-        check = await task.check(dir, result);
+        check = await task.check(dir, result, { ...(web && { web }) });
       } catch (err) {
         check = { pass: false, reason: `check threw: ${errorMessage(err)}` };
       }
@@ -182,8 +213,10 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
     record.pass = check.pass;
     record.outcome = classifyOutcome(check.pass, result.errorKind);
     if (check.reason) record.reason = check.reason;
+    if (check.details) record.details = check.details;
     return record;
   } finally {
+    await site?.close();
     if (!args.keep) fs.rmSync(base, { recursive: true, force: true, maxRetries: 3 });
   }
 }
@@ -276,6 +309,13 @@ function compareWithPrevious(summaries: TaskSummary[]): void {
     changes.push(`  ${s.taskId}: ${p.passes}/${scored(p)} → ${s.passes}/${scored(s)} (${label})`);
   }
   console.log(changes.length ? `\nChanges vs ${previous}:\n${changes.join("\n")}` : `\nNo pass/fail changes vs ${previous}.`);
+}
+
+// Ctrl+C: shut down MCP server process trees (browsers) before exiting.
+installShutdownHandlers();
+if (selected.some((t) => t.mcpServers)) {
+  console.log(`Pre-warming ${CHROME_DEVTOOLS_MCP} in the npx cache…`);
+  prewarmChromeDevtools();
 }
 
 // Run all jobs through a simple worker pool.

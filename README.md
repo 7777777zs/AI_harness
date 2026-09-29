@@ -64,6 +64,8 @@ cd ~/some/project
 harness "list the files here"
 harness "add a .gitignore for a Node project"
 harness --cwd ~/other/project "summarize README.md"
+harness --mcp chrome-devtools "open http://localhost:3000 and tell me what the page says"
+harness --no-mcp "run the tests"
 harness --help
 ```
 
@@ -88,6 +90,59 @@ Type-check: `npm run typecheck` (same as `npx tsc --noEmit`).
   - Commands time out after 30 s. On Windows, processes the command itself started may keep running after the timeout.
 - **Output limit:** tool output over 10,000 characters keeps the first 6,000 and last 2,000 characters, with a `[... truncated: N chars / M lines omitted ...]` marker in between.
 - **Errors don't crash the agent:** tool errors, invalid JSON arguments, and unknown tool names go back to the model as `Error: ...` strings so it can recover.
+- **MCP content is untrusted:** see the next section.
+
+## MCP servers
+
+The harness can use tools from [MCP](https://modelcontextprotocol.io) servers (stdio only). Servers are configured in `~/.harness/mcp.json`, in the common `mcpServers` format plus a few harness fields:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `command`, `args`, `env` | – | How to start the server. `npx` works on Windows too. `env` is added to a minimal environment, so your API key is not passed on. |
+| `enabled` | `true` | `false` skips the server unless it is named with `--mcp`. |
+| `includeTools` / `excludeTools` | all / none | Which of the server's tools the model sees. |
+| `autoApproveTools` | none | Tools that run without confirmation. **Every other MCP tool asks first.** |
+| `hideParams` | none | `{ "<tool>": ["<param>"] }`: removed from the tool's schema, and calls that pass them anyway are rejected. |
+| `callTimeoutMs` | 60000 | Per tool call. |
+| `startupTimeoutMs` | 30000 | Start + handshake + tool listing. |
+
+- **Flags:** `--mcp a,b` uses only those servers; `--no-mcp` uses none. Invalid configuration (bad JSON, unknown keys, out-of-range timeouts, unknown `--mcp` names) stops the harness at startup with a clear message.
+- **Tool names:** tools appear to the model as `mcp__<server>__<tool>`. Names are limited to `[a-zA-Z0-9_-]`, 64 characters; longer names are shortened with a hash. Two tools mapping to the same name is an error.
+- **Startup:** servers start in parallel when the run starts. A server that fails to start is reported and skipped; the run continues without it. The `run_start` log entry lists each server, its tools and which are auto-approved.
+- **Shutdown:** when the run ends (normally, with an error, or on Ctrl+C), each server's whole process tree is shut down. Its stdin is closed first so it can close its browser cleanly; whatever is still running after 3 s is killed.
+- **Results:**
+  - Text is passed on as-is. Images become a note like `[image omitted: image/png, 1280x720, …]`, because tool messages can't carry images.
+  - Results longer than one page (10,000 characters, or less for small context limits) are split into pages kept in memory. The model sees the first page and can read the rest with the built-in `read_tool_result` tool, by offset or by searching with `pattern`.
+  - Size caps, compaction and logging apply as for every other tool.
+
+### Untrusted content
+
+Everything an MCP tool returns, such as a web page, is treated as data, not instructions:
+- The system prompt says so.
+- Every MCP result is wrapped in an `[Untrusted content from …]` / `[End of untrusted content …]` pair.
+- **Guard:** after the model has received MCP content, its next `run_shell`, `write_file` or `edit_file` asks for confirmation **even with auto-approve**. Each such call is logged as `post_untrusted_action`, and the eval runner always denies them.
+
+### Chrome DevTools MCP
+
+[`mcp.example.json`](mcp.example.json) configures Google's `chrome-devtools-mcp`. Copy it to `~/.harness/mcp.json`.
+
+- **Profile:** it uses the server's default *dedicated* browser profile, which is logged into nothing.
+- **`--autoConnect`:** attaches to your own running Chrome instead. The agent could then act inside your logged-in sessions (mail, banking, admin consoles), so it is not recommended for general use.
+- **Other flags:** `--headless` runs without a window. `--isolated` uses a fresh temporary profile each time; the evals use both.
+- **Why not `--slim`:** slim mode has only three tools: `navigate`, `evaluate` (runs arbitrary JavaScript in the page) and `screenshot` (returns a file path). It has no text snapshot, so reading a page would require `evaluate`. The example uses full mode narrowed with `includeTools` instead.
+
+| Tool | Auto-approved | Why |
+|---|---|---|
+| `list_pages` | yes | Lists open tabs; read-only. |
+| `select_page` | yes | Chooses the tab later calls use; changes nothing on the page. |
+| `new_page` | yes | Opens a URL in a new tab, like following a link. |
+| `navigate_page` | yes, with `initScript` hidden | URL / back / forward / reload. `initScript` would run JavaScript on the page, so it is removed. |
+| `take_snapshot` | yes, with `filePath` hidden | Text (accessibility-tree) snapshot of the page. `filePath` would write a file anywhere on disk, so it is removed. |
+| `wait_for` | yes | Waits for text to appear; read-only. |
+| `click`, `fill`, `press_key` | no | Interact with the page (submit forms, trigger actions). |
+| `evaluate_script` | no | Runs arbitrary JavaScript in the page. |
+
+All other tools of the server (performance traces, heap snapshots, extensions, file uploads, network request bodies saved to disk, …) are not exposed. Before a public page's instructions reach a shell or a file, the guard above asks you.
 
 ## Architecture
 
@@ -98,7 +153,15 @@ src/
 ├── config.ts         ~/.harness paths and .env loading
 ├── agent.ts          runAgent(): main loop, provider-agnostic (no `openai` import)
 ├── confirm.ts        Terminal y/N prompt
+├── process.ts        Process-tree kill, registry of long-lived children, Ctrl+C shutdown
 ├── types.ts          Tool / ToolContext types
+├── mcp/
+│   ├── config.ts     mcp.json loading and validation, --mcp / --no-mcp selection
+│   ├── transport.ts  stdio transport over a child process the harness controls (tree shutdown)
+│   ├── manager.ts    Starts servers in parallel, wraps their tools (naming, filtering, confirmation, timeouts)
+│   ├── convert.ts    Schema cleanup and result conversion (text, image notes, resources, errors)
+│   ├── resultPages.ts  Paging of oversized results and the read_tool_result tool
+│   └── names.ts      mcp__server__tool names
 ├── llm/
 │   ├── types.ts      LLMClient interface, Message, ToolCall, LLMResponse, ContextLengthError
 │   ├── index.ts      createClientFromEnv(): the one place that picks a provider
@@ -204,8 +267,15 @@ Options:
 - `--keep`: keep the temp directories.
 - `--verbose`: show the agent's output.
 - `--compact-model <model>`: use a different model for compaction calls (default: the model under test).
+- `--without-mcp`: skip the tasks that need an MCP server (the core suite only).
 
-All harness settings are passed to each run explicitly, so your environment and `~/.harness/.env` don't affect eval results. With large tasks, keep `--concurrency` low: parallel jobs can hit your organization's tokens-per-minute limit (HTTP 429).
+All harness settings are passed to each run explicitly, so your environment and `~/.harness/.env` don't affect eval results. The same goes for MCP: a task gets only the servers it declares, so `~/.harness/mcp.json` is never read.
+
+**Web tasks** (`read-page`, `multi-page`, `long-page`, `prompt-injection`):
+- **Requirements:** Chrome and network access for `npx` (the runner pre-downloads the pinned `chrome-devtools-mcp` once).
+- **Pages:** each run serves its fixture pages from a local HTTP server on `127.0.0.1`; evals never use the public internet.
+- **Browser:** each run starts its own headless browser with an isolated profile.
+- **Process cleanup:** `npx tsx evals/cleanup-check.ts` checks, without API calls, that no server or Chrome processes are left behind after normal end, error, timeout, SIGINT and a hard kill. With large tasks, keep `--concurrency` low: parallel jobs can hit your organization's tokens-per-minute limit (HTTP 429).
 
 The runner prints a summary table and saves full results to `evals/results/<timestamp>.json`. It also lists any tasks whose pass rate changed since the previous results file. Per-run agent logs go to `evals/results/logs/`.
 

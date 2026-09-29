@@ -1,6 +1,7 @@
 // Detection and compression of file-listing tool results. When a listing has to be
 // elided, the paths themselves are kept (grouped per directory) instead of a model
 // description, because an agent that loses the file list starts guessing paths.
+import { isUntrustedToolName } from "../mcp/names.js";
 
 const LISTING_COMMAND = /^\s*(?:git\s+ls-files|ls|dir|find|tree|get-childitem|gci|fd)\b/i;
 /** Tree-drawing characters used by `tree` (unix and Windows). */
@@ -34,6 +35,8 @@ const LIST_DIR_SUFFIX = / \((?:\d+ B|\d+(?:\.\d+)? [KM]B|link, not followed)\)$/
 const NOTE_LINE = /^(?:\[|\(empty directory\)|No files match\b)/;
 
 export function isListing(toolName: string, args: Record<string, unknown> | null | undefined, content: string): boolean {
+  // Untrusted results (e.g. web pages from an MCP server) never name project files.
+  if (isUntrustedToolName(toolName)) return false;
   if (LISTING_TOOLS.has(toolName)) return true;
   if (toolName === "run_shell" && typeof args?.command === "string" && LISTING_COMMAND.test(args.command)) return true;
   const lines = shellStdout(content).split(/\r?\n/).filter((l) => l.trim());

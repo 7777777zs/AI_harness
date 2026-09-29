@@ -1,4 +1,5 @@
 import type { Message } from "../llm/types.js";
+import { isUntrustedToolName } from "../mcp/names.js";
 import { compressListing, isListing, parseListing } from "./listing.js";
 import { ContextStore } from "./store.js";
 import { extractSymbols, formatSymbols } from "./symbols.js";
@@ -20,6 +21,7 @@ export const L2_MIN_SAVING = 0.2;
 export const MIN_ELIDE_CHARS = 1_500;
 const LOSSY_FILE = "This is a lossy summary — re-read the file if you need exact code, names, or details.";
 const LOSSY_OUTPUT = "This is a lossy summary — re-run the command if you need the exact output.";
+const LOSSY_EXTERNAL = "This is a lossy summary — call the tool again if you need the exact content.";
 
 export const ELIDED_PREFIX = "[Elided:";
 export const SUMMARY_PREFIX = "[Summary of earlier conversation, generated to save context]";
@@ -186,7 +188,7 @@ export function placeholder(p: PlaceholderParts): string {
   const parts = [head];
   if (p.symbols) parts.push(`Symbols: ${p.symbols}.`);
   if (p.description) parts.push(`Description: ${p.description.replace(/[.\s]+$/, "")}.`);
-  parts.push(p.name === "run_shell" ? LOSSY_OUTPUT : LOSSY_FILE);
+  parts.push(p.name === "run_shell" ? LOSSY_OUTPUT : isUntrustedToolName(p.name) ? LOSSY_EXTERNAL : LOSSY_FILE);
   return `${parts.join(" ")}]`;
 }
 

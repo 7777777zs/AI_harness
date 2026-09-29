@@ -1,5 +1,6 @@
 // In-memory state that must survive across compactions within one agent run.
 import { createHash } from "node:crypto";
+import { isUntrustedToolName } from "../mcp/names.js";
 
 export interface OriginalResult {
   name: string;
@@ -33,7 +34,9 @@ export class ContextStore {
    * read_file), the start of a shell command, or the pattern for glob/grep.
    */
   label(toolCallId: string): string {
-    const args = this.originals.get(toolCallId)?.args;
+    const original = this.originals.get(toolCallId);
+    if (original && isUntrustedToolName(original.name)) return externalLabel(original.args, original.content);
+    const args = original?.args;
     if (!args) return "";
     let value =
       typeof args.path === "string" && typeof args.pattern !== "string"
@@ -50,4 +53,21 @@ export class ContextStore {
     }
     return value;
   }
+}
+
+/**
+ * Label for an MCP result: its first scalar arguments, e.g. `(url: http://…)`. A call without
+ * arguments (e.g. a page snapshot) is labeled with the first URL in its content instead.
+ */
+export function externalLabel(args: Record<string, unknown> | null, content: string): string {
+  const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max)}…` : s);
+  const parts = Object.entries(args ?? {})
+    .filter(([, v]) => (typeof v === "string" && v.trim() !== "") || typeof v === "number")
+    .slice(0, 2)
+    .map(([k, v]) => `${k}: ${clip(String(v), 60)}`);
+  if (parts.length === 0) {
+    const url = /https?:\/\/[^\s"'<>)\]]+/.exec(content)?.[0];
+    if (url) parts.push(`url: ${clip(url, 80)}`);
+  }
+  return parts.length ? `(${parts.join(", ")})` : "";
 }

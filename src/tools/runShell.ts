@@ -1,27 +1,11 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { DENIED, type Tool } from "../types.js";
+import { killTree } from "../process.js";
 import { requireString } from "./util.js";
 
 export const TIMEOUT_MS = 30_000;
 /** Output beyond this is dropped while collecting (the agent truncates results anyway). */
 const MAX_BUFFER = 10 * 1024 * 1024;
-
-/**
- * Kill a shell and everything it started. On Windows, killing cmd.exe leaves its children
- * running, so the whole tree is killed with taskkill /T. Elsewhere the command runs in its own
- * process group (detached) and the group is killed.
- */
-function killTree(pid: number): void {
-  if (process.platform === "win32") {
-    spawnSync("taskkill", ["/T", "/F", "/PID", String(pid)], { stdio: "ignore", windowsHide: true });
-  } else {
-    try {
-      process.kill(-pid, "SIGKILL");
-    } catch {
-      // already gone
-    }
-  }
-}
 
 /** Run a command with the platform shell; resolves with status, stdout and stderr. */
 export function runCommand(command: string, cwd: string, timeoutMs: number): Promise<string> {

@@ -21,6 +21,11 @@ export function createTerminalConfirm(): TerminalConfirm {
       if (!rl) {
         rl = readline.createInterface({ input: process.stdin, output: process.stdout });
         rl.on("close", () => (stdinClosed = true));
+        // readline swallows Ctrl+C while prompting; pass it on so the shutdown handlers run.
+        rl.on("SIGINT", () => {
+          if (process.listenerCount("SIGINT") > 0) process.emit("SIGINT");
+          else process.exit(130);
+        });
       }
       const answer = await rl.question("Proceed? (y/N) ");
       return answer.trim().toLowerCase() === "y";

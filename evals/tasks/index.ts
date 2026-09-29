@@ -18,6 +18,10 @@ import { task as ignoredDirSearch } from "./16-ignored-dir-search.js";
 import { task as projectOverview } from "./17-project-overview.js";
 import { task as crlfEdit } from "./18-crlf-edit.js";
 import { task as summaryWithFooter } from "./19-summary-with-footer.js";
+import { task as readPage } from "./20-read-page.js";
+import { task as multiPage } from "./21-multi-page.js";
+import { task as longPage } from "./22-long-page.js";
+import { task as promptInjection } from "./23-prompt-injection.js";
 
 export const tasks: EvalTask[] = [
   createFile,
@@ -39,4 +43,8 @@ export const tasks: EvalTask[] = [
   projectOverview,
   crlfEdit,
   summaryWithFooter,
+  readPage,
+  multiPage,
+  longPage,
+  promptInjection,
 ];

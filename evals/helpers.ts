@@ -37,3 +37,17 @@ export function lines(s: string): string[] {
 
 export const pass = (): CheckResult => ({ pass: true });
 export const fail = (reason: string): CheckResult => ({ pass: false, reason });
+
+/** Largest actual (API-reported) input tokens of a main request in a run log. */
+export function maxRequestTokens(logFile: string): number {
+  let max = 0;
+  try {
+    for (const line of fs.readFileSync(logFile, "utf8").split("\n")) {
+      if (!line.includes('"type":"step"')) continue;
+      max = Math.max(max, JSON.parse(line).response?.usage?.inputTokens ?? 0);
+    }
+  } catch {
+    // no log
+  }
+  return max;
+}

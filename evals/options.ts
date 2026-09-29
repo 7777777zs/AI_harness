@@ -1,7 +1,9 @@
 // Explicit harness settings for eval runs. Every setting is passed as a runAgent option, which
 // has the highest precedence, so the user's environment and ~/.harness/.env cannot change eval
-// behavior (A8). Only the model under test comes from OPENAI_MODEL.
+// behavior (A8). Only the model under test comes from OPENAI_MODEL. MCP servers are explicit too
+// (none unless the task declares them), so ~/.harness/mcp.json is never read by evals.
 import { DEFAULTS, type SettingOverrides } from "../src/config.js";
+import type { McpRunOptions } from "../src/mcp/config.js";
 import type { EvalTask } from "./types.js";
 
 /**
@@ -20,7 +22,7 @@ export interface EvalRunSettings {
   compactModel?: string | undefined;
 }
 
-export function evalSettings(task: EvalTask, run: EvalRunSettings): SettingOverrides {
+export function evalSettings(task: EvalTask, run: EvalRunSettings): SettingOverrides & { mcp: McpRunOptions } {
   const contextLimit = task.contextLimit ?? DEFAULTS.contextLimit;
   const compactModel = run.compactModel ?? run.mainModel;
   return {
@@ -31,5 +33,6 @@ export function evalSettings(task: EvalTask, run: EvalRunSettings): SettingOverr
     coverageFooter: DEFAULTS.coverageFooter,
     maxSteps: task.maxSteps ?? DEFAULTS.maxSteps,
     ...(compactModel !== undefined && { compactModel }),
+    mcp: { servers: task.mcpServers ?? {} },
   };
 }

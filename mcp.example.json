@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest", "--no-usage-statistics"],
+      "includeTools": [
+        "list_pages",
+        "select_page",
+        "new_page",
+        "navigate_page",
+        "take_snapshot",
+        "wait_for",
+        "click",
+        "fill",
+        "press_key",
+        "evaluate_script"
+      ],
+      "autoApproveTools": ["list_pages", "select_page", "new_page", "navigate_page", "take_snapshot", "wait_for"],
+      "hideParams": {
+        "take_snapshot": ["filePath"],
+        "navigate_page": ["initScript"]
+      }
+    }
+  }
+}
