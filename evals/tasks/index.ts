@@ -16,6 +16,8 @@ import { task as renameFunction } from "./14-rename-function.js";
 import { task as largeFileEdit } from "./15-large-file-edit.js";
 import { task as ignoredDirSearch } from "./16-ignored-dir-search.js";
 import { task as projectOverview } from "./17-project-overview.js";
+import { task as crlfEdit } from "./18-crlf-edit.js";
+import { task as summaryWithFooter } from "./19-summary-with-footer.js";
 
 export const tasks: EvalTask[] = [
   createFile,
@@ -35,4 +37,6 @@ export const tasks: EvalTask[] = [
   largeFileEdit,
   ignoredDirSearch,
   projectOverview,
+  crlfEdit,
+  summaryWithFooter,
 ];

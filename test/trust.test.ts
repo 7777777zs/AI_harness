@@ -316,7 +316,7 @@ async function scripted(dir: string, script: (n: number) => LLMResponse) {
       return script(n);
     },
   };
-  const result = await runAgent({ task: "x", cwd: dir, client, quiet: true, contextLimit: 1e9 });
+  const result = await runAgent({ task: "x", cwd: dir, client, quiet: true, contextLimit: 5_000_000 });
   return { seen, result };
 }
 

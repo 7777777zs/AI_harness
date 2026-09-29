@@ -11,6 +11,8 @@ export const GREP_MAX_CONTEXT = 5;
 export const GREP_DEFAULT_RESULTS = 100;
 export const GREP_MAX_RESULTS = 500;
 const BINARY_SNIFF_BYTES = 8000;
+/** Files read concurrently while searching. */
+const READ_AHEAD = 32;
 
 const clip = (s: string) => (s.length > GREP_MAX_LINE_CHARS ? `${s.slice(0, GREP_MAX_LINE_CHARS)} …[line truncated]` : s);
 
@@ -76,13 +78,32 @@ export const grep: Tool = {
     let skippedLarge = 0;
     let skippedBinary = 0;
 
-    for await (const [abs, rel] of candidates()) {
-      const size = (await fs.stat(abs)).size;
-      if (size > GREP_MAX_FILE_BYTES) {
+    // Read files with bounded parallelism, consumed in walk order (so output stays deterministic).
+    // Awaiting stat+read one file at a time left the I/O idle most of the time on large trees.
+    type Loaded = { rel: string; buf: Buffer | null; large: boolean };
+    const load = async ([abs, rel]: [string, string]): Promise<Loaded> => {
+      try {
+        if ((await fs.stat(abs)).size > GREP_MAX_FILE_BYTES) return { rel, buf: null, large: true };
+        return { rel, buf: await fs.readFile(abs), large: false };
+      } catch {
+        return { rel, buf: null, large: false }; // vanished or unreadable: skip
+      }
+    };
+    async function* loaded(): AsyncGenerator<Loaded> {
+      const queue: Promise<Loaded>[] = [];
+      for await (const c of candidates()) {
+        queue.push(load(c));
+        if (queue.length >= READ_AHEAD) yield await queue.shift()!;
+      }
+      while (queue.length) yield await queue.shift()!;
+    }
+
+    for await (const { rel, buf, large } of loaded()) {
+      if (large) {
         skippedLarge++;
         continue;
       }
-      const buf = await fs.readFile(abs);
+      if (!buf) continue;
       if (buf.subarray(0, BINARY_SNIFF_BYTES).includes(0)) {
         skippedBinary++;
         continue;

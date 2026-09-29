@@ -174,7 +174,9 @@ test("the pinned file listing survives Level 1 and Level 2 compaction", async ()
     client,
     tools,
     quiet: true,
-    contextLimit: 3_000,
+    // Large enough that the per-result / preflight caps (Phase 4) don't shrink results below
+    // the elision minimum, small enough that Level 1 and Level 2 both run.
+    contextLimit: 12_000,
     compactThreshold: 0.7,
     coverageCheck: false,
   });
@@ -320,11 +322,19 @@ test("the coverage check fires once when listed files remain unread", async () =
   assert.equal(
     msg!.content,
     "You have not read these files: ./: README.md; app/: agent.py, db.py; tests/: test_agent.py. " +
-      "Either read the relevant ones, or state in your final answer which files/directories you did not cover.",
+      "Either read the relevant ones, or state in your final answer which files/directories you did not cover. " +
+      "Your next reply replaces your previous answer, so it must be complete — include everything from your " +
+      "previous answer plus any additions.",
   );
   // The model answered twice; only one follow-up was sent, and the second answer was accepted.
   assert.equal(last.filter((m) => m.content?.startsWith("You have not read these files")).length, 1);
-  assert.equal(result.finalText, `Final answer ${client.requests.length - 1}`);
+  // The second answer is kept (it is not shorter than 60% of the first), followed by the harness footer.
+  assert.equal(
+    result.finalText,
+    `Final answer ${client.requests.length - 1}\n\n` +
+      "--- Coverage (reported by harness): read 1 of 5 known files. Not read: README.md, app/agent.py, app/db.py, tests/test_agent.py.",
+  );
+  assert.deepEqual(result.answerHistory, ["Final answer 2", "Final answer 3"]);
 });
 
 test("the coverage check does not fire when all known files were read", async () => {

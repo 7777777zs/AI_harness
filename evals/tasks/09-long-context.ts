@@ -25,24 +25,26 @@ function filler(seed: number): string {
 
 export const task: EvalTask = {
   id: "long-context",
-  description: `Follow a chain of ${PARTS} files of ~40k chars each; low context limit forces compaction`,
+  description: `Follow a chain of ${PARTS} files of ~40k chars each (pointer at the END of each file); tight limit forces compaction`,
   prompt:
     "Read start.txt. Each file tells you which file to read next; follow the chain one file at a time " +
-    "until you reach the last file, then report the answer code it contains. Only the first lines of each file matter.",
-  // Each read returns ~10k chars (~2.5k tokens) after tool-output truncation, so the
-  // budget of 14000 × 0.7 ≈ 9.8k tokens is exceeded after about four reads.
-  contextLimit: 14_000,
+    "until you reach the last file, then report the answer code it contains.",
+  // The pointer to the next file is the LAST line, so each file has to be read as a whole (a range
+  // from the top won't find it). A whole read returns the 10k head+tail view (~2.9k tokens, which
+  // includes the last line), under the 25% per-result cap of 16000 (4000 tokens); six reads exceed
+  // the compaction budget of 16000 × 0.7 = 11.2k tokens.
+  contextLimit: 16_000,
   compactThreshold: 0.7,
   setup(dir) {
     const names = Array.from({ length: PARTS }, (_, i) => (i === 0 ? "start.txt" : `${randomCode("part").toLowerCase()}.txt`));
     const code = randomCode("ANSWER");
     answers.set(dir, code);
     names.forEach((name, i) => {
-      const header =
+      const pointer =
         i < PARTS - 1
-          ? `Part ${i + 1} of ${PARTS}. Next file: ${names[i + 1]}\n`
-          : `Part ${i + 1} of ${PARTS}. This is the last file. The answer code is ${code}\n`;
-      write(dir, name, header + filler(i));
+          ? `End of part ${i + 1} of ${PARTS}. Next file: ${names[i + 1]}\n`
+          : `End of part ${i + 1} of ${PARTS}. This is the last file. The answer code is ${code}\n`;
+      write(dir, name, `Part ${i + 1} of ${PARTS}.\n` + filler(i) + pointer);
     });
   },
   check(dir, result) {

@@ -68,6 +68,8 @@ export interface CompactOptions {
   keepTurns?: number;
   /** Harness-computed remaining work (e.g. unread files), appended to Level 2 summaries. */
   remainingWork?: () => string;
+  /** Calibration ratio (actual / heuristic tokens) applied to this function's own estimates. */
+  tokenScale?: number;
 }
 
 export interface CompactResult {
@@ -352,6 +354,7 @@ export function sanitizeSummary(text: string, harnessRemaining?: string): string
 /** Apply Level 1, then Level 2 if still needed. Pure except for the describer/summarizer calls. */
 export async function compact(messages: Message[], opts: CompactOptions): Promise<CompactResult> {
   const keepTurns = opts.keepTurns ?? KEEP_TURNS;
+  const scale = opts.tokenScale ?? 1;
   const budget = opts.limit * opts.threshold;
   const result: CompactResult = {
     messages,
@@ -371,7 +374,7 @@ export async function compact(messages: Message[], opts: CompactOptions): Promis
   if (l1.describeError) result.describeError = l1.describeError;
   result.rejectedDescriptions = l1.rejected;
   if (l1.elided > 0) {
-    const after = Math.max(0, result.tokens - l1.savedTokens);
+    const after = Math.max(0, result.tokens - Math.ceil(l1.savedTokens * scale));
     result.events.push({
       level: 1,
       beforeTokens: result.tokens,
@@ -393,7 +396,7 @@ export async function compact(messages: Message[], opts: CompactOptions): Promis
     result.notes.push(`nothing older than the last ${keepTurns} turns to summarize`);
     return result;
   }
-  const spanTokens = estimateTokens(middle);
+  const spanTokens = Math.ceil(estimateTokens(middle) * scale);
   if (spanTokens < L2_MIN_SPAN_TOKENS) {
     result.level2 = { status: "skipped", spanTokens, reason: `span ~${spanTokens} tokens < ${L2_MIN_SPAN_TOKENS}` };
     return result;
@@ -412,8 +415,8 @@ export async function compact(messages: Message[], opts: CompactOptions): Promis
     result.notes.push(`Level 2 discarded, it would break tool-call pairing: ${pairingError}`);
     return result;
   }
-  const saved = l2.spanTokens - l2.summaryTokens;
-  if (saved < L2_MIN_SAVING * l2.spanTokens) {
+  const saved = Math.ceil((l2.spanTokens - l2.summaryTokens) * scale);
+  if (saved < L2_MIN_SAVING * l2.spanTokens * scale) {
     result.level2 = {
       status: "rejected",
       spanTokens: l2.spanTokens,

@@ -45,7 +45,7 @@ test("a context-length error forces compaction and the retry succeeds", async ()
     return final(`done after ${messages.length} messages`);
   });
 
-  const result = await runAgent({ task: "read files", cwd: dir, client, quiet: true, contextLimit: 1e9 });
+  const result = await runAgent({ task: "read files", cwd: dir, client, quiet: true, contextLimit: 5_000_000 });
   assert.equal(result.stopReason, "done");
   assert.ok(result.compactions >= 1, "forced compaction happened");
   const log = fs.readFileSync(result.logFile, "utf8");

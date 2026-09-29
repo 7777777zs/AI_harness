@@ -34,12 +34,28 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4.1-mini
 ```
 
-Values are resolved in this order, and the first one found wins:
-1. Environment variables (`export OPENAI_API_KEY=...` in bash, `$env:OPENAI_API_KEY = "..."` in PowerShell).
-2. `~/.harness/.env`.
-3. `.env` in this repository (handy while developing; see `.env.example`).
+Every setting can go in the same file. `.env.example` lists them all with their defaults.
 
-A `.env` in the directory you run `harness` from is **never** read, so a project's own secrets don't leak into the agent. Set `HARNESS_HOME` to use a directory other than `~/.harness`.
+| Setting | Default | Meaning |
+|---|---|---|
+| `CONTEXT_LIMIT` | `100000` | Context window budget in tokens (min 2000) |
+| `COMPACT_THRESHOLD` | `0.7` | Share of the limit at which compaction starts (0.1–0.95) |
+| `RECENT_BUDGET` | 40% of the limit | Tokens of recent tool results kept in full by compaction |
+| `COMPACT_MODEL` | the main model | Model for compaction calls (file descriptions, summaries) |
+| `COVERAGE_CHECK` | `on` | Ask once to cover unread files before accepting a whole-project answer |
+| `COVERAGE_FOOTER` | `on` | Append the harness-computed coverage footer to final answers |
+| `MAX_STEPS` | `20` | Maximum agent steps per task |
+
+Values are resolved in this order, and the first one found wins:
+1. Explicit options: `runAgent({...})` options, or the CLI flags `--context-limit`, `--compact-threshold`, `--recent-budget`, `--compact-model`, `--coverage-check`, `--coverage-footer`, `--max-steps`.
+2. Environment variables (`export CONTEXT_LIMIT=8000` in bash, `$env:CONTEXT_LIMIT = "8000"` in PowerShell).
+3. `~/.harness/.env`.
+4. `.env` in this repository (handy while developing).
+5. Built-in defaults.
+
+Invalid values stop the harness with a clear message instead of falling back silently. Examples are a non-numeric `CONTEXT_LIMIT`, a `CONTEXT_LIMIT` below 2000, and a `COMPACT_THRESHOLD` outside 0.1–0.95. At startup, the terminal and the `run_start` log entry show each setting's effective value and its source (`option`, `env`, `.env` or `default`).
+
+A `.env` in the directory you run `harness` from is **never** read, so a project's own secrets don't leak into the agent. Set `HARNESS_HOME` to use a directory other than `~/.harness`. The eval runner passes every setting explicitly, so your `.env` can't change eval behaviour.
 
 ## Usage
 
@@ -150,12 +166,18 @@ Before each model call, the harness estimates the context size. The starting poi
 
 Everything is printed (`⟳ Compaction L1: ~6,744 → ~3,973 tokens …`) and logged to the JSONL file: `compaction`, `level2_rejected`, `level2_skipped`, `describe_failed`, `repeated_call`.
 
-| Env var | Default |
-|---|---|
-| `CONTEXT_LIMIT` | `100000` tokens |
-| `COMPACT_THRESHOLD` | `0.7` |
-| `RECENT_BUDGET` | 40% of `CONTEXT_LIMIT` (tokens) |
-| `COVERAGE_CHECK` | `on` |
+See **Configuration** above for all settings (`CONTEXT_LIMIT`, `COMPACT_THRESHOLD`, `RECENT_BUDGET`, `COMPACT_MODEL`, `COVERAGE_CHECK`, `COVERAGE_FOOTER`, `MAX_STEPS`).
+
+**Size caps:**
+- No single tool result may exceed 25% of the context limit. `read_file` results are cut at a line boundary with `[Truncated at line N of M. Use read_file with offset=N+1 …]`.
+- The results of one turn together may not exceed 50%; the largest are shrunk first.
+- Before every request, if the estimate still exceeds the limit, the newest results are shrunk (`preflight_truncated`).
+
+**Token estimates:** Chinese, Japanese and Korean characters count as about 1 token each, and other text as about 3.5 characters per token. The estimates are calibrated against the API's real token counts during each run.
+
+**Answers:**
+- If the reply after a coverage check is much shorter than the previous answer, both are kept.
+- Unread files are listed in a footer written by the harness (`COVERAGE_FOOTER`).
 
 ## Tests
 

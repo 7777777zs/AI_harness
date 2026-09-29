@@ -61,7 +61,7 @@ test("E1: one context-length error forces compaction, retries exactly once, and 
     return final("finished");
   });
 
-  const result = await runAgent({ task: "read", cwd: dir, client, quiet: true, contextLimit: 1e9 });
+  const result = await runAgent({ task: "read", cwd: dir, client, quiet: true, contextLimit: 5_000_000 });
 
   assert.equal(result.stopReason, "done");
   assert.equal(result.finalText, "finished");

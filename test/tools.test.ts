@@ -322,14 +322,16 @@ test("edit_file: a denied edit returns DENIED and leaves the file untouched", as
   assert.equal(fs.readFileSync(path.join(dir, "code.js"), "utf8"), CODE);
 });
 
-test("edit_file: CRLF files match a LF old_str, and the result says so", async () => {
+// Phase 4 (B1): matching always runs on LF-normalized text and the CRLF style is preserved on
+// write, so the old "(matched after normalizing line endings to CRLF)" suffix is gone.
+test("edit_file: CRLF files match a LF old_str and keep CRLF", async () => {
   const crlf = CODE.replace(/\n/g, "\r\n");
   const dir = sandbox({ "win.js": crlf });
   const result = await editFile.execute(
     { path: "win.js", old_str: "function a() {\n  return 1;", new_str: "function a() {\n  return 5;" },
     context(dir).ctx,
   );
-  assert.equal(result, "Edited win.js: replaced 1 occurrence (lines 1-2) (matched after normalizing line endings to CRLF)");
+  assert.equal(result, "Edited win.js: replaced 1 occurrence (lines 1-2)");
   assert.equal(fs.readFileSync(path.join(dir, "win.js"), "utf8"), crlf.replace("return 1;", "return 5;"));
 });
 
@@ -397,10 +399,12 @@ test("truncate with a small max (write_file's 500-char preview) keeps within max
 
 const TEN = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join("\n") + "\n";
 
-test("read_file: without offset/limit the content is returned unchanged", async () => {
-  const dir = sandbox({ "a.txt": TEN, "crlf.txt": "a\r\nb\r\n" });
+// Phase 4 (B1): read_file shows LF-only text without a BOM, so old_str copied from it matches.
+test("read_file: without offset/limit the content is returned with LF line endings and no BOM", async () => {
+  const dir = sandbox({ "a.txt": TEN, "crlf.txt": "a\r\nb\r\n", "bom.txt": "﻿x\r\ny" });
   assert.equal(await readFile.execute({ path: "a.txt" }, context(dir).ctx), TEN);
-  assert.equal(await readFile.execute({ path: "crlf.txt" }, context(dir).ctx), "a\r\nb\r\n");
+  assert.equal(await readFile.execute({ path: "crlf.txt" }, context(dir).ctx), "a\nb\n");
+  assert.equal(await readFile.execute({ path: "bom.txt" }, context(dir).ctx), "x\ny");
 });
 
 test("read_file: offset/limit return numbered lines and a continuation hint", async () => {

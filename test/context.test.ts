@@ -51,7 +51,7 @@ test("validatePairing accepts valid conversations and rejects broken ones", () =
 
 test("Level 1 keeps every tool call/result pair and never adds or removes messages", async () => {
   const msgs = conversation(6);
-  const { messages, elided } = await elideToolResults(msgs, { budgetTokens: 5_100 });
+  const { messages, elided } = await elideToolResults(msgs, { budgetTokens: 5_800 });
   assert.equal(validatePairing(messages), null);
   assert.equal(messages.length, msgs.length);
   messages.forEach((m, i) => {
@@ -59,13 +59,13 @@ test("Level 1 keeps every tool call/result pair and never adds or removes messag
     assert.equal(m.role, orig.role);
     if (m.role === "tool" && orig.role === "tool") assert.equal(m.toolCallId, orig.toolCallId);
   });
-  // Kept by budget: t6c0, t6c1 (unseen), t5c0, t4c1 = ~5,008 tokens. Elided: t4c0, t3c0, t2c0, t2c1, t1c0.
+  // Each result is ~1,430 tokens (5,005 chars / 3.5). Kept by budget: t6c0, t6c1 (unseen), t5c0, t4c1 = ~5,720 tokens. Elided: t4c0, t3c0, t2c0, t2c1, t1c0.
   assert.equal(elided, 5);
 });
 
 test("Level 1 keeps the newest results within budget and elides everything older", async () => {
   const msgs = conversation(6);
-  const { messages } = await elideToolResults(msgs, { budgetTokens: 5_100 });
+  const { messages } = await elideToolResults(msgs, { budgetTokens: 5_800 });
   assert.deepEqual(fullIds(messages), ["t4c1", "t5c0", "t6c0", "t6c1"]);
   for (const m of messages) {
     if (m.role === "tool" && !fullIds(messages).includes(m.toolCallId)) {

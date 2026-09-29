@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import type { Tool } from "../types.js";
 import { optInt, requireString, resolveInCwd } from "./util.js";
+import { parseText, toLF } from "./textFormat.js";
 
 /** Width of the right-aligned line number in "<n>\t<text>" output (like `cat -n`). */
 const LINE_NO_WIDTH = 6;
@@ -25,12 +26,13 @@ export const readFile: Tool = {
     const file = resolveInCwd(ctx.cwd, requireString(args, "path"));
     const offset = optInt(args, "offset", { min: 1 });
     const limit = optInt(args, "limit", { min: 1 });
-    const content = await fs.readFile(file, "utf8");
-    if (offset === undefined && limit === undefined) return content;
+    // Always LF-only and without a BOM, so old_str copied from here matches in edit_file.
+    // Line numbers count the file's real lines (\r\n and \n both end a line).
+    const parsed = parseText(await fs.readFile(file, "utf8"));
+    if (offset === undefined && limit === undefined) return toLF(parsed.lines);
 
-    const lines = content.split(/\r?\n/);
-    if (content.endsWith("\n")) lines.pop();
-    const total = content === "" ? 0 : lines.length;
+    const lines = parsed.lines.map((l) => l.text);
+    const total = lines.length;
     if (total === 0) return "(empty file)";
     const start = offset ?? 1;
     if (start > total) throw new Error(`offset ${start} is past the end of the file (${total} lines)`);

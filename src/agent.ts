@@ -8,49 +8,71 @@ import type { Tool, ToolContext } from "./types.js";
 import { tools as defaultTools } from "./tools/index.js";
 import { truncate } from "./tools/util.js";
 import { createTerminalConfirm } from "./confirm.js";
-import { logsDir } from "./config.js";
-import { compact, RECENT_BUDGET_FRACTION } from "./context/compact.js";
+import {
+  ConfigError,
+  DEFAULTS,
+  describeConfig,
+  envFileSources,
+  harnessVersion,
+  logsDir,
+  resolveConfig,
+  type HarnessConfig,
+} from "./config.js";
+import { capResult, capTurn, RESULT_CAP_FRACTION, shrinkNewest, TURN_CAP_FRACTION } from "./context/budget.js";
+import { compact } from "./context/compact.js";
 import { Coverage, isWholeProjectTask } from "./context/coverage.js";
 import { ContextStore } from "./context/store.js";
-import { ContextTracker } from "./context/tokens.js";
+import { ContextTracker, estimateTokens, estimateToolDefs } from "./context/tokens.js";
 import { makeDescriber, makeSummarizer } from "./context/summarize.js";
 
-export const MAX_STEPS = 20;
+export const MAX_STEPS = DEFAULTS.maxSteps;
 
 export interface RunAgentOptions {
   task: string;
   /** Sandbox directory: tool paths are restricted to it and shell commands run in it. */
   cwd: string;
-  /** Skip the y/N confirmation for write_file and run_shell. Defaults to false. */
+  /** Skip the y/N confirmation for write_file, edit_file and run_shell. Defaults to false. */
   autoApprove?: boolean;
-  maxSteps?: number;
   /** Where the JSONL log goes. Defaults to ~/.harness/logs (never inside cwd). */
   logDir?: string;
-  /** Context window budget in tokens. Defaults to env CONTEXT_LIMIT or 100000. */
+  // Settings below override env / ~/.harness/.env / defaults (see src/config.ts).
+  maxSteps?: number;
+  /** Context window budget in tokens (CONTEXT_LIMIT, default 100000). */
   contextLimit?: number;
-  /** Fraction of contextLimit that triggers compaction. Defaults to env COMPACT_THRESHOLD or 0.7. */
+  /** Fraction of contextLimit that triggers compaction (COMPACT_THRESHOLD, default 0.7). */
   compactThreshold?: number;
-  /** Tokens of recent tool results kept in full by Level 1. Defaults to env RECENT_BUDGET or 40% of contextLimit. */
+  /** Tokens of recent tool results kept in full by Level 1 (RECENT_BUDGET, default 40% of contextLimit). */
   recentBudget?: number;
+  /** Model for compaction calls (COMPACT_MODEL, default: the main model). */
+  compactModel?: string;
+  /**
+   * Before accepting a final answer to a whole-project task while listed files are unread,
+   * ask the model once to read them or state what it skipped (COVERAGE_CHECK, default on).
+   */
+  coverageCheck?: boolean;
+  /** Append the harness-computed coverage footer to the final answer (COVERAGE_FOOTER, default on). */
+  coverageFooter?: boolean;
   /** Defaults to a client built from environment variables. */
   client?: LLMClient;
+  /** Client for compaction calls. Defaults to a client for compactModel, else `client`. */
+  compactClient?: LLMClient;
   /** Defaults to an interactive terminal y/N prompt. Ignored when autoApprove is true. */
   confirm?: (summary: string) => Promise<boolean>;
   tools?: Tool[];
   /** Suppress terminal output. */
   quiet?: boolean;
-  /**
-   * Before accepting a final answer to a whole-project task while listed files are unread,
-   * ask the model once to read them or state what it skipped. Defaults to env COVERAGE_CHECK
-   * ("on" unless set to "off").
-   */
-  coverageCheck?: boolean;
 }
 
 export interface AgentResult {
+  /** The final answer, with the harness coverage footer appended when files were left unread. */
   finalText: string | null;
+  /** Every final-answer candidate the model produced (more than one after a coverage check). */
+  answerHistory: string[];
   steps: number;
+  /** Total tokens: main task + compaction. */
   usage: Usage;
+  /** Tokens of the main task calls only. */
+  mainUsage: Usage;
   stopReason: "done" | "max_steps" | "error";
   error?: string;
   durationMs: number;
@@ -67,6 +89,10 @@ export interface AgentResult {
   compactionUsage: Usage & { calls: number };
   /** Harness-computed file coverage at the end of the run. */
   coverage: { known: number; read: number; unread: string[] };
+  /** Calibrated ratio of actual to estimated tokens at the end of the run. */
+  tokenRatio: number;
+  /** Effective settings and where each came from; null if the configuration was invalid. */
+  config: HarnessConfig | null;
   logFile: string;
 }
 
@@ -90,7 +116,12 @@ export interface NudgeStats {
 
 export const coverageCheckMessage = (unread: string) =>
   `You have not read these files: ${unread}. Either read the relevant ones, or state in your final answer ` +
-  "which files/directories you did not cover.";
+  "which files/directories you did not cover. Your next reply replaces your previous answer, so it must be " +
+  "complete — include everything from your previous answer plus any additions.";
+
+/** A final answer shorter than this share of the previous one is merged with it (A1 safety net). */
+export const ANSWER_SHRINK_RATIO = 0.6;
+export const ANSWER_MERGE_SEPARATOR = "\n\n--- (continued after the harness coverage check) ---\n\n";
 
 /** Steps in a row with tool calls but no reply text before the note-taking reminder fires. */
 export const SILENT_STEPS_BEFORE_NUDGE = 3;
@@ -116,11 +147,6 @@ const c = {
 function oneLine(s: string, max: number): string {
   const flat = s.replace(/\s+/g, " ").trim();
   return flat.length > max ? `${flat.slice(0, max)}…` : flat;
-}
-
-function envNumber(name: string, fallback: number): number {
-  const value = Number(process.env[name]);
-  return process.env[name] && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -158,13 +184,19 @@ export function repeatNotice(call: ToolCall, count: number): string {
   );
 }
 
+/** A1 safety net: combine the final answer with the previous one if it shrank a lot. */
+export function mergeAnswers(history: string[]): { text: string; merged: boolean } {
+  const current = history.at(-1) ?? "";
+  const previous = history.at(-2);
+  if (previous !== undefined && current.length < ANSWER_SHRINK_RATIO * previous.length) {
+    return { text: `${previous}${ANSWER_MERGE_SEPARATOR}${current}`, merged: true };
+  }
+  return { text: current, merged: false };
+}
+
 export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
   const startedAt = Date.now();
   const cwd = path.resolve(opts.cwd);
-  const maxSteps = opts.maxSteps ?? MAX_STEPS;
-  const contextLimit = opts.contextLimit ?? envNumber("CONTEXT_LIMIT", 100_000);
-  const threshold = opts.compactThreshold ?? envNumber("COMPACT_THRESHOLD", 0.7);
-  const recentBudget = opts.recentBudget ?? envNumber("RECENT_BUDGET", contextLimit * RECENT_BUDGET_FRACTION);
   const tools = opts.tools ?? defaultTools;
   const out = opts.quiet ? () => {} : (s: string) => console.log(s);
 
@@ -203,7 +235,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
   const nudges: NudgeStats = { notes: 0, missingFile: 0, repeat: 0, coverage: 0 };
   const compactionUsage = { inputTokens: 0, outputTokens: 0, calls: 0 };
   const coverage = new Coverage(cwd);
-  const coverageCheck = opts.coverageCheck ?? process.env.COVERAGE_CHECK?.toLowerCase() !== "off";
+  const answerHistory: string[] = [];
+  let config: HarnessConfig | null = null;
   let coverageChecked = false;
   const callCounts = new Map<string, number>();
   let repeatedCalls = 0;
@@ -240,10 +273,19 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
   ];
 
   const finish = (stopReason: AgentResult["stopReason"], finalText: string | null, error?: string): AgentResult => {
+    // A2: unread (or only partially read) known files are reported by the harness, not the model.
+    const footer = stopReason === "done" && finalText !== null && config?.coverageFooter ? coverage.footer() : null;
+    if (footer) finalText = `${finalText}\n\n${footer}`;
+    const mainUsage = {
+      inputTokens: usage.inputTokens - compactionUsage.inputTokens,
+      outputTokens: usage.outputTokens - compactionUsage.outputTokens,
+    };
     const result: AgentResult = {
       finalText,
+      answerHistory,
       steps: step,
       usage,
+      mainUsage,
       stopReason,
       ...(error !== undefined && { error }),
       durationMs: Date.now() - startedAt,
@@ -254,17 +296,64 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       nudges,
       compactionUsage,
       coverage: { known: coverage.known.size, read: coverage.known.size - coverage.unread().length, unread: coverage.unread() },
+      tokenRatio: tracker.ratio,
+      config,
       logFile,
     };
     log({ type: "result", ...result });
     if (stopReason !== "error") {
-      out(c.dim(`\nSteps: ${step} | Tokens in: ${usage.inputTokens}, out: ${usage.outputTokens} | Log: ${logFile}`));
+      if (footer) out(c.dim(footer));
+      out(
+        c.dim(
+          `\nSteps: ${step} | main tokens in ${fmt(mainUsage.inputTokens)}, out ${fmt(mainUsage.outputTokens)} | ` +
+            `compaction in ${fmt(compactionUsage.inputTokens)}, out ${fmt(compactionUsage.outputTokens)} (${compactionUsage.calls} calls) | ` +
+            `token ratio ${tracker.ratio.toFixed(2)} | Log: ${logFile}`,
+        ),
+      );
     }
     return result;
   };
 
   try {
+    // A8: validated settings with their sources (option > env > .env > default).
+    try {
+      config = resolveConfig({
+        ...(opts.contextLimit !== undefined && { contextLimit: opts.contextLimit }),
+        ...(opts.compactThreshold !== undefined && { compactThreshold: opts.compactThreshold }),
+        ...(opts.recentBudget !== undefined && { recentBudget: opts.recentBudget }),
+        ...(opts.compactModel !== undefined && { compactModel: opts.compactModel }),
+        ...(opts.coverageCheck !== undefined && { coverageCheck: opts.coverageCheck }),
+        ...(opts.coverageFooter !== undefined && { coverageFooter: opts.coverageFooter }),
+        ...(opts.maxSteps !== undefined && { maxSteps: opts.maxSteps }),
+      });
+    } catch (err) {
+      if (err instanceof ConfigError) return finish("error", null, `Invalid configuration: ${err.message}`);
+      throw err;
+    }
+    const { contextLimit, compactThreshold: threshold, recentBudget, maxSteps } = config;
+
     const client = opts.client ?? createClientFromEnv();
+    const mainModel = opts.client ? "(custom client)" : process.env.OPENAI_MODEL;
+    const modelSource = opts.client ? "option" : envFileSources.has("OPENAI_MODEL") ? ".env" : "env";
+    const separateCompactModel = config.compactModel !== undefined && config.compactModel !== process.env.OPENAI_MODEL;
+    const compactClient =
+      opts.compactClient ?? (separateCompactModel && !opts.client ? createClientFromEnv(config.compactModel) : client);
+
+    // A4: log the effective configuration once at the start.
+    const version = harnessVersion();
+    log({
+      type: "run_start",
+      model: mainModel,
+      modelSource,
+      compactModel: config.compactModel ?? mainModel,
+      config,
+      cwd,
+      platform: process.platform,
+      node: process.version,
+      harness: version,
+    });
+    out(c.dim(`Config: model=${mainModel} (${modelSource}) ${describeConfig(config, mainModel)} | harness ${version.version}${version.commit ? ` @ ${version.commit}` : ""}`));
+
     // Compaction calls count toward total usage and are also tracked (and logged) separately.
     const compactionCall = (kind: "describe_call" | "level2_call") => (u: Usage) => {
       addUsage(u);
@@ -273,10 +362,13 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       compactionUsage.calls++;
       log({ type: kind, step, inputTokens: u.inputTokens, outputTokens: u.outputTokens });
     };
-    const summarize = makeSummarizer(client, compactionCall("level2_call"));
-    const describe = makeDescriber(client, compactionCall("describe_call"));
+    const summarize = makeSummarizer(compactClient, compactionCall("level2_call"));
+    const describe = makeDescriber(compactClient, compactionCall("describe_call"));
     const remainingWork = () =>
       coverage.known.size ? `Unread files (harness-computed): ${coverage.unreadText() || "none"}` : "";
+    const resultCap = Math.floor(contextLimit * RESULT_CAP_FRACTION);
+    const turnCap = Math.floor(contextLimit * TURN_CAP_FRACTION);
+    const tokensOf = (text: string) => tracker.tokensOf(text);
 
     const maybeCompact = async (force: boolean) => {
       const r = await compact(messages, {
@@ -289,6 +381,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         store,
         force,
         remainingWork,
+        tokenScale: tracker.ratio,
       });
       if (r.describeError) {
         stats.describeFailures++;
@@ -304,13 +397,13 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         if (ev.level === 1) stats.level1++;
         else stats.level2Accepted++;
         out(c.magenta(`⟳ Compaction L${ev.level}: ~${fmt(ev.beforeTokens)} → ~${fmt(ev.afterTokens)} tokens (${ev.detail})`));
-        log({ type: "compaction", step, contextLimit, threshold, recentBudget, ...ev });
+        log({ type: "compaction", step, contextLimit, threshold, recentBudget, tokenRatio: tracker.ratio, ...ev });
       }
       if (r.level2.status === "rejected" || r.level2.status === "skipped") {
         if (r.level2.status === "rejected") stats.level2Rejected++;
         else stats.level2Skipped++;
         out(c.yellow(`⟳ Compaction L2 ${r.level2.status}: ${r.level2.reason}`));
-        log({ type: `level2_${r.level2.status}`, step, ...r.level2 });
+        log({ type: `level2_${r.level2.status}`, step, tokenRatio: tracker.ratio, ...r.level2 });
       }
       for (const note of r.notes) {
         out(c.yellow(`⟳ Compaction: ${note}`));
@@ -323,18 +416,39 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       }
     };
 
+    // The known-files status is attached to each request instead of stored in history,
+    // so it is never elided or summarized and is always current.
+    const withStatus = () => {
+      const status = coverage.statusBlock(opts.task);
+      return status ? [...messages, { role: "user" as const, content: status }] : messages;
+    };
+
+    // A3 preflight: never send a request estimated above the context limit.
+    const preflight = () => {
+      const status = coverage.statusBlock(opts.task);
+      const estimate = tracker.estimate(messages, toolDefs) + (status ? tracker.tokensOf(status) : 0);
+      if (estimate <= contextLimit) return;
+      const shrunk = shrinkNewest(messages, estimate - contextLimit, tokensOf);
+      if (shrunk.shrunk.length === 0) return;
+      messages = shrunk.messages;
+      for (const m of messages) {
+        if (m.role === "tool" && shrunk.shrunk.includes(m.toolCallId)) {
+          const orig = store.originals.get(m.toolCallId);
+          if (orig) store.record(m.toolCallId, orig.name, orig.args, m.content);
+        }
+      }
+      tracker.reset(Math.max(0, tracker.estimate(messages, toolDefs) - shrunk.saved), messages.length);
+      out(c.yellow(`⟳ Preflight: request ~${fmt(estimate)} tokens > limit ${fmt(contextLimit)}; shrank ${shrunk.shrunk.length} newest result(s)`));
+      log({ type: "preflight_truncated", step, estimate, limit: contextLimit, saved: shrunk.saved, shrunk: shrunk.shrunk });
+    };
+
     while (step < maxSteps) {
       step++;
       out(c.bold(`\n── Step ${step} ──`));
 
       await maybeCompact(false);
+      preflight();
 
-      // The known-files status is attached to each request instead of stored in history,
-      // so it is never elided or summarized and is always current.
-      const withStatus = () => {
-        const status = coverage.statusBlock(opts.task);
-        return status ? [...messages, { role: "user" as const, content: status }] : messages;
-      };
       let request = withStatus();
       let response: LLMResponse;
       let sentCount = messages.length;
@@ -345,6 +459,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         out(c.red(`Context length exceeded; forcing compaction and retrying once.`));
         log({ type: "context_length_error", step, error: err.message });
         await maybeCompact(true);
+        preflight();
         sentCount = messages.length;
         request = withStatus();
         try {
@@ -358,15 +473,26 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       }
 
       addUsage(response.usage);
-      tracker.record(response.usage.inputTokens, sentCount);
-      log({ type: "step", step, request: { messages: request, tools: toolDefs }, response });
+      // A5: calibrate the estimator against the API's actual count for this request.
+      const heuristic = estimateTokens(request) + estimateToolDefs(toolDefs);
+      const observedRatio = tracker.record(response.usage.inputTokens, sentCount, heuristic);
+      log({
+        type: "step",
+        step,
+        request: { messages: request, tools: toolDefs },
+        response,
+        heuristicTokens: heuristic,
+        observedRatio,
+        tokenRatio: tracker.ratio,
+      });
 
       messages.push({ role: "assistant", content: response.text, toolCalls: response.toolCalls });
 
       if (response.toolCalls.length === 0) {
+        answerHistory.push(response.text ?? "");
         // Coverage check: once per run, don't accept a whole-project answer while listed files are unread.
         const unread = coverage.unread();
-        if (coverageCheck && !coverageChecked && unread.length > 0 && isWholeProjectTask(opts.task)) {
+        if (config.coverageCheck && !coverageChecked && unread.length > 0 && isWholeProjectTask(opts.task)) {
           coverageChecked = true;
           nudges.coverage++;
           out(c.yellow(`  ⚑ coverage check: ${unread.length} listed file(s) not read; asking the model once more`));
@@ -374,12 +500,25 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
           messages.push({ role: "user", content: coverageCheckMessage(coverage.unreadText()) });
           continue;
         }
-        out(c.green("\nFinal answer:\n") + (response.text ?? "(empty response)"));
-        return finish("done", response.text);
+        // A1: the final reply must not silently drop an earlier, fuller answer.
+        const merged = mergeAnswers(answerHistory);
+        if (merged.merged) {
+          out(c.yellow(`  ⚑ final answer much shorter than the previous one; keeping both`));
+          log({
+            type: "answer_merged",
+            step,
+            previousChars: answerHistory.at(-2)!.length,
+            currentChars: answerHistory.at(-1)!.length,
+          });
+        }
+        out(c.green("\nFinal answer:\n") + (merged.text || "(empty response)"));
+        return finish("done", response.text === null && !merged.merged ? null : merged.text);
       }
 
       if (response.text) out(c.cyan("Model: ") + response.text);
 
+      // Execute every call of this turn, then apply the size caps, then append harness hints.
+      const turn: { call: ToolCall; content: string; hints: string }[] = [];
       for (const call of response.toolCalls) {
         const shownArgs = call.args ? JSON.stringify(call.args) : "(invalid JSON)";
         out(c.yellow(`→ ${call.name}`) + " " + c.dim(oneLine(shownArgs, 200)));
@@ -396,25 +535,50 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
             coverage.markRead(call.args.path, call.args.offset !== undefined || call.args.limit !== undefined);
           }
         }
-        let result = truncate(raw);
-        // The store keeps the result without harness hints, for descriptions and summaries.
-        store.record(call.id, call.name, call.args, result);
-        // Hints are appended after truncation so they are never cut off.
-        if (call.name === "read_file" && result.startsWith("Error: ENOENT")) {
+        // A3 per-result cap: no single result above RESULT_CAP_FRACTION of the context limit.
+        let content = truncate(raw);
+        if (tokensOf(content) > resultCap) {
+          const before = tokensOf(content);
+          content = capResult(call.name, call.args, call.name === "read_file" ? raw : content, resultCap, tokensOf);
+          log({ type: "result_capped", step, tool: call.name, beforeTokens: before, afterTokens: tokensOf(content), cap: resultCap });
+        }
+
+        let hints = "";
+        if (call.name === "read_file" && raw.startsWith("Error: ENOENT")) {
           missingFileReads++;
           nudges.missingFile++;
-          result += MISSING_FILE_HINT;
+          hints += MISSING_FILE_HINT;
           log({ type: "nudge", kind: "missing_file", step, args: call.args });
         }
         if (count >= 2) {
           repeatedCalls++;
           nudges.repeat++;
-          result += repeatNotice(call, count);
+          hints += repeatNotice(call, count);
           log({ type: "repeated_call", step, tool: call.name, args: call.args, count });
           log({ type: "nudge", kind: "repeat", step, tool: call.name, count });
         }
-        messages.push({ role: "tool", toolCallId: call.id, name: call.name, content: result });
+        turn.push({ call, content, hints });
+      }
 
+      // A3 per-turn cap: all results of this turn together within TURN_CAP_FRACTION of the limit.
+      const totalTurn = turn.reduce((s, t) => s + tokensOf(t.content), 0);
+      if (totalTurn > turnCap) {
+        const capped = capTurn(
+          turn.map((t) => ({ name: t.call.name, args: t.call.args, content: t.content })),
+          turnCap,
+          tokensOf,
+        );
+        capped.forEach((content, i) => (turn[i]!.content = content));
+        const after = capped.reduce((s, x) => s + tokensOf(x), 0);
+        out(c.yellow(`⟳ Turn cap: ${turn.length} results ~${fmt(totalTurn)} tokens > ${fmt(turnCap)}; shrank to ~${fmt(after)}`));
+        log({ type: "turn_capped", step, beforeTokens: totalTurn, afterTokens: after, cap: turnCap });
+      }
+
+      for (const { call, content, hints } of turn) {
+        // The store keeps the result as the model sees it, without harness hints.
+        store.record(call.id, call.name, call.args, content);
+        const result = content + hints;
+        messages.push({ role: "tool", toolCallId: call.id, name: call.name, content: result });
         const color = result.startsWith("Error:") ? c.red : c.dim;
         out(color(`  ← ${oneLine(result, 150)} (${result.length} chars)`));
       }

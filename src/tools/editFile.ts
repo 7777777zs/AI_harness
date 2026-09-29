@@ -1,6 +1,10 @@
 import fs from "node:fs/promises";
 import { DENIED, type Tool } from "../types.js";
 import { optBool, requireString, resolveInCwd, toRel } from "./util.js";
+import { applyReplacements, dominantEol, normalizeEol, parseText, serialize, toLF } from "./textFormat.js";
+
+/** Remove spaces/tabs at the end of every line (for the "only trailing whitespace differs" hint). */
+const stripTrailingWhitespace = (s: string) => s.replace(/[ \t]+(?=\n|$)/g, "");
 
 const MAX_HUNKS = 3;
 const MAX_HUNK_LINES = 12; // per side
@@ -90,21 +94,25 @@ export const editFile: Tool = {
     if (oldS === "") throw new Error("old_str must not be empty (use write_file to create a new file)");
     if (oldS === newS) throw new Error("old_str and new_str are identical; nothing to change");
 
-    const content = await fs.readFile(file, "utf8");
-    let positions = findAll(content, oldS);
-    let crlf = false;
-    // The model usually sends "\n"; retry once against a CRLF file, and say so in the result.
-    if (positions.length === 0 && content.includes("\r\n") && oldS.includes("\n") && !oldS.includes("\r")) {
-      const crlfOld = oldS.replace(/\n/g, "\r\n");
-      const crlfPositions = findAll(content, crlfOld);
-      if (crlfPositions.length > 0) {
-        oldS = crlfOld;
-        newS = newS.replace(/\r?\n/g, "\r\n");
-        positions = crlfPositions;
-        crlf = true;
-      }
-    }
+    // Match against the LF-normalized text without BOM (what read_file shows), then write back in
+    // the file's own style: untouched lines keep their line endings, the BOM is preserved.
+    const parsed = parseText(await fs.readFile(file, "utf8"));
+    const content = toLF(parsed.lines);
+    oldS = normalizeEol(oldS);
+    newS = normalizeEol(newS);
+    if (oldS === newS) throw new Error("old_str and new_str are identical; nothing to change");
+    const positions = findAll(content, oldS);
     if (positions.length === 0) {
+      // Say so when only trailing whitespace differs: the model can't see trailing spaces in its own text.
+      const stripped = findAll(stripTrailingWhitespace(content), stripTrailingWhitespace(oldS));
+      if (stripped.length > 0) {
+        const lines = lineNumbers(stripTrailingWhitespace(content), stripped);
+        throw new Error(
+          `old_str not found in ${rel}, but it matches (${lines.length === 1 ? "line" : "lines"} ${lines.join(", ")}) ` +
+            "if trailing whitespace is ignored: the whitespace at the end of some lines differs from the file. " +
+            "Copy the exact text, including trailing spaces or tabs, or re-read the lines with read_file.",
+        );
+      }
       throw new Error(
         `old_str not found in ${rel}. It must match the file exactly, including whitespace and indentation; ` +
           "read the file again and copy the exact text.",
@@ -118,30 +126,26 @@ export const editFile: Tool = {
       );
     }
 
-    // Build the new content and the new line number of each replacement.
-    let updated = "";
-    let last = 0;
+    // Build the new file and the new line number of each replacement.
     const delta = countNewlines(newS) - countNewlines(oldS);
     const newStarts = oldLines.map((l, i) => l + i * delta);
-    for (const pos of positions) {
-      updated += content.slice(last, pos) + newS;
-      last = pos + oldS.length;
-    }
-    updated += content.slice(last);
+    const updated = applyReplacements(
+      parsed,
+      positions.map((pos) => ({ start: pos, end: pos + oldS.length, text: newS })),
+    );
 
     const n = positions.length;
+    const eol = dominantEol(parsed.lines);
+    const style = [eol === "\r\n" ? "CRLF line endings" : "", parsed.bom ? "BOM" : ""].filter(Boolean).join(", ");
     const hunks = positions.slice(0, MAX_HUNKS).map((pos, i) => hunk(content, pos, oldS, newS, oldLines[i]!));
     if (n > MAX_HUNKS) hunks.push(`… and ${n - MAX_HUNKS} more replacement${n - MAX_HUNKS === 1 ? "" : "s"}`);
     const approved = await ctx.confirm(
-      `edit_file -> ${rel} (${n} replacement${n === 1 ? "" : "s"}${crlf ? ", CRLF line endings" : ""})\n${hunks.join("\n")}`,
+      `edit_file -> ${rel} (${n} replacement${n === 1 ? "" : "s"}${style ? `, ${style} preserved` : ""})\n${hunks.join("\n")}`,
     );
     if (!approved) return DENIED;
 
-    await fs.writeFile(file, updated, "utf8");
+    await fs.writeFile(file, serialize(updated), "utf8");
     const where = newS === "" ? `at ${describeLines(newStarts, 1)}, text deleted` : describeLines(newStarts, spanLines(newS));
-    return (
-      `Edited ${rel}: replaced ${n} occurrence${n === 1 ? "" : "s"} (${where})` +
-      (crlf ? " (matched after normalizing line endings to CRLF)" : "")
-    );
+    return `Edited ${rel}: replaced ${n} occurrence${n === 1 ? "" : "s"} (${where})`;
   },
 };

@@ -17,8 +17,9 @@ export function missingEnv(): string | null {
   return null;
 }
 
-export function createClientFromEnv(): LLMClient {
+/** A client for `model`, or for OPENAI_MODEL when no model is given (e.g. COMPACT_MODEL unset). */
+export function createClientFromEnv(model?: string): LLMClient {
   const missing = missingEnv();
   if (missing) throw new Error(missing);
-  return new OpenAIClient(process.env.OPENAI_API_KEY!, process.env.OPENAI_MODEL!);
+  return new OpenAIClient(process.env.OPENAI_API_KEY!, model ?? process.env.OPENAI_MODEL!);
 }

@@ -8,6 +8,7 @@ import { runAgent } from "../src/agent.js";
 import { loadEnv } from "../src/config.js";
 import { missingEnv } from "../src/llm/index.js";
 import { tasks } from "./tasks/index.js";
+import { evalSettings } from "./options.js";
 import type { CheckResult, EvalTask } from "./types.js";
 
 interface RunRecord {
@@ -30,6 +31,11 @@ interface RunRecord {
   nudges: number;
   /** Input tokens spent on compaction calls (Level 1 descriptions + Level 2 summaries). */
   compactionInputTokens?: number;
+  compactionOutputTokens?: number;
+  mainInputTokens?: number;
+  mainOutputTokens?: number;
+  tokenRatio?: number;
+  answerMerged?: boolean;
   /** Listed files never read, at the end of the run. */
   unreadAtEnd?: number;
   logFile?: string;
@@ -63,6 +69,7 @@ const { values: args } = parseArgs({
     concurrency: { type: "string", default: "1" },
     keep: { type: "boolean", default: false },
     verbose: { type: "boolean", default: false },
+    "compact-model": { type: "string" },
   },
 });
 
@@ -130,9 +137,8 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       autoApprove: true,
       quiet: !args.verbose,
       logDir: path.join(logsRoot, `${task.id}-${run}`),
-      ...(task.contextLimit !== undefined && { contextLimit: task.contextLimit }),
-      ...(task.compactThreshold !== undefined && { compactThreshold: task.compactThreshold }),
-      ...(task.maxSteps !== undefined && { maxSteps: task.maxSteps }),
+      // Every setting explicit: ~/.harness/.env and env vars can't change eval behavior (A8).
+      ...evalSettings(task, { mainModel: process.env.OPENAI_MODEL, compactModel: args["compact-model"] }),
     });
     Object.assign(record, {
       stopReason: result.stopReason,
@@ -148,6 +154,11 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       descriptionRejected: result.compactionStats.descriptionRejected,
       nudges: result.nudges.notes + result.nudges.missingFile + result.nudges.repeat + result.nudges.coverage,
       compactionInputTokens: result.compactionUsage.inputTokens,
+      compactionOutputTokens: result.compactionUsage.outputTokens,
+      mainInputTokens: result.mainUsage.inputTokens,
+      mainOutputTokens: result.mainUsage.outputTokens,
+      tokenRatio: result.tokenRatio,
+      answerMerged: result.answerHistory.length > 1 && result.finalText?.includes("--- (continued after the harness coverage check) ---"),
       unreadAtEnd: result.coverage.unread.length,
       logFile: path.relative(process.cwd(), result.logFile),
     });

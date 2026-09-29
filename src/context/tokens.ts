@@ -1,45 +1,86 @@
 import type { Message, ToolDefinition } from "../llm/types.js";
 
-/** Rough token estimate: characters / 4. No tokenizer dependency. */
-export function estimateChars(chars: number): number {
-  return Math.ceil(chars / 4);
+/** Chinese/Japanese/Korean characters (and full-width forms): roughly one token each. */
+const CJK = /[぀-ヿ㐀-䶿一-鿿가-힯豈-﫿＀-￯]/g;
+/** Characters per token for other text (code, English): a bit denser than the old /4. */
+export const CHARS_PER_TOKEN = 3.5;
+
+/** Heuristic token estimate for a string: CJK characters count 1 each, other text chars / 3.5. */
+export function estimateText(s: string): number {
+  if (!s) return 0;
+  const cjk = s.match(CJK)?.length ?? 0;
+  return Math.ceil(cjk + (s.length - cjk) / CHARS_PER_TOKEN);
 }
 
-function messageChars(m: Message): number {
-  let chars = (m.content ?? "").length;
+/** Heuristic for a character count of non-CJK text (used for "chars saved" arithmetic). */
+export function estimateChars(chars: number): number {
+  return Math.ceil(chars / CHARS_PER_TOKEN);
+}
+
+function messageText(m: Message): string {
+  let text = m.content ?? "";
   if (m.role === "assistant") {
-    for (const call of m.toolCalls) chars += call.name.length + JSON.stringify(call.args ?? {}).length;
+    for (const call of m.toolCalls) text += call.name + JSON.stringify(call.args ?? {});
   }
-  return chars;
+  return text;
 }
 
 export function estimateTokens(messages: Message[]): number {
-  return estimateChars(messages.reduce((sum, m) => sum + messageChars(m), 0));
+  return messages.reduce((sum, m) => sum + estimateText(messageText(m)), 0);
 }
 
 export function estimateToolDefs(tools: ToolDefinition[]): number {
-  return tools.length === 0 ? 0 : estimateChars(JSON.stringify(tools).length);
+  return tools.length === 0 ? 0 : estimateText(JSON.stringify(tools));
 }
 
+export const RATIO_MIN = 0.5;
+export const RATIO_MAX = 3.0;
+/** Weight of each new observation in the smoothed ratio. */
+export const RATIO_ALPHA = 0.3;
+
 /**
- * Tracks the current context size. The latest API response's `inputTokens` is the
- * ground truth; messages appended since that call are estimated with the heuristic.
- * Before the first call (or if the provider reports no usage) it is fully heuristic.
+ * Tracks the current context size. The latest API response's `inputTokens` is the ground
+ * truth; messages appended since that call are estimated with the heuristic, scaled by a
+ * calibration ratio learned during the run (actual tokens / heuristic estimate, smoothed
+ * with an exponential moving average and clamped to [0.5, 3.0]).
  */
 export class ContextTracker {
   private baseTokens = 0;
   private baseCount = 0;
   private hasBase = false;
+  /** Calibration: actual input tokens / heuristic estimate. 1 until the first response. */
+  ratio = 1;
+  private observations = 0;
 
-  estimate(messages: Message[], tools: ToolDefinition[]): number {
-    if (!this.hasBase) return estimateTokens(messages) + estimateToolDefs(tools);
-    return this.baseTokens + estimateTokens(messages.slice(this.baseCount));
+  /** Calibrated estimate of arbitrary text (e.g. a tool result or the status block). */
+  tokensOf(text: string): number {
+    return Math.ceil(estimateText(text) * this.ratio);
   }
 
-  /** Record ground truth: `inputTokens` covered the first `messageCount` messages. */
-  record(inputTokens: number, messageCount: number): void {
-    if (inputTokens <= 0) return;
+  /** Calibrated estimate of a list of messages. */
+  tokensOfMessages(messages: Message[]): number {
+    return Math.ceil(estimateTokens(messages) * this.ratio);
+  }
+
+  estimate(messages: Message[], tools: ToolDefinition[]): number {
+    if (!this.hasBase) return Math.ceil((estimateTokens(messages) + estimateToolDefs(tools)) * this.ratio);
+    return this.baseTokens + this.tokensOfMessages(messages.slice(this.baseCount));
+  }
+
+  /**
+   * Record ground truth: `inputTokens` covered the first `messageCount` messages, and the
+   * uncalibrated heuristic for that same request was `heuristicTokens` (if known). Updates the
+   * calibration ratio. Returns the observed ratio for this request, or null.
+   */
+  record(inputTokens: number, messageCount: number, heuristicTokens?: number): number | null {
+    if (inputTokens <= 0) return null;
     this.reset(inputTokens, messageCount);
+    if (!heuristicTokens || heuristicTokens <= 0) return null;
+    const observed = inputTokens / heuristicTokens;
+    const next = this.observations === 0 ? observed : this.ratio + RATIO_ALPHA * (observed - this.ratio);
+    this.ratio = Math.min(RATIO_MAX, Math.max(RATIO_MIN, next));
+    this.observations++;
+    return observed;
   }
 
   /** Rebase after compaction: the first `messageCount` messages are now ~`tokens`. */
