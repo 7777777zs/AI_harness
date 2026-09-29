@@ -887,11 +887,11 @@ About $0.80 of the $1.20 budget in total:
 
 **5. Token estimate tuned** to the measured values: 0.7 tokens per CJK character and 4 characters per token for other text. All tests pass. The only test changes were the A5 unit test's expected values and one comment.
 
-**6. Developer Mode / symlink test C4:** still skipped. Waiting for your confirmation that Developer Mode is on; then C4 will be re-run and confirmed to pass rather than skip.
+**6. Developer Mode / symlink test C4:** Developer Mode was enabled after the merge, and C4 was re-run. It now **runs and passes** (no longer skipped): `read_file` and `write_file` both refuse a file symlink inside cwd that points outside. C4b passes too. A full `npm test` afterwards gives 172 tests: 172 pass, 0 fail, 0 skipped.
 
 ### Final validation
 
-- **Tests:** `npx tsc --noEmit` passes. `npm test` has 172 tests: 171 pass, 0 fail, 1 skipped (C4).
+- **Tests:** `npx tsc --noEmit` passes. `npm test` has 172 tests: 171 pass, 0 fail, 1 skipped (C4, before Developer Mode; with Developer Mode on, 172/172 pass, see item 6).
 - **Full suite** (1 run per task, `--concurrency 2`, gpt-4.1-mini, `2026-09-29T02-51-29-962Z`): **18/19**, 0 runs classified as `error`, 0 API retries needed.
 
 | Task | Result | Steps | Tokens |
