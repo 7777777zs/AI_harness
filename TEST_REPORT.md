@@ -836,3 +836,88 @@ About $0.80 of the $1.20 budget in total:
 - the sequential re-run of 7 tasks × 3: $0.31;
 - the `COMPACT_MODEL` comparison: $0.105;
 - calibration and model checks: under $0.01.
+
+
+## Phase 4 wrap-up (after review)
+
+**1. long-context, outcomes over process.**
+- The real-model `long-context` eval now checks **only the answer**; the compaction requirement is gone.
+- Compaction under whole-file reads is covered by the new deterministic `test/long-context.test.ts` (mocked model, no API calls):
+  - a scripted model lists the project, then reads eight ~9k-char files **in full**, one per step, writing notes as it goes, under a 16k limit;
+  - the test asserts that Level 1 and Level 2 both trigger, that a summary is sent, that tool-call pairing is valid in every request, that the `list_dir` result is compacted away while the pinned file list still shows all 9 files (`Read: 8 / Not yet read: 1`), that every request stays within the limit, and that the run finishes with the right answer.
+  - While writing it I found a flaw in my own first mock: it counted progress by assistant messages, which Level 2 removes, so it restarted. It now counts calls.
+
+**2. find-call-sites.** The prompt now says "all call sites … anywhere in the repository, including test files". Final suite: 1/1 (previously 0/3).
+
+**3. `COMPACT_MODEL=gpt-4.1-nano`, 3 runs per task: not recommended.**
+
+| Task | Main model compaction | nano compaction |
+|---|---|---|
+| project-overview | 3/3, 12.0 steps | **1/3**, 26.3 steps, ~8 repeated calls/run |
+| trustworthy-summary | 2/3 | 3/3 |
+| summary-with-footer | 3/3 (re-scored) | 3/3 |
+| `description_rejected` | 0 | 0 |
+| Compaction share of cost | ~32% (project-overview) | ~8.5% |
+
+- **Why nano fails on project-overview:** its Level 2 summaries were vague ("The project has multiple directories… Function definitions are plentiful…") and lost the per-file purposes.
+- **Effect:** the main model re-read files and compacted far more (10–15 Level 2 summaries per run against about 4).
+- **The earlier single run was misleading:** it looked like a free 7× saving. Three runs show it costs correctness on the largest task.
+- **Decision:** correctness doesn't match the main model, so `COMPACT_MODEL=gpt-4.1-nano` was **not** added to `.env.example`; the code default stays "same as main model".
+
+**4. Retries for transient API errors** (new `src/llm/retry.ts`).
+- **Error mapping:** the adapter maps OpenAI errors to a provider-agnostic `LLMApiError`. `retryable` is true for 429, 5xx and connection failures, false for other 4xx such as 401. `retryAfterMs` comes from `retry-after-ms` or `retry-after` (seconds or an HTTP date, capped at 2 minutes). The SDK's own retries are disabled (`maxRetries: 0`), so every attempt is ours and logged.
+- **`withRetry` wraps both the main and the compaction client:**
+  - it honors retry-after when given, otherwise uses exponential backoff with ±25% jitter: 1, 2, 4, 8, 16 s, i.e. 5 retries after the first attempt;
+  - each retry is logged as `api_retry` with source, status, delay and reason;
+  - after the last retry the run ends with `stopReason: "error"`, `errorKind: "api"` and `API call failed after 6 attempts; last error: …`.
+- **Not retried:** non-429 4xx errors, context-length errors, and non-API errors.
+- **Eval runner:**
+  - a run that ended on an API error is outcome `error`, not `fail`, and is excluded from pass rates;
+  - there is a new `err` column, a total line such as `N runs ended on API/infrastructure errors; excluded`, and a `!` mark in the progress output;
+  - the previous-run comparison uses the same basis.
+- **Tests:** `test/retry.test.ts`, 12 tests:
+  - retry-after honored, the exact backoff sequence, jitter bounds, 5xx and connection errors recovering;
+  - no retry for 401/400/404, context-length or other errors;
+  - giving up after 6 attempts;
+  - adapter mapping via a stubbed `fetch`, including that the SDK makes exactly one request;
+  - `parseRetryAfter` cases;
+  - agent-level retry, give-up and 401 behavior;
+  - retries on the compaction client;
+  - outcome classification.
+
+**5. Token estimate tuned** to the measured values: 0.7 tokens per CJK character and 4 characters per token for other text. All tests pass. The only test changes were the A5 unit test's expected values and one comment.
+
+**6. Developer Mode / symlink test C4:** still skipped. Waiting for your confirmation that Developer Mode is on; then C4 will be re-run and confirmed to pass rather than skip.
+
+### Final validation
+
+- **Tests:** `npx tsc --noEmit` passes. `npm test` has 172 tests: 171 pass, 0 fail, 1 skipped (C4).
+- **Full suite** (1 run per task, `--concurrency 2`, gpt-4.1-mini, `2026-09-29T02-51-29-962Z`): **18/19**, 0 runs classified as `error`, 0 API retries needed.
+
+| Task | Result | Steps | Tokens |
+|---|---|---|---|
+| create-file, edit-line, find-string, json-config, path-escape | pass | 2–3 | 2.6k–4.2k |
+| fix-bug | pass | 6 | 10.5k |
+| missing-file | pass | 4 | 5.6k |
+| count-lines | **fail** | 2 | 3.3k |
+| long-context | pass | 9 | 39.5k |
+| shell-tree | pass | 4 | 6.0k |
+| multi-file-summary | pass | 5 | 14.2k |
+| trustworthy-summary | pass | 12 | 54.1k |
+| find-call-sites | pass | 3 | 4.6k |
+| rename-function | pass | 4 | 7.9k |
+| large-file-edit | pass | 6 | 11.9k |
+| ignored-dir-search | pass | 3 | 4.3k |
+| project-overview | pass | 15 | 106.7k (11 compactions, 6 Level 2) |
+| crlf-edit | pass | 3 | 4.1k |
+| summary-with-footer | pass | 4 | 18.6k |
+
+**The only failure** is `count-lines`, the known capability gap (P3): the model estimates "120" instead of counting. Compared with the Phase 3 integration baseline (15/17), `long-context` and `find-call-sites` now pass, and the two new tasks pass.
+
+**API usage for Phase 4, total about $1.22** (approved budget: $1.30):
+
+| Item | Cost |
+|---|---|
+| Earlier Phase 4 work | ~$0.80 |
+| nano comparison, 3 tasks × 3 runs | ~$0.28 |
+| Final suite | ~$0.14 |
