@@ -992,7 +992,7 @@ While a server runs, the tree is **2× cmd.exe, 2× node.exe, 8× chrome.exe**.
 | SIGINT (Ctrl+C handler path, emitted in-process) | 130 | none |
 | Harness killed abruptly (`taskkill /F` on the harness only) | 1 | none: the server exits on stdin EOF and closes Chrome |
 
-A real Ctrl+C in a terminal is checked separately by hand (see below).
+**Real Ctrl+C (manual, your PowerShell terminal, `harness --mcp` with the example config plus `--isolated`):** you pressed Ctrl+C at the `Proceed? (y/N)` prompt for `run_shell`. At that point the server and a visible Chrome window were running. The harness returned to the shell prompt. A process check right afterwards found **no** chrome-devtools-mcp node/cmd or Chrome processes left. This also confirms that readline passes Ctrl+C on to the shutdown handler while a prompt is open.
 
 ### Web evals (gpt-4.1-mini, `--runs 3`, local pages on 127.0.0.1)
 The harness changed between rounds, because the evals exposed problems. All rounds are listed:
@@ -1053,7 +1053,7 @@ Final state: round 4/5 prompts, which are the code on the branch.
 - **Guarded tools are fixed:** only `run_shell`/`write_file`/`edit_file`. Other MCP tools that need confirmation (click, fill, evaluate_script) always ask anyway, except under auto-approve.
 
 ### API usage for Phase 5
-About **$0.79** in total (gpt-4.1-mini at $0.40/M input and $1.60/M output, computed from the results files), against the $0.80 limit:
+About **$0.80** in total (including about $0.004 for two manual CLI runs) (gpt-4.1-mini at $0.40/M input and $1.60/M output, computed from the results files), against the $0.80 limit:
 
 | Item | Cost |
 |---|---|
