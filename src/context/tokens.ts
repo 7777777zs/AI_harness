@@ -1,15 +1,20 @@
 import type { Message, ToolDefinition } from "../llm/types.js";
 
-/** Chinese/Japanese/Korean characters (and full-width forms): roughly one token each. */
+/** Chinese/Japanese/Korean characters (and full-width forms). */
 const CJK = /[぀-ヿ㐀-䶿一-鿿가-힯豈-﫿＀-￯]/g;
-/** Characters per token for other text (code, English): a bit denser than the old /4. */
-export const CHARS_PER_TOKEN = 3.5;
+/**
+ * Tokens per CJK character and characters per token for other text. Measured against gpt-4.1's
+ * tokenizer (TEST_REPORT.md, Phase 4): Chinese prose ≈ 0.69 tokens/char, code and English ≈ 4
+ * chars/token. The per-run calibration ratio corrects the remaining error.
+ */
+export const CJK_TOKENS_PER_CHAR = 0.7;
+export const CHARS_PER_TOKEN = 4;
 
-/** Heuristic token estimate for a string: CJK characters count 1 each, other text chars / 3.5. */
+/** Heuristic token estimate for a string: CJK characters count 0.7 each, other text chars / 4. */
 export function estimateText(s: string): number {
   if (!s) return 0;
   const cjk = s.match(CJK)?.length ?? 0;
-  return Math.ceil(cjk + (s.length - cjk) / CHARS_PER_TOKEN);
+  return Math.ceil(cjk * CJK_TOKENS_PER_CHAR + (s.length - cjk) / CHARS_PER_TOKEN);
 }
 
 /** Heuristic for a character count of non-CJK text (used for "chars saved" arithmetic). */

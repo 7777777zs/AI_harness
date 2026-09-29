@@ -4,14 +4,15 @@ import type {
   ChatCompletionMessageParam,
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
-import { ContextLengthError } from "./types.js";
+import { ContextLengthError, LLMApiError } from "./types.js";
 import type { LLMClient, LLMResponse, Message, ToolCall, ToolDefinition } from "./types.js";
 
 export class OpenAIClient implements LLMClient {
   private client: OpenAI;
 
   constructor(apiKey: string, private model: string) {
-    this.client = new OpenAI({ apiKey });
+    // Retries are handled by withRetry (src/llm/retry.ts) so every attempt is logged and bounded.
+    this.client = new OpenAI({ apiKey, maxRetries: 0 });
   }
 
   async chat(messages: Message[], tools: ToolDefinition[]): Promise<LLMResponse> {
@@ -25,6 +26,16 @@ export class OpenAIClient implements LLMClient {
       });
     } catch (err) {
       if (isContextLengthError(err)) throw new ContextLengthError((err as Error).message);
+      if (err instanceof OpenAI.APIError) {
+        // status is undefined for connection failures (APIConnectionError), which are transient.
+        const status = err.status;
+        const retryable = status === undefined || status === 429 || status >= 500;
+        throw new LLMApiError(`${status ?? "connection error"}: ${err.message}`, {
+          status,
+          retryable,
+          retryAfterMs: parseRetryAfter(err.headers),
+        });
+      }
       throw err;
     }
 
@@ -45,6 +56,23 @@ export class OpenAIClient implements LLMClient {
       raw: response,
     };
   }
+}
+
+/** Longest wait we accept from a retry-after header. */
+const MAX_RETRY_AFTER_MS = 120_000;
+
+/** Milliseconds from `retry-after-ms`, or `retry-after` (seconds or an HTTP date); undefined if absent. */
+export function parseRetryAfter(headers: Headers | undefined, now = Date.now()): number | undefined {
+  if (!headers) return undefined;
+  const clamp = (ms: number) => Math.min(MAX_RETRY_AFTER_MS, Math.max(0, Math.round(ms)));
+  const ms = Number(headers.get("retry-after-ms"));
+  if (headers.get("retry-after-ms") !== null && Number.isFinite(ms)) return clamp(ms);
+  const raw = headers.get("retry-after");
+  if (raw === null) return undefined;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds)) return clamp(seconds * 1_000);
+  const date = Date.parse(raw);
+  return Number.isNaN(date) ? undefined : clamp(date - now);
 }
 
 function isContextLengthError(err: unknown): boolean {

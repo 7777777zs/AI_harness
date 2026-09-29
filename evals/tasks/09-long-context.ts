@@ -51,8 +51,9 @@ export const task: EvalTask = {
     const code = answers.get(dir);
     answers.delete(dir);
     if (!code) return fail("setup did not run");
+    // Outcome only: how the model reads the files (whole, ranged, via list_dir) is its choice.
+    // Compaction under whole-file reads is covered deterministically by test/long-context.test.ts.
     if (!(result.finalText ?? "").includes(code)) return fail(`final answer does not contain ${code}`);
-    if (result.compactions < 1) return fail("answer correct, but compaction was not triggered");
     return pass();
   },
 };

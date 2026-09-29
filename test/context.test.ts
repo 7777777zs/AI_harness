@@ -59,7 +59,7 @@ test("Level 1 keeps every tool call/result pair and never adds or removes messag
     assert.equal(m.role, orig.role);
     if (m.role === "tool" && orig.role === "tool") assert.equal(m.toolCallId, orig.toolCallId);
   });
-  // Each result is ~1,430 tokens (5,005 chars / 3.5). Kept by budget: t6c0, t6c1 (unseen), t5c0, t4c1 = ~5,720 tokens. Elided: t4c0, t3c0, t2c0, t2c1, t1c0.
+  // Each result is ~1,252 tokens (5,005 chars / 4). Kept by budget 5,800: t6c0, t6c1 (unseen), t5c0, t4c1 = ~5,008 tokens. Elided: t4c0, t3c0, t2c0, t2c1, t1c0.
   assert.equal(elided, 5);
 });
 

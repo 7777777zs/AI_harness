@@ -98,7 +98,8 @@ export const task: EvalTask = {
   id: "find-call-sites",
   description: "Find every call site of a function across a small project and report file:line",
   prompt:
-    `Find every call site of the function ${FN} in this project. Only actual calls count: not its definition, ` +
+    `Find all call sites of the function ${FN} anywhere in the repository, including test files. ` +
+    "Only actual calls count: not its definition, " +
     `imports, comments, strings, or other functions whose names merely start with ${FN}. ` +
     "Write the call sites to call-sites.txt, one per line, formatted as relative/path/to/file.js:LINE " +
     "(path relative to the current directory, 1-based line number), and also list them in your final answer.",

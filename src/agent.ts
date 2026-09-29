@@ -1,7 +1,8 @@
 // Main agent loop. Provider-agnostic: only uses the internal LLM types.
 import fs from "node:fs";
 import path from "node:path";
-import { ContextLengthError } from "./llm/types.js";
+import { ContextLengthError, LLMApiError } from "./llm/types.js";
+import { withRetry, type RetryOptions } from "./llm/retry.js";
 import type { LLMClient, LLMResponse, Message, ToolCall, Usage } from "./llm/types.js";
 import { createClientFromEnv } from "./llm/index.js";
 import type { Tool, ToolContext } from "./types.js";
@@ -61,6 +62,8 @@ export interface RunAgentOptions {
   tools?: Tool[];
   /** Suppress terminal output. */
   quiet?: boolean;
+  /** Retry settings for transient API errors (tests inject sleep/random). */
+  retry?: Omit<RetryOptions, "onRetry">;
 }
 
 export interface AgentResult {
@@ -75,6 +78,12 @@ export interface AgentResult {
   mainUsage: Usage;
   stopReason: "done" | "max_steps" | "error";
   error?: string;
+  /**
+   * What kind of error ended the run: "api" for API/infrastructure failures (after retries),
+   * "config" for invalid settings, "context_length" when compaction could not fit the request,
+   * "other" for anything else.
+   */
+  errorKind?: "api" | "config" | "context_length" | "other";
   durationMs: number;
   /** Level 1 events plus accepted Level 2 events. */
   compactions: number;
@@ -272,7 +281,12 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     { role: "user", content: opts.task },
   ];
 
-  const finish = (stopReason: AgentResult["stopReason"], finalText: string | null, error?: string): AgentResult => {
+  const finish = (
+    stopReason: AgentResult["stopReason"],
+    finalText: string | null,
+    error?: string,
+    errorKind?: AgentResult["errorKind"],
+  ): AgentResult => {
     // A2: unread (or only partially read) known files are reported by the harness, not the model.
     const footer = stopReason === "done" && finalText !== null && config?.coverageFooter ? coverage.footer() : null;
     if (footer) finalText = `${finalText}\n\n${footer}`;
@@ -287,7 +301,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       usage,
       mainUsage,
       stopReason,
-      ...(error !== undefined && { error }),
+      ...(error !== undefined && { error, errorKind: errorKind ?? "other" }),
       durationMs: Date.now() - startedAt,
       compactions,
       compactionStats: stats,
@@ -327,17 +341,29 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         ...(opts.maxSteps !== undefined && { maxSteps: opts.maxSteps }),
       });
     } catch (err) {
-      if (err instanceof ConfigError) return finish("error", null, `Invalid configuration: ${err.message}`);
+      if (err instanceof ConfigError) return finish("error", null, `Invalid configuration: ${err.message}`, "config");
       throw err;
     }
     const { contextLimit, compactThreshold: threshold, recentBudget, maxSteps } = config;
 
-    const client = opts.client ?? createClientFromEnv();
+    // Transient API errors (429, 5xx, connection) are retried with backoff for both clients.
+    const retrying = (source: "main" | "compaction", inner: LLMClient) =>
+      withRetry(inner, {
+        ...opts.retry,
+        onRetry: (info) => {
+          out(c.yellow(`  ⟳ API ${info.status ?? "connection"} error (${source}); retry ${info.retry}/${info.maxRetries} in ${(info.delayMs / 1000).toFixed(1)}s`));
+          log({ type: "api_retry", step, source, ...info });
+        },
+      });
+    const rawClient = opts.client ?? createClientFromEnv();
+    const client = retrying("main", rawClient);
     const mainModel = opts.client ? "(custom client)" : process.env.OPENAI_MODEL;
     const modelSource = opts.client ? "option" : envFileSources.has("OPENAI_MODEL") ? ".env" : "env";
     const separateCompactModel = config.compactModel !== undefined && config.compactModel !== process.env.OPENAI_MODEL;
-    const compactClient =
-      opts.compactClient ?? (separateCompactModel && !opts.client ? createClientFromEnv(config.compactModel) : client);
+    const compactClient = retrying(
+      "compaction",
+      opts.compactClient ?? (separateCompactModel && !opts.client ? createClientFromEnv(config.compactModel) : rawClient),
+    );
 
     // A4: log the effective configuration once at the start.
     const version = harnessVersion();
@@ -466,7 +492,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
           response = await client.chat(request, toolDefs);
         } catch (retryErr) {
           if (retryErr instanceof ContextLengthError) {
-            return finish("error", null, `Context length exceeded even after compaction: ${retryErr.message}`);
+            return finish("error", null, `Context length exceeded even after compaction: ${retryErr.message}`, "context_length");
           }
           throw retryErr;
         }
@@ -600,7 +626,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     out(c.red(`\nStopped: reached MAX_STEPS (${maxSteps}) without a final answer.`));
     return finish("max_steps", null);
   } catch (err) {
-    return finish("error", null, err instanceof Error ? err.message : String(err));
+    return finish("error", null, err instanceof Error ? err.message : String(err), err instanceof LLMApiError ? "api" : "other");
   } finally {
     terminal?.close();
   }

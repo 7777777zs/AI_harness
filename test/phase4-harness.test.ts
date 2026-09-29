@@ -359,12 +359,14 @@ test("A4: run_start logs every setting with its source, the model and the harnes
 
 // ---- A5: estimation and calibration ----
 
-test("A5: CJK characters count ~1 token each, other text ~3.5 chars per token", () => {
-  assert.equal(estimateText("abcdefg"), 2);
-  assert.equal(estimateText("你好世界"), 4);
-  assert.equal(estimateText("中文 text"), 2 + Math.ceil(5 / 3.5));
-  assert.equal(estimateText("こんにちは"), 5);
-  assert.equal(estimateText("한국어"), 3);
+// Tuned from the Phase 4 measurement: ~0.7 tokens per CJK character, ~4 chars per token otherwise.
+test("A5: CJK characters count ~0.7 tokens each, other text ~4 chars per token", () => {
+  assert.equal(estimateText("abcdefgh"), 2);
+  assert.equal(estimateText("你好世界"), Math.ceil(4 * 0.7));
+  assert.equal(estimateText("中文 text"), Math.ceil(2 * 0.7 + 5 / 4));
+  assert.equal(estimateText("こんにちは"), Math.ceil(5 * 0.7));
+  assert.equal(estimateText("한국어"), Math.ceil(3 * 0.7));
+  assert.equal(estimateText("中".repeat(1_000)), 700);
 });
 
 test("A5: the calibration ratio is an EMA of actual/estimated, clamped to 0.5–3.0", () => {

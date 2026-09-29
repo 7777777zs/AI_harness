@@ -41,6 +41,24 @@ export interface LLMClient {
   chat(messages: Message[], tools: ToolDefinition[]): Promise<LLMResponse>;
 }
 
+/**
+ * Thrown by adapters for API / infrastructure failures. `retryable` is true for rate limits (429),
+ * server errors (5xx) and connection failures; false for other client errors such as an invalid
+ * API key (401). `retryAfterMs` comes from the provider's retry-after header, if any.
+ */
+export class LLMApiError extends Error {
+  readonly status: number | undefined;
+  readonly retryable: boolean;
+  readonly retryAfterMs: number | undefined;
+  constructor(message: string, opts: { status?: number | undefined; retryable: boolean; retryAfterMs?: number | undefined }) {
+    super(message);
+    this.name = "LLMApiError";
+    this.status = opts.status;
+    this.retryable = opts.retryable;
+    this.retryAfterMs = opts.retryAfterMs;
+  }
+}
+
 /** Thrown by adapters when the request exceeds the model's context window. */
 export class ContextLengthError extends Error {
   constructor(message: string) {

@@ -4,6 +4,15 @@
 import { DEFAULTS, type SettingOverrides } from "../src/config.js";
 import type { EvalTask } from "./types.js";
 
+/**
+ * A run's outcome for pass-rate accounting: runs that ended on API/infrastructure errors (after
+ * retries) are "error", not "fail", and are excluded from pass rates.
+ */
+export function classifyOutcome(pass: boolean, errorKind: string | undefined): "pass" | "fail" | "error" {
+  if (pass) return "pass";
+  return errorKind === "api" ? "error" : "fail";
+}
+
 export interface EvalRunSettings {
   /** The model under test (OPENAI_MODEL); also the compaction model unless `compactModel` is set. */
   mainModel: string | undefined;

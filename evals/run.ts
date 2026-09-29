@@ -8,13 +8,15 @@ import { runAgent } from "../src/agent.js";
 import { loadEnv } from "../src/config.js";
 import { missingEnv } from "../src/llm/index.js";
 import { tasks } from "./tasks/index.js";
-import { evalSettings } from "./options.js";
+import { classifyOutcome, evalSettings } from "./options.js";
 import type { CheckResult, EvalTask } from "./types.js";
 
 interface RunRecord {
   taskId: string;
   run: number;
   pass: boolean;
+  /** "error": the run ended on an API/infrastructure error (after retries); excluded from pass rates. */
+  outcome: "pass" | "fail" | "error";
   reason?: string;
   stopReason: string;
   steps: number;
@@ -46,6 +48,8 @@ interface TaskSummary {
   taskId: string;
   runs: number;
   passes: number;
+  /** Runs that ended on API/infrastructure errors (not counted in the pass rate). */
+  errors?: number;
   avgSteps: number;
   avgTokens: number;
   avgSeconds: number;
@@ -108,6 +112,7 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
     taskId: task.id,
     run,
     pass: false,
+    outcome: "fail",
     stopReason: "error",
     steps: 0,
     inputTokens: 0,
@@ -175,6 +180,7 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       if (!check.pass && result.stopReason === "max_steps") check.reason = `hit max steps; ${check.reason ?? ""}`;
     }
     record.pass = check.pass;
+    record.outcome = classifyOutcome(check.pass, result.errorKind);
     if (check.reason) record.reason = check.reason;
     return record;
   } finally {
@@ -194,6 +200,7 @@ function summarize(records: RunRecord[]): TaskSummary[] {
       taskId: task.id,
       runs: rs.length,
       passes: rs.filter((r) => r.pass).length,
+      errors: rs.filter((r) => r.outcome === "error").length,
       avgSteps: avg((r) => r.steps),
       avgTokens: avg((r) => r.inputTokens + r.outputTokens),
       avgSeconds: avg((r) => r.durationMs) / 1000,
@@ -210,10 +217,11 @@ function summarize(records: RunRecord[]): TaskSummary[] {
 }
 
 function printTable(summaries: TaskSummary[]): void {
-  const header = ["task", "pass", "steps", "tokens", "secs", "compact", "L2 a/r", "repeats", "missing", "desc rej", "nudges", "failure reasons"];
+  const header = ["task", "pass", "err", "steps", "tokens", "secs", "compact", "L2 a/r", "repeats", "missing", "desc rej", "nudges", "failure reasons"];
   const rows = summaries.map((s) => [
     s.taskId,
-    `${s.passes}/${s.runs}`,
+    `${s.passes}/${s.runs - (s.errors ?? 0)}`,
+    String(s.errors ?? 0),
     s.avgSteps.toFixed(1),
     Math.round(s.avgTokens).toLocaleString("en-US"),
     s.avgSeconds.toFixed(1),
@@ -232,8 +240,12 @@ function printTable(summaries: TaskSummary[]): void {
   for (const r of rows) console.log(fmtRow(r));
 
   const passes = summaries.reduce((s, x) => s + x.passes, 0);
+  const errors = summaries.reduce((s, x) => s + (x.errors ?? 0), 0);
   const total = summaries.reduce((s, x) => s + x.runs, 0);
-  console.log(`\nTotal: ${passes}/${total} passed`);
+  console.log(
+    `\nTotal: ${passes}/${total - errors} passed` +
+      (errors ? ` (${errors} run${errors === 1 ? "" : "s"} ended on API/infrastructure errors; excluded from pass rates)` : ""),
+  );
 }
 
 function compareWithPrevious(summaries: TaskSummary[]): void {
@@ -254,12 +266,14 @@ function compareWithPrevious(summaries: TaskSummary[]): void {
   const changes: string[] = [];
   for (const s of summaries) {
     const p = prevSummaries.find((x) => x.taskId === s.taskId);
-    if (!p || p.runs === 0 || s.runs === 0) continue;
-    const before = p.passes / p.runs;
-    const after = s.passes / s.runs;
+    // Pass rates exclude runs that ended on API/infrastructure errors.
+    const scored = (x: TaskSummary) => x.runs - (x.errors ?? 0);
+    if (!p || scored(p) === 0 || scored(s) === 0) continue;
+    const before = p.passes / scored(p);
+    const after = s.passes / scored(s);
     if (before === after) continue;
     const label = after > before ? "\x1b[32mimproved\x1b[0m" : "\x1b[31mregressed\x1b[0m";
-    changes.push(`  ${s.taskId}: ${p.passes}/${p.runs} → ${s.passes}/${s.runs} (${label})`);
+    changes.push(`  ${s.taskId}: ${p.passes}/${scored(p)} → ${s.passes}/${scored(s)} (${label})`);
   }
   console.log(changes.length ? `\nChanges vs ${previous}:\n${changes.join("\n")}` : `\nNo pass/fail changes vs ${previous}.`);
 }
@@ -276,7 +290,7 @@ await Promise.all(
     for (let job = jobs.shift(); job; job = jobs.shift()) {
       const r = await runJob(job.task, job.run);
       records.push(r);
-      const mark = r.pass ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
+      const mark = r.pass ? "\x1b[32m✓\x1b[0m" : r.outcome === "error" ? "\x1b[33m!\x1b[0m" : "\x1b[31m✗\x1b[0m";
       console.log(
         `${mark} ${r.taskId} #${r.run}  ${r.steps} steps  ${(r.inputTokens + r.outputTokens).toLocaleString("en-US")} tokens  ` +
           `${(r.durationMs / 1000).toFixed(1)}s${r.compactions ? `  ${r.compactions} compaction(s)` : ""}` +
