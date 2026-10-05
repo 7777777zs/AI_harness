@@ -866,6 +866,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         store.record(call.id, call.name, call.args, content);
         const result = content + hints;
         messages.push({ role: "tool", toolCallId: call.id, name: call.name, content: result });
+        // Logged now: a step's request only shows earlier results, so the last step's would be lost.
+        log({ type: "tool_result", step, tool: call.name, toolCallId: call.id, content: result });
         const color = result.startsWith("Error:") ? c.red : c.dim;
         out(color(`  ← ${oneLine(result, 150)} (${result.length} chars)`));
       }

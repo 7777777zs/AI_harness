@@ -98,3 +98,16 @@ test("tools are restricted to the cwd passed in, not process.cwd()", async () =>
   await runAgent({ task: "x", cwd: dir, client, quiet: true, autoApprove: true });
   assert.deepEqual(results, ["inside", 'Error: Path "../outside.txt" is outside the working directory']);
 });
+
+test("every tool result is logged as it is produced, including the last step's (P5)", async () => {
+  const dir = sandbox();
+  fs.writeFileSync(path.join(dir, "a.txt"), "MARKER-P5-4417");
+  const client = fakeClient((_, n) => call(`c${n}`, "read_file", { path: "a.txt" }));
+  const result = await runAgent({ task: "x", cwd: dir, client, quiet: true, maxSteps: 1 });
+  assert.equal(result.stopReason, "max_steps");
+  const entries = fs.readFileSync(result.logFile, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  const logged = entries.filter((e) => e.type === "tool_result");
+  assert.equal(logged.length, 1);
+  assert.deepEqual([logged[0].step, logged[0].tool, logged[0].toolCallId], [1, "read_file", "c0"]);
+  assert.match(logged[0].content, /MARKER-P5-4417/);
+});
