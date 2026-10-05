@@ -7,7 +7,7 @@ import { parseArgs } from "node:util";
 import { ANSWER_MERGE_SEPARATOR, runAgent } from "../src/agent.js";
 import { loadEnv } from "../src/config.js";
 import { missingEnv } from "../src/llm/index.js";
-import { installShutdownHandlers } from "../src/process.js";
+import { installShutdownHandlers, registerCleanup } from "../src/process.js";
 import { tasks } from "./tasks/index.js";
 import { classifyOutcome, evalSettings } from "./options.js";
 import { maxRequestTokens } from "./helpers.js";
@@ -100,6 +100,8 @@ const { values: args } = parseArgs({
     "without-skill-tasks": { type: "boolean", default: false },
     /** "off" (default), "available" (listed, none preloaded), "preloaded" (the task's skill up front) or "routed" (the skill router picks). */
     skills: { type: "string", default: "off" },
+    /** Where results (and logs/) go; default evals/results. */
+    "results-dir": { type: "string" },
   },
 });
 
@@ -134,10 +136,17 @@ if (selected.length === 0) {
 }
 
 const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-const logsRoot = path.join(RESULTS_DIR, "logs", timestamp);
+const resultsDir = args["results-dir"] ? path.resolve(args["results-dir"]) : RESULTS_DIR;
+const logsRoot = path.join(resultsDir, "logs", timestamp);
+const records: RunRecord[] = [];
+/** Sandboxes of running jobs, removed on Ctrl+C (unless --keep). */
+const activeSandboxes = new Set<string>();
+/** Set on Ctrl+C: no new jobs start. */
+let interrupted = false;
 
 async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "ai-harness-eval-"));
+  activeSandboxes.add(base);
   const dir = path.join(base, "work");
   fs.mkdirSync(dir);
   let site: SiteServer | undefined;
@@ -243,6 +252,7 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
   } finally {
     await site?.close();
     if (!args.keep) fs.rmSync(base, { recursive: true, force: true, maxRetries: 3 });
+    activeSandboxes.delete(base);
   }
 }
 
@@ -307,8 +317,8 @@ function printTable(summaries: TaskSummary[]): void {
 }
 
 function compareWithPrevious(summaries: TaskSummary[]): void {
-  const previous = fs.existsSync(RESULTS_DIR)
-    ? fs.readdirSync(RESULTS_DIR).filter((f) => f.endsWith(".json")).sort().at(-1)
+  const previous = fs.existsSync(resultsDir)
+    ? fs.readdirSync(resultsDir).filter((f) => f.endsWith(".json")).sort().at(-1)
     : undefined;
   if (!previous) {
     console.log("\nNo previous results to compare with.");
@@ -316,7 +326,7 @@ function compareWithPrevious(summaries: TaskSummary[]): void {
   }
   let prevSummaries: TaskSummary[];
   try {
-    prevSummaries = JSON.parse(fs.readFileSync(path.join(RESULTS_DIR, previous), "utf8")).summary;
+    prevSummaries = JSON.parse(fs.readFileSync(path.join(resultsDir, previous), "utf8")).summary;
   } catch (err) {
     console.log(`\nCould not read previous results ${previous}: ${errorMessage(err)}`);
     return;
@@ -336,8 +346,27 @@ function compareWithPrevious(summaries: TaskSummary[]): void {
   console.log(changes.length ? `\nChanges vs ${previous}:\n${changes.join("\n")}` : `\nNo pass/fail changes vs ${previous}.`);
 }
 
-// Ctrl+C: shut down MCP server process trees (browsers) before exiting.
+/** Write the results file atomically (temp file + rename), so it is never left half-written. */
+function writeResults(records: RunRecord[], extra: Record<string, unknown> = {}): string {
+  const order = new Map(selected.map((t, i) => [t.id, i]));
+  const sorted = [...records].sort((a, b) => order.get(a.taskId)! - order.get(b.taskId)! || a.run - b.run);
+  fs.mkdirSync(resultsDir, { recursive: true });
+  const outFile = path.join(resultsDir, `${timestamp}.json`);
+  const data = { timestamp, model: process.env.OPENAI_MODEL, options: { ...args, runs, concurrency }, ...extra, summary: summarize(sorted), results: sorted };
+  fs.writeFileSync(`${outFile}.tmp`, JSON.stringify(data, null, 2) + "\n");
+  fs.renameSync(`${outFile}.tmp`, outFile);
+  return outFile;
+}
+
+// Ctrl+C: shut down MCP server process trees (browsers), then save the completed runs and
+// remove the sandboxes of the interrupted ones.
 installShutdownHandlers();
+registerCleanup(() => {
+  interrupted = true;
+  const outFile = writeResults(records, { interrupted: true });
+  console.log(`\nInterrupted: ${records.length} completed run(s) saved to ${path.relative(process.cwd(), outFile)}`);
+  if (!args.keep) for (const dir of activeSandboxes) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+});
 if (selected.some((t) => t.mcpServers)) {
   console.log(`Pre-warming ${CHROME_DEVTOOLS_MCP} in the npx cache…`);
   prewarmChromeDevtools();
@@ -345,14 +374,13 @@ if (selected.some((t) => t.mcpServers)) {
 
 // Run all jobs through a simple worker pool.
 const jobs = selected.flatMap((task) => Array.from({ length: runs }, (_, i) => ({ task, run: i + 1 })));
-const records: RunRecord[] = [];
 console.log(
   `Running ${jobs.length} job(s): ${selected.length} task(s) × ${runs} run(s), concurrency ${concurrency}, skills ${skillsCondition}, model ${process.env.OPENAI_MODEL}`,
 );
 
 await Promise.all(
   Array.from({ length: Math.min(concurrency, jobs.length) }, async () => {
-    for (let job = jobs.shift(); job; job = jobs.shift()) {
+    for (let job = jobs.shift(); job && !interrupted; job = jobs.shift()) {
       const r = await runJob(job.task, job.run);
       records.push(r);
       const mark = r.pass ? "\x1b[32m✓\x1b[0m" : r.outcome === "error" ? "\x1b[33m!\x1b[0m" : "\x1b[31m✗\x1b[0m";
@@ -373,15 +401,6 @@ const summary = summarize(records);
 printTable(summary);
 compareWithPrevious(summary);
 
-fs.mkdirSync(RESULTS_DIR, { recursive: true });
-const outFile = path.join(RESULTS_DIR, `${timestamp}.json`);
-fs.writeFileSync(
-  outFile,
-  JSON.stringify(
-    { timestamp, model: process.env.OPENAI_MODEL, options: { ...args, runs, concurrency }, summary, results: records },
-    null,
-    2,
-  ) + "\n",
-);
+const outFile = writeResults(records);
 console.log(`\nResults saved to ${path.relative(process.cwd(), outFile)}`);
 if (args.keep) console.log("Sandboxes kept (see `sandbox` in the results file).");

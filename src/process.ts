@@ -89,13 +89,30 @@ export function killAllSync(): void {
   live.clear();
 }
 
-/** Gracefully shut down every tracked child, killing whatever is left after `timeoutMs`. */
+/** Run on shutdown after the children are gone (e.g. the eval runner's sandboxes and results). */
+const cleanups: (() => Promise<void> | void)[] = [];
+
+export function registerCleanup(cleanup: () => Promise<void> | void): void {
+  cleanups.push(cleanup);
+}
+
+/**
+ * Gracefully shut down every tracked child, killing whatever is left after `timeoutMs`, then
+ * run the registered cleanups (children first: Windows can't delete a process's working directory).
+ */
 export async function shutdownAll(timeoutMs = 5_000): Promise<void> {
   const pending = [...live.values()].map((shutdown) => shutdown().catch(() => {}));
   let timer: NodeJS.Timeout | undefined;
   await Promise.race([Promise.all(pending), new Promise<void>((r) => (timer = setTimeout(r, timeoutMs)))]);
   clearTimeout(timer);
   killAllSync();
+  for (const cleanup of cleanups.splice(0)) {
+    try {
+      await cleanup();
+    } catch {
+      // keep going: the other cleanups still matter
+    }
+  }
 }
 
 let handlersInstalled = false;
