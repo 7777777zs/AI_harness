@@ -1,0 +1,112 @@
+{
+  "timestamp": "2026-10-05T10-38-04-405Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "multi-page",
+    "runs": 2,
+    "concurrency": 2,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false,
+    "skills": "off"
+  },
+  "summary": [
+    {
+      "taskId": "multi-page",
+      "runs": 2,
+      "passes": 1,
+      "errors": 0,
+      "avgSteps": 5.5,
+      "avgTokens": 15703,
+      "avgSeconds": 7.995,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0.5,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 1,
+      "descriptionRejected": 0,
+      "nudges": 4,
+      "failures": [
+        "the linked page was never loaded"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "multi-page",
+      "run": 1,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 10385,
+      "outputTokens": 214,
+      "durationMs": 6226,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 1,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 10385,
+      "mainOutputTokens": 214,
+      "tokenRatio": 0.8007536341897343,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-38-04-405Z\\multi-page-1\\2026-10-05T10-38-06-225Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__list_pages": 1,
+        "grep": 1,
+        "read_file": 1,
+        "list_dir": 1
+      },
+      "mcpCalls": 1,
+      "guardFired": 0,
+      "maxRequestTokens": 2729,
+      "skillsCondition": "off",
+      "skillsLoaded": [],
+      "reason": "the linked page was never loaded"
+    },
+    {
+      "taskId": "multi-page",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 7,
+      "inputTokens": 20331,
+      "outputTokens": 476,
+      "durationMs": 9764,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 1,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 20331,
+      "mainOutputTokens": 476,
+      "tokenRatio": 0.8447550333350288,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-38-04-405Z\\multi-page-2\\2026-10-05T10-38-06-250Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__new_page": 1,
+        "grep": 3,
+        "mcp__chrome-devtools__take_snapshot": 2,
+        "mcp__chrome-devtools__navigate_page": 1
+      },
+      "mcpCalls": 4,
+      "guardFired": 0,
+      "maxRequestTokens": 3559,
+      "skillsCondition": "off",
+      "skillsLoaded": []
+    }
+  ]
+}

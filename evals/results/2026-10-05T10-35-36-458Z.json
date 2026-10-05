@@ -1,0 +1,152 @@
+{
+  "timestamp": "2026-10-05T10-35-36-458Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "multi-file-summary",
+    "skills": "routed",
+    "runs": 3,
+    "concurrency": 3,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "multi-file-summary",
+      "runs": 3,
+      "passes": 3,
+      "errors": 0,
+      "avgSteps": 5.333333333333333,
+      "avgTokens": 28407.666666666668,
+      "avgSeconds": 9.942666666666666,
+      "avgCompactions": 0.6666666666666666,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 1,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 6,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "multi-file-summary",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 6,
+      "inputTokens": 33599,
+      "outputTokens": 1254,
+      "durationMs": 12200,
+      "compactions": 1,
+      "level2Accepted": 1,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "compactionInputTokens": 1984,
+      "compactionOutputTokens": 419,
+      "mainInputTokens": 31376,
+      "mainOutputTokens": 795,
+      "tokenRatio": 1.0103238771550764,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-35-36-458Z\\multi-file-summary-1\\2026-10-05T10-35-38-291Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 13
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 9421,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The task requires explaining the purpose of each source file in the project, which is related to providing an overview of the codebase."
+    },
+    {
+      "taskId": "multi-file-summary",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 5,
+      "inputTokens": 20362,
+      "outputTokens": 619,
+      "durationMs": 8604,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 20123,
+      "mainOutputTokens": 584,
+      "tokenRatio": 0.9515820788180303,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-35-36-458Z\\multi-file-summary-2\\2026-10-05T10-35-38-347Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 7
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 5034,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The task involves describing the project's source files and their purposes, which requires an overview of the codebase."
+    },
+    {
+      "taskId": "multi-file-summary",
+      "run": 3,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 5,
+      "inputTokens": 28582,
+      "outputTokens": 807,
+      "durationMs": 9024,
+      "compactions": 1,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "compactionInputTokens": 1575,
+      "compactionOutputTokens": 96,
+      "mainInputTokens": 26768,
+      "mainOutputTokens": 677,
+      "tokenRatio": 0.9671427386959047,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-35-36-458Z\\multi-file-summary-3\\2026-10-05T10-35-38-386Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 7
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 8812,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The task asks for an overview of all source files and their purposes, which fits codebase onboarding."
+    }
+  ]
+}

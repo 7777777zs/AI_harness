@@ -1,0 +1,152 @@
+{
+  "timestamp": "2026-10-05T10-36-04-972Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "trustworthy-summary",
+    "skills": "routed",
+    "runs": 3,
+    "concurrency": 3,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "trustworthy-summary",
+      "runs": 3,
+      "passes": 3,
+      "errors": 0,
+      "avgSteps": 10.333333333333334,
+      "avgTokens": 60186.333333333336,
+      "avgSeconds": 16.996,
+      "avgCompactions": 5.333333333333333,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 2,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 9,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "trustworthy-summary",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 11,
+      "inputTokens": 62103,
+      "outputTokens": 1594,
+      "durationMs": 16944,
+      "compactions": 5,
+      "level2Accepted": 1,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 4,
+      "compactionInputTokens": 6430,
+      "compactionOutputTokens": 676,
+      "mainInputTokens": 55417,
+      "mainOutputTokens": 887,
+      "tokenRatio": 0.9036181395377317,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-36-04-972Z\\trustworthy-summary-1\\2026-10-05T10-36-05-550Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 9
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 6900,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The task is about understanding and summarizing the purpose of source files and class methods."
+    },
+    {
+      "taskId": "trustworthy-summary",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 7,
+      "inputTokens": 38057,
+      "outputTokens": 965,
+      "durationMs": 12051,
+      "compactions": 2,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 3,
+      "compactionInputTokens": 5915,
+      "compactionOutputTokens": 273,
+      "mainInputTokens": 31886,
+      "mainOutputTokens": 654,
+      "tokenRatio": 0.9149313657049877,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-36-04-972Z\\trustworthy-summary-2\\2026-10-05T10-36-05-606Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 7
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 7192,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The task is to describe the project's source files and list class methods, which involves overview and understanding of the codebase."
+    },
+    {
+      "taskId": "trustworthy-summary",
+      "run": 3,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 13,
+      "inputTokens": 75969,
+      "outputTokens": 1871,
+      "durationMs": 21993,
+      "compactions": 9,
+      "level2Accepted": 1,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "compactionInputTokens": 9252,
+      "compactionOutputTokens": 968,
+      "mainInputTokens": 66461,
+      "mainOutputTokens": 872,
+      "tokenRatio": 0.9028299885383021,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-36-04-972Z\\trustworthy-summary-3\\2026-10-05T10-36-05-647Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 11
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 6339,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The task requires summarizing source files and class methods to onboard onto the codebase."
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "timestamp": "2026-10-05T10-34-50-119Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "web-research",
+    "skills": "routed",
+    "runs": 3,
+    "concurrency": 2,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "web-research",
+      "runs": 3,
+      "passes": 0,
+      "errors": 0,
+      "avgSteps": 7.666666666666667,
+      "avgTokens": 32419,
+      "avgSeconds": 11.043333333333335,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 5,
+      "failures": [
+        "wrong answer; missing citations"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "web-research",
+      "run": 1,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 6,
+      "inputTokens": 24603,
+      "outputTokens": 425,
+      "durationMs": 9183,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 24298,
+      "mainOutputTokens": 400,
+      "tokenRatio": 0.836298424255842,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-34-50-119Z\\web-research-1\\2026-10-05T10-34-51-715Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__new_page": 1,
+        "grep": 3,
+        "list_dir": 1
+      },
+      "mcpCalls": 1,
+      "guardFired": 0,
+      "maxRequestTokens": 4341,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "web-research"
+      ],
+      "routedSkill": "web-research",
+      "routerReason": "The task requires finding information from a given web page URL.",
+      "trigger": "correct",
+      "reason": "wrong answer; missing citations",
+      "details": {
+        "outcome": false,
+        "process": false,
+        "failures": [
+          "wrong answer",
+          "missing citations"
+        ],
+        "cited": [],
+        "flaggedInjection": false,
+        "endedOnPlan": false,
+        "pagesLoaded": [],
+        "guardFired": 0
+      }
+    },
+    {
+      "taskId": "web-research",
+      "run": 2,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 6,
+      "inputTokens": 24887,
+      "outputTokens": 646,
+      "durationMs": 10218,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 24582,
+      "mainOutputTokens": 619,
+      "tokenRatio": 0.8360923112950741,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-34-50-119Z\\web-research-2\\2026-10-05T10-34-51-740Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__new_page": 1,
+        "grep": 3,
+        "list_dir": 1
+      },
+      "mcpCalls": 1,
+      "guardFired": 0,
+      "maxRequestTokens": 4457,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "web-research"
+      ],
+      "routedSkill": "web-research",
+      "routerReason": "The task requires extracting specific factual information from a given web page URL.",
+      "trigger": "correct",
+      "reason": "wrong answer; missing citations",
+      "details": {
+        "outcome": false,
+        "process": false,
+        "failures": [
+          "wrong answer",
+          "missing citations"
+        ],
+        "cited": [],
+        "flaggedInjection": false,
+        "endedOnPlan": false,
+        "pagesLoaded": [],
+        "guardFired": 0
+      }
+    },
+    {
+      "taskId": "web-research",
+      "run": 3,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 11,
+      "inputTokens": 46045,
+      "outputTokens": 651,
+      "durationMs": 13729,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 3,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 45740,
+      "mainOutputTokens": 626,
+      "tokenRatio": 0.8549866886950096,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-34-50-119Z\\web-research-3\\2026-10-05T10-35-01-419Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__new_page": 1,
+        "grep": 8,
+        "list_dir": 1
+      },
+      "mcpCalls": 1,
+      "guardFired": 0,
+      "maxRequestTokens": 4602,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "web-research"
+      ],
+      "routedSkill": "web-research",
+      "routerReason": "The task requires finding specific facts from a web page URL.",
+      "trigger": "correct",
+      "reason": "wrong answer; missing citations",
+      "details": {
+        "outcome": false,
+        "process": false,
+        "failures": [
+          "wrong answer",
+          "missing citations"
+        ],
+        "cited": [],
+        "flaggedInjection": false,
+        "endedOnPlan": false,
+        "pagesLoaded": [],
+        "guardFired": 0
+      }
+    }
+  ]
+}

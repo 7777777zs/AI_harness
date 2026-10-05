@@ -1,0 +1,152 @@
+{
+  "timestamp": "2026-10-05T10-37-06-628Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "summary-with-footer",
+    "skills": "routed",
+    "runs": 3,
+    "concurrency": 3,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "summary-with-footer",
+      "runs": 3,
+      "passes": 3,
+      "errors": 0,
+      "avgSteps": 3.6666666666666665,
+      "avgTokens": 19906.666666666668,
+      "avgSeconds": 12.251333333333333,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "summary-with-footer",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 21663,
+      "outputTokens": 834,
+      "durationMs": 12131,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 21426,
+      "mainOutputTokens": 806,
+      "tokenRatio": 0.9510939335049502,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-37-06-628Z\\summary-with-footer-1\\2026-10-05T10-37-07-575Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 24
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 8155,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "Summarizing each source file maps the codebase structure and content."
+    },
+    {
+      "taskId": "summary-with-footer",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 21671,
+      "outputTokens": 829,
+      "durationMs": 15215,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 21434,
+      "mainOutputTokens": 799,
+      "tokenRatio": 0.9515392819796205,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-37-06-628Z\\summary-with-footer-2\\2026-10-05T10-37-07-633Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 24
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 8157,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "Summarizing each source file is part of understanding and explaining the codebase."
+    },
+    {
+      "taskId": "summary-with-footer",
+      "run": 3,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 3,
+      "inputTokens": 14228,
+      "outputTokens": 495,
+      "durationMs": 9408,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 13991,
+      "mainOutputTokens": 458,
+      "tokenRatio": 0.9042502524733415,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T10-37-06-628Z\\summary-with-footer-3\\2026-10-05T10-37-07-680Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 12
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 8605,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "Summarizing each source file in the src/ directory requires an overview of the codebase structure and its components."
+    }
+  ]
+}

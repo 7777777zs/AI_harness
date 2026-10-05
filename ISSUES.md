@@ -7,22 +7,25 @@ The decisions below come from a review of the open issues after Phase 6 (2026-10
 - Each validation round may spend at most **$1** of API usage.
 - All work happens on branch `issues-round1`.
 
-**Statuses:** **Fix** (decided, with a plan), **Accept** (known and documented, no change), **Defer** (revisit later), **Todo** (the fix is already clear). The **Order** column gives the suggested implementation order. The **Skill** column names the workflow to use: `/tdd` for red → green against the agreed seams, `/diagnosing-bugs` when the cause still needs finding.
+**Statuses:** **Fix** (decided, with a plan), **Accept** (known and documented, no change), **Defer** (revisit later), **Todo** (the fix is already clear), **Done** (implemented; commit given). The **Order** column gives the suggested implementation order. The **Skill** column names the workflow to use: `/tdd` for red → green against the agreed seams, `/diagnosing-bugs` when the cause still needs finding.
 
 ## Summary
 
 | Order | Item | Status | Skill |
 |---|---|---|---|
-| 1 | [D3a: retry waits: max(Retry-After, backoff)](#d3-rate-limits) | Fix | /tdd |
-| 2 | [D4: long-page: dedupe stored results, memory bound, search hint](#d4-long-page-stored-results-and-search) | Fix | /tdd |
-| 3 | [D1: pre-finish checks (plan nudge, completion criteria, coverage) + skill wording](#d1-pre-finish-checks) | Fix | /tdd |
-| 4 | [T1: log tool results as they are produced (P5)](#t1-tool-results-of-the-last-step-are-not-logged-p5) | Todo | /tdd |
-| 5 | [T2: interrupted eval run leaks sandboxes, loses results (P4)](#t2-an-interrupted-eval-run-leaks-sandboxes-and-loses-results-p4) | Todo | /tdd |
-| 6 | [T3: `npm run eval --runs 1` crashes (P6)](#t3-npm-run-eval---runs-1-crashes-p6) | Todo | /tdd |
-| 7 | [T4: `test/agent.test.ts` leaks temp directories (P7)](#t4-testagenttestts-leaks-temp-directories-p7) | Todo | /tdd |
-| 8 | [D6: commit sanitized eval result files](#d6-eval-results-in-the-repository) | Fix | /tdd |
-| 9 | [D5: validation and re-runs (one round, ≤ $1)](#d5-re-runs-and-validation) | Fix | — |
-| 10 | [D2: same-turn guard gap: document](#d2-same-turn-guard-gap) | Accept | — |
+| 1 | [D3a: retry waits: max(Retry-After, backoff)](#d3-rate-limits) | Done (`f8c075d`) | /tdd |
+| 2 | [D4: long-page: dedupe stored results, memory bound, search hint](#d4-long-page-stored-results-and-search) | Done (`a3e2691`) | /tdd |
+| 3 | [D1: pre-finish checks (plan nudge, completion criteria, coverage) + skill wording](#d1-pre-finish-checks) | Done (`d4d37d9`, `067be38`, `c40a77b`; wording fixed in D5) | /tdd |
+| 4 | [T1: log tool results as they are produced (P5)](#t1-tool-results-of-the-last-step-are-not-logged-p5) | Done (`62d5197`) | /tdd |
+| 5 | [T2: interrupted eval run leaks sandboxes, loses results (P4)](#t2-an-interrupted-eval-run-leaks-sandboxes-and-loses-results-p4) | Done (`4bf2a1b`) | /tdd |
+| 6 | [T3: `npm run eval --runs 1` crashes (P6)](#t3-npm-run-eval---runs-1-crashes-p6) | Done (`5266825`) | /tdd |
+| 7 | [T4: `test/agent.test.ts` leaks temp directories (P7)](#t4-testagenttestts-leaks-temp-directories-p7) | Done (`3cc0b41`) | /tdd |
+| 8 | [D6: commit sanitized eval result files](#d6-eval-results-in-the-repository) | Done (`6774853`) | /tdd |
+| 9 | [D5: validation and re-runs (one round, ≤ $1)](#d5-re-runs-and-validation) | Done ($0.46; see TEST_REPORT.md) | — |
+| 10 | [D2: same-turn guard gap: document](#d2-same-turn-guard-gap) | Accept, documented (`86217b8`) | — |
+| – | [N1: codebase-onboarding matches per-file summaries](#new-findings-from-d5) | Todo | /tdd |
+| – | [N2: completion rules check format, not substance](#new-findings-from-d5) | Accept, documented | — |
+| – | [N3: no Chinese final answers to evaluate plan detection on](#new-findings-from-d5) | Defer | — |
 | – | [D3b: re-run only errored eval jobs](#d3-rate-limits) | Defer | — |
 | – | [T5: clean up leftovers](#t5-clean-up-leftovers) | Todo (needs confirmation) | — |
 | – | [Accepted limitations](#accepted-limitations) | Accept | — |
@@ -196,6 +199,15 @@ The decisions below come from a review of the open issues after Phase 6 (2026-10
 - the temporary `HARNESS_HOME` used for the manual Ctrl+C test (in the session scratchpad).
 
 ---
+
+## New findings from D5
+
+Details are in TEST_REPORT.md ("Issues round 1").
+
+- **Skill wording can cause the very failure it tries to prevent.** D1(a) asked web-research to write its list "in the same message as your first tool call". In the validation round, no run then read a page: each batched `new_page` with `grep` of local files and gave up (0/3). Replacing that with one explicit sentence (read pages with `new_page` + `take_snapshot`; pages are not files) gave 3/3. That is the first web-research pass in any condition. Fixed on this branch.
+- **N1: codebase-onboarding matches per-file summaries** (Todo, `/tdd`). The router chose it for all three "either" tasks (9/9). The outcomes didn't change (9/9 in both conditions), but tokens went up by 93% and 23% on two of the three tasks. Fix: narrow the skill's description to architecture overviews ("how the codebase works"), excluding per-file listings. Re-check with `evals/route-check.ts` (about $0.01).
+- **N2: completion rules check format, not substance** (Accept). In round A, the follow-up made the model add a Conflicts section to an answer that had no facts. The machine rules are a backstop for answers built on real reading, not a replacement for it. This is documented in TEST_REPORT.md.
+- **N3: plan detection is unverified on Chinese text** (Defer). The logs contain no Chinese final answers. Re-run `evals/plan-detect-eval.ts` once Chinese runs exist.
 
 ## Accepted limitations
 

@@ -22,8 +22,8 @@ The bar: **two sources per fact, a URL after every claim.** The first page that 
 
 ## Steps
 
-1. **Split the question into sub-questions**, one per fact you need (e.g. "When did X open?", "How long is X?"). Write them down in the same message as your first tool call.
-2. **List the candidate sources.** Open the start page, then write a numbered list of *every* linked page that could address a sub-question, with its URL, in the same message as the tool call that opens the first of them (a reply without tool calls ends the run). Done when the list is written.
+1. **Split the question into sub-questions**, one per fact you need (e.g. "When did X open?", "How long is X?"). Write them down.
+2. **List the candidate sources.** Open the start page with `new_page` and read it with `take_snapshot` — web pages are not files in the working directory, so `grep` and `read_file` can't see them. Then write a numbered list of *every* linked page that could address a sub-question, with its URL, in the same message as the tool call that opens the first of them (a reply without tool calls ends the run). Done when the list is written.
 3. **Read every page on your list**, ticking each off alongside your next tool call. For each, note the fact, the URL, the page's date and its kind (primary/official, reference, news, blog). On long pages, search with `read_tool_result` and a `pattern` first. Done when every listed page has been read.
 4. **Cross-check.** Compare the values across sources. When they disagree, keep both and judge reliability: primary or official over secondary; newer over older for facts that change; a source that cites evidence over one that does not. Done when every fact is corroborated by two sources, in conflict with a judgment, or marked single-source because no second source exists.
 5. **Check the draft before answering:** every sentence with a fact ends with `(URL)`; **Sources** lists every page you read; **Conflicts** names each disagreement or says "None found". Fix the draft until all three hold.
