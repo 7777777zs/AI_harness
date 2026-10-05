@@ -464,3 +464,12 @@ test("bundled skills: all valid, each under ~1,200 tokens, with the intended fro
   assert.deepEqual(by["web-research"]!.requires.mcp, ["chrome-devtools"]);
   assert.equal(by["bugfix-with-test"]!.readOnly, false);
 });
+
+test("CRLF SKILL.md (e.g. a Windows checkout) parses, and the body is normalized to LF", () => {
+  const root = tmp();
+  fs.mkdirSync(path.join(root, "crlf"));
+  fs.writeFileSync(path.join(root, "crlf", "SKILL.md"), "---\r\nname: crlf\r\ndescription: Use when testing CRLF.\r\n---\r\n# Title\r\n1. Step.\r\n");
+  const d = discoverSkills([root]);
+  assert.deepEqual(d.warnings, []);
+  assert.equal(d.skills[0]!.body, "# Title\n1. Step.");
+});

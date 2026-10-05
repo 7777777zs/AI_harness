@@ -104,7 +104,8 @@ export function parseSkill(text: string, dir: string): Skill {
     }
   }
 
-  const body = m[2]!.trim();
+  // A Windows checkout (core.autocrlf) gives CRLF files; the prompt gets LF.
+  const body = m[2]!.replace(/\r\n/g, "\n").trim();
   if (!body) throw new Error("the skill has no instructions after the frontmatter");
   return { name: fm.name, description, requires, readOnly: fm.readOnly === true, body, dir, files: supportingFiles(dir) };
 }
