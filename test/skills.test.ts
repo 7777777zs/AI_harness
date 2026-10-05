@@ -463,6 +463,10 @@ test("bundled skills: all valid, each under ~1,200 tokens, with the intended fro
   assert.equal(by["code-review"]!.readOnly, true);
   assert.deepEqual(by["code-review"]!.files, ["checklist.md"]);
   assert.deepEqual(by["web-research"]!.requires.mcp, ["chrome-devtools"]);
+  assert.deepEqual(by["web-research"]!.completion?.requiredSections, ["^#+\\s*Conflicts"]);
+  // The rule matches a real "## Conflicts" heading (and not, say, "##Conflicts-free" prose elsewhere).
+  assert.match("## Answer\n…\n\n## Conflicts\nNone found.", new RegExp(by["web-research"]!.completion!.requiredSections[0]!, "im"));
+  assert.equal(by["web-research"]!.completion?.minDistinctUrls, 2);
   assert.equal(by["bugfix-with-test"]!.readOnly, false);
 });
 

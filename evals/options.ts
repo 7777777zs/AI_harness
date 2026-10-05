@@ -45,6 +45,7 @@ export function evalSettings(
     coverageCheck: DEFAULTS.coverageCheck,
     coverageFooter: DEFAULTS.coverageFooter,
     maxSteps: task.maxSteps ?? DEFAULTS.maxSteps,
+    prefinishMax: DEFAULTS.prefinishMax,
     ...(compactModel !== undefined && { compactModel }),
     mcp: { servers: task.mcpServers ?? {} },
     skillsEnabled: run.skills === "available" || run.skills === "preloaded" || run.skills === "routed",

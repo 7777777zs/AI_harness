@@ -3,6 +3,11 @@ name: web-research
 description: Answer a question from web pages, citing a source URL for every claim. Use when the task needs facts from the web or from given URLs — looking something up, comparing sources, or checking a claim.
 requires:
   mcp: [chrome-devtools]
+completion:
+  requiredSections: ['^#+\s*Conflicts']
+  minDistinctUrls: 2
+  text:
+    - Every factual claim is followed by its source URL in parentheses.
 ---
 
 # Web research
@@ -17,9 +22,9 @@ The bar: **two sources per fact, a URL after every claim.** The first page that 
 
 ## Steps
 
-1. **Split the question into sub-questions**, one per fact you need (e.g. "When did X open?", "How long is X?"). Write them down.
-2. **List the candidate sources in your reply.** Open the start page, then write a numbered list of *every* linked page that could address a sub-question, with its URL. Done when the list is written — before you read any of them.
-3. **Read every page on your list**, ticking each off in your reply. For each, note the fact, the URL, the page's date and its kind (primary/official, reference, news, blog). On long pages, search with `read_tool_result` and a `pattern` first. Done when every listed page has been read.
+1. **Split the question into sub-questions**, one per fact you need (e.g. "When did X open?", "How long is X?"). Write them down in the same message as your first tool call.
+2. **List the candidate sources.** Open the start page, then write a numbered list of *every* linked page that could address a sub-question, with its URL, in the same message as the tool call that opens the first of them (a reply without tool calls ends the run). Done when the list is written.
+3. **Read every page on your list**, ticking each off alongside your next tool call. For each, note the fact, the URL, the page's date and its kind (primary/official, reference, news, blog). On long pages, search with `read_tool_result` and a `pattern` first. Done when every listed page has been read.
 4. **Cross-check.** Compare the values across sources. When they disagree, keep both and judge reliability: primary or official over secondary; newer over older for facts that change; a source that cites evidence over one that does not. Done when every fact is corroborated by two sources, in conflict with a judgment, or marked single-source because no second source exists.
 5. **Check the draft before answering:** every sentence with a fact ends with `(URL)`; **Sources** lists every page you read; **Conflicts** names each disagreement or says "None found". Fix the draft until all three hold.
 6. **Answer** in the format below.

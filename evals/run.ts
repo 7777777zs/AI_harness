@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { runAgent } from "../src/agent.js";
+import { ANSWER_MERGE_SEPARATOR, runAgent } from "../src/agent.js";
 import { loadEnv } from "../src/config.js";
 import { missingEnv } from "../src/llm/index.js";
 import { installShutdownHandlers } from "../src/process.js";
@@ -208,7 +208,7 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       mainInputTokens: result.mainUsage.inputTokens,
       mainOutputTokens: result.mainUsage.outputTokens,
       tokenRatio: result.tokenRatio,
-      answerMerged: result.answerHistory.length > 1 && result.finalText?.includes("--- (continued after the harness coverage check) ---"),
+      answerMerged: result.answerHistory.length > 1 && result.finalText?.includes(ANSWER_MERGE_SEPARATOR.trim()),
       unreadAtEnd: result.coverage.unread.length,
       logFile: path.relative(process.cwd(), result.logFile),
       toolCalls: result.toolCalls,

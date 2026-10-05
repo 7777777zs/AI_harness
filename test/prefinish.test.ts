@@ -1,8 +1,16 @@
 // Pre-finish checks: plan-only replies, skill completion criteria, and the shared follow-up
 // budget (with the coverage check). Scripted model; no API calls.
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { runAgent } from "../src/agent.js";
+import { resolveConfig } from "../src/config.js";
+import type { LLMClient, Message } from "../src/llm/types.js";
 import { isPlanOnly } from "../src/prefinish.js";
+import { evalSettings } from "../evals/options.js";
+import type { EvalTask } from "../evals/types.js";
 
 // ---- Plan-only detection ----
 
@@ -34,4 +42,149 @@ test("genuine final answers are not plans, even when they mention future work or
   ]) {
     assert.equal(isPlanOnly(answer), false, answer);
   }
+});
+
+// ---- The pre-finish check in the agent loop ----
+
+const created: string[] = [];
+after(() => created.forEach((d) => fs.rmSync(d, { recursive: true, force: true })));
+const tmp = () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "ai-harness-prefinish-"));
+  created.push(d);
+  return d;
+};
+const logOf = (file: string) => fs.readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+
+/** A skills directory with one skill "cite" whose frontmatter has `completion`. */
+function citeSkill(completion: string): string {
+  const root = tmp();
+  fs.mkdirSync(path.join(root, "cite"));
+  fs.writeFileSync(
+    path.join(root, "cite", "SKILL.md"),
+    `---\nname: cite\ndescription: Use when testing citations.\ncompletion:\n${completion}\n---\nCite sources.\n`,
+  );
+  return root;
+}
+const MACHINE = "  requiredSections: ['^#+\\s*Conflicts']\n  minDistinctUrls: 2\n  text:\n    - Every claim has its URL.";
+const GOOD = "## Answer\nOpened 1931 (http://a/1) and 412 m (http://a/2).\n\n## Conflicts\nThe blog says 1932 (http://a/3).";
+
+type Reply = string | { tool: string; args: Record<string, unknown> };
+/** Scripted model: replies in order (a string is a final answer, an object a tool call). */
+function scripted(replies: Reply[]) {
+  const requests: Message[][] = [];
+  const client: LLMClient = {
+    async chat(messages) {
+      requests.push(structuredClone(messages));
+      const r = replies[requests.length - 1] ?? "done";
+      const usage = { inputTokens: 1, outputTokens: 1 };
+      return typeof r === "string"
+        ? { text: r, toolCalls: [], usage, raw: null }
+        : { text: null, toolCalls: [{ id: `c${requests.length}`, name: r.tool, args: r.args }], usage, raw: null };
+    },
+  };
+  /** The harness's follow-up messages (user messages after the task, without the per-request status block). */
+  const followUps = () =>
+    requests.at(-1)!.filter((m, i) => m.role === "user" && i > 1 && !m.content!.startsWith("[Harness status")).map((m) => m.content!);
+  return { client, requests, followUps };
+}
+const run = (client: LLMClient, extra: Partial<Parameters<typeof runAgent>[0]> = {}) =>
+  runAgent({ task: "Find the facts.", cwd: tmp(), client, quiet: true, coverageCheck: false, ...extra });
+const withCite = (completion: string, extra: Partial<Parameters<typeof runAgent>[0]> = {}) => ({
+  skillsEnabled: true,
+  skills: { dirs: [citeSkill(completion)], preload: ["cite"] },
+  ...extra,
+});
+
+test("a plan-only reply gets one 'do it now' follow-up and is not kept as an answer", async () => {
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, "a.txt"), "facts");
+  const s = scripted(["I will read a.txt to find the facts.", { tool: "read_file", args: { path: "a.txt" } }, "The facts are: facts."]);
+  const result = await runAgent({ task: "Find the facts.", cwd: dir, client: s.client, quiet: true, coverageCheck: false });
+  assert.equal(result.stopReason, "done");
+  assert.equal(result.finalText, "The facts are: facts.");
+  assert.deepEqual(result.answerHistory, ["The facts are: facts."], "the plan is not an answer");
+  assert.equal(s.followUps().length, 1);
+  assert.match(s.followUps()[0]!, /^Your reply only describes what you are going to do/);
+  assert.equal(result.nudges.plan, 1);
+  assert.ok(logOf(result.logFile).some((l) => l.type === "nudge" && l.kind === "plan"));
+});
+
+test("completion criteria: failing machine rules get one follow-up naming them (and the text criteria)", async () => {
+  const s = scripted(["The bridge opened in 1931 and is 412 m long (http://a/1).", GOOD]);
+  const result = await run(s.client, withCite(MACHINE));
+  assert.equal(result.finalText, GOOD);
+  const [msg] = s.followUps();
+  assert.match(msg!, /completion criteria of the "cite" skill/);
+  assert.match(msg!, /- a section matching \/\^#\+\\s\*Conflicts\/ is missing/);
+  assert.match(msg!, /- at least 2 distinct URLs are required; the answer has 1/);
+  assert.match(msg!, /- Every claim has its URL\./);
+  assert.equal(result.nudges.completion, 1);
+  assert.ok(logOf(result.logFile).some((l) => l.type === "nudge" && l.kind === "completion"));
+});
+
+test("completion criteria: no follow-up when the machine rules pass, even with text criteria", async () => {
+  const s = scripted([GOOD]);
+  const result = await run(s.client, withCite(MACHINE));
+  assert.equal(s.requests.length, 1);
+  assert.equal(result.nudges.completion, 0);
+});
+
+test("completion criteria: text-only criteria always get one follow-up", async () => {
+  const s = scripted(["An answer.", "An answer, checked."]);
+  const result = await run(s.client, withCite("  text:\n    - Every claim has its URL."));
+  assert.equal(s.requests.length, 2);
+  assert.match(s.followUps()[0]!, /- Every claim has its URL\./);
+  assert.equal(result.finalText, "An answer, checked.");
+});
+
+test("the follow-ups share a budget (PREFINISH_MAX, default 2): the plan nudge doesn't use up the answer check", async () => {
+  // Budget 2: plan nudge, then the completion check on the real answer; the third reply is accepted.
+  const two = scripted(["I will read the pages now.", "Opened 1931.", "Opened 1931, still no sources."]);
+  const r2 = await run(two.client, withCite(MACHINE));
+  assert.equal(two.requests.length, 3);
+  assert.deepEqual([r2.nudges.plan, r2.nudges.completion], [1, 1]);
+  assert.match(r2.finalText!, /Opened 1931, still no sources\.$/);
+  // Budget 1: the plan nudge uses it; the real answer is accepted unchecked.
+  const one = scripted(["I will read the pages now.", "Opened 1931."]);
+  const r1 = await run(one.client, withCite(MACHINE, { prefinishMax: 1 }));
+  assert.equal(one.requests.length, 2);
+  assert.deepEqual([r1.nudges.plan, r1.nudges.completion], [1, 0]);
+  // Budget 0: no follow-ups at all.
+  const none = scripted(["I will read the pages now."]);
+  assert.equal((await run(none.client, withCite(MACHINE, { prefinishMax: 0 }))).finalText, "I will read the pages now.");
+  assert.equal(none.requests.length, 1);
+});
+
+test("coverage and completion failing on the same answer go out as one follow-up", async () => {
+  const dir = tmp();
+  for (const f of ["a.py", "b.py", "c.py"]) fs.writeFileSync(path.join(dir, f), "x = 1\n");
+  const s = scripted([{ tool: "list_dir", args: {} }, "Overview: a.py sets x.", GOOD]);
+  const result = await runAgent({
+    task: "Give an overview of this project.",
+    cwd: dir,
+    client: s.client,
+    quiet: true,
+    coverageCheck: true,
+    ...withCite(MACHINE),
+  });
+  const msgs = s.followUps();
+  assert.equal(msgs.length, 1);
+  assert.match(msgs[0]!, /You have not read these files/);
+  assert.match(msgs[0]!, /completion criteria of the "cite" skill/);
+  assert.deepEqual([result.nudges.coverage, result.nudges.completion], [1, 1]);
+});
+
+test("A1 still protects a fuller answer after a completion follow-up", async () => {
+  const long = "## Answer\n" + "Opened 1931 with many details. ".repeat(20) + "(http://a/1)";
+  const s = scripted([long, "## Conflicts\nNone found (http://a/1, http://a/2)."]);
+  const result = await run(s.client, withCite(MACHINE));
+  assert.ok(result.finalText!.startsWith(long), "the earlier, fuller answer is kept");
+  assert.match(result.finalText!, /--- \(continued after the harness check\) ---/);
+});
+
+test("PREFINISH_MAX is validated and set explicitly by the eval settings", () => {
+  assert.throws(() => resolveConfig({}, { PREFINISH_MAX: "-1" }), /PREFINISH_MAX=-1 is out of range \(0–10\)/);
+  assert.equal(resolveConfig({}, {}).prefinishMax, 2);
+  const task: EvalTask = { id: "t", description: "", prompt: "x", check: () => ({ pass: true }) };
+  assert.equal(evalSettings(task, { mainModel: "m" }).prefinishMax, 2);
 });

@@ -65,6 +65,8 @@ export interface SettingOverrides {
   skillsEnabled?: boolean;
   /** Pick a skill for the task with one COMPACT_MODEL call before the first step (SKILL_ROUTER=on|off). */
   skillRouter?: boolean;
+  /** Follow-ups the pre-finish check may send before a final answer is accepted (PREFINISH_MAX). */
+  prefinishMax?: number;
 }
 
 export interface HarnessConfig {
@@ -78,6 +80,7 @@ export interface HarnessConfig {
   maxSteps: number;
   skillsEnabled: boolean;
   skillRouter: boolean;
+  prefinishMax: number;
   sources: Record<keyof SettingOverrides, SettingSource>;
 }
 
@@ -98,6 +101,7 @@ const ENV_NAMES: Record<keyof SettingOverrides, string> = {
   maxSteps: "MAX_STEPS",
   skillsEnabled: "SKILLS",
   skillRouter: "SKILL_ROUTER",
+  prefinishMax: "PREFINISH_MAX",
 };
 
 export const DEFAULTS = {
@@ -110,6 +114,7 @@ export const DEFAULTS = {
   maxSteps: 20,
   skillsEnabled: true,
   skillRouter: true,
+  prefinishMax: 2,
 } as const;
 
 /** Resolve settings: options > process env > .env files > defaults. Throws ConfigError on bad values. */
@@ -161,7 +166,8 @@ export function resolveConfig(overrides: SettingOverrides = {}, env: NodeJS.Proc
   const maxSteps = pick("maxSteps", number(1, 500, true), DEFAULTS.maxSteps);
   const skillsEnabled = pick("skillsEnabled", onOff, DEFAULTS.skillsEnabled);
   const skillRouter = pick("skillRouter", onOff, DEFAULTS.skillRouter);
-  return { contextLimit, compactThreshold, recentBudget, compactModel, coverageCheck, coverageFooter, maxSteps, skillsEnabled, skillRouter, sources };
+  const prefinishMax = pick("prefinishMax", number(0, 10, true), DEFAULTS.prefinishMax);
+  return { contextLimit, compactThreshold, recentBudget, compactModel, coverageCheck, coverageFooter, maxSteps, skillsEnabled, skillRouter, prefinishMax, sources };
 }
 
 /** One-line "NAME=value (source)" summary of the effective settings. */
@@ -177,6 +183,7 @@ export function describeConfig(config: HarnessConfig, mainModel: string | undefi
     show("maxSteps", config.maxSteps),
     show("skillsEnabled", config.skillsEnabled ? "on" : "off"),
     show("skillRouter", config.skillRouter ? "on" : "off"),
+    show("prefinishMax", config.prefinishMax),
   ].join(" ");
 }
 

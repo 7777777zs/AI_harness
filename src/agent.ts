@@ -32,6 +32,7 @@ import { PAGE_CHARS, ResultPages, type PageLimits } from "./mcp/resultPages.js";
 import { discoverSkills, type Discovery } from "./skills/load.js";
 import { readOnlyViolation, SkillRegistry, SKILLS_CAP_FRACTION } from "./skills/registry.js";
 import { routeSkill } from "./skills/router.js";
+import { completionGaps, completionMessage, isPlanOnly, PLAN_NUDGE } from "./prefinish.js";
 
 export const MAX_STEPS = DEFAULTS.maxSteps;
 
@@ -123,6 +124,11 @@ export interface RunAgentOptions {
    * are available and none is preloaded (SKILL_ROUTER, default on).
    */
   skillRouter?: boolean;
+  /**
+   * Follow-ups the pre-finish check may send before accepting a final answer (PREFINISH_MAX,
+   * default 2): a nudge for a plan-only reply, the coverage check, and skill completion criteria.
+   */
+  prefinishMax?: number;
 }
 
 export interface AgentResult {
@@ -192,6 +198,10 @@ export interface NudgeStats {
   repeat: number;
   /** Coverage check before accepting a final answer (at most once per run). */
   coverage: number;
+  /** "Do it now" after a reply that only announced work (at most once per run). */
+  plan: number;
+  /** Loaded skills' completion criteria not met by a final answer (at most once per run). */
+  completion: number;
 }
 
 export const coverageCheckMessage = (unread: string) =>
@@ -201,7 +211,7 @@ export const coverageCheckMessage = (unread: string) =>
 
 /** A final answer shorter than this share of the previous one is merged with it (A1 safety net). */
 export const ANSWER_SHRINK_RATIO = 0.6;
-export const ANSWER_MERGE_SEPARATOR = "\n\n--- (continued after the harness coverage check) ---\n\n";
+export const ANSWER_MERGE_SEPARATOR = "\n\n--- (continued after the harness check) ---\n\n";
 
 /** Steps in a row with tool calls but no reply text before the note-taking reminder fires. */
 export const SILENT_STEPS_BEFORE_NUDGE = 3;
@@ -324,7 +334,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     describeFailures: 0,
     descriptionRejected: 0,
   };
-  const nudges: NudgeStats = { notes: 0, missingFile: 0, repeat: 0, coverage: 0 };
+  const nudges: NudgeStats = { notes: 0, missingFile: 0, repeat: 0, coverage: 0, plan: 0, completion: 0 };
   const compactionUsage = { inputTokens: 0, outputTokens: 0, calls: 0 };
   const routerUsage: Usage = { inputTokens: 0, outputTokens: 0 };
   let skillRouting: AgentResult["skillRouting"] = null;
@@ -332,6 +342,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
   const answerHistory: string[] = [];
   let config: HarnessConfig | null = null;
   let coverageChecked = false;
+  let planNudged = false;
+  let completionChecked = false;
+  /** Pre-finish follow-ups sent so far (all kinds share PREFINISH_MAX). */
+  let prefinishUsed = 0;
   const callCounts = new Map<string, number>();
   let repeatedCalls = 0;
   let missingFileReads = 0;
@@ -434,6 +448,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         ...(opts.maxSteps !== undefined && { maxSteps: opts.maxSteps }),
         ...(opts.skillsEnabled !== undefined && { skillsEnabled: opts.skillsEnabled }),
         ...(opts.skillRouter !== undefined && { skillRouter: opts.skillRouter }),
+        ...(opts.prefinishMax !== undefined && { prefinishMax: opts.prefinishMax }),
       });
     } catch (err) {
       if (err instanceof ConfigError) return finish("error", null, `Invalid configuration: ${err.message}`, "config");
@@ -704,16 +719,45 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       messages.push({ role: "assistant", content: response.text, toolCalls: response.toolCalls });
 
       if (response.toolCalls.length === 0) {
-        answerHistory.push(response.text ?? "");
-        // Coverage check: once per run, don't accept a whole-project answer while listed files are unread.
-        const unread = coverage.unread();
-        if (config.coverageCheck && !coverageChecked && unread.length > 0 && isWholeProjectTask(opts.task)) {
-          coverageChecked = true;
-          nudges.coverage++;
-          out(c.yellow(`  ⚑ coverage check: ${unread.length} listed file(s) not read; asking the model once more`));
-          log({ type: "nudge", kind: "coverage", step, unread });
-          messages.push({ role: "user", content: coverageCheckMessage(coverage.unreadText()) });
+        const text = response.text ?? "";
+        // Pre-finish check: up to PREFINISH_MAX follow-ups per run, each kind at most once.
+        const canFollowUp = prefinishUsed < config.prefinishMax;
+        // A reply that only announces work would end the run; it is not an answer (A1 never sees it).
+        if (canFollowUp && !planNudged && isPlanOnly(text)) {
+          planNudged = true;
+          prefinishUsed++;
+          nudges.plan++;
+          out(c.yellow("  ⚑ the reply only announces work; asking the model to do it"));
+          log({ type: "nudge", kind: "plan", step });
+          messages.push({ role: "user", content: PLAN_NUDGE });
           continue;
+        }
+        answerHistory.push(text);
+        if (canFollowUp) {
+          const followUp: string[] = [];
+          // Coverage: don't accept a whole-project answer while listed files are unread.
+          const unread = coverage.unread();
+          if (config.coverageCheck && !coverageChecked && unread.length > 0 && isWholeProjectTask(opts.task)) {
+            coverageChecked = true;
+            nudges.coverage++;
+            out(c.yellow(`  ⚑ coverage check: ${unread.length} listed file(s) not read; asking the model once more`));
+            log({ type: "nudge", kind: "coverage", step, unread });
+            followUp.push(coverageCheckMessage(coverage.unreadText()));
+          }
+          // Completion criteria declared by loaded skills.
+          const gaps = !completionChecked && skills ? completionGaps(text, skills.loaded) : [];
+          if (gaps.length > 0) {
+            completionChecked = true;
+            nudges.completion++;
+            out(c.yellow(`  ⚑ completion criteria not met (${gaps.map((g) => g.skill).join(", ")}); asking the model once more`));
+            log({ type: "nudge", kind: "completion", step, gaps });
+            followUp.push(completionMessage(gaps));
+          }
+          if (followUp.length > 0) {
+            prefinishUsed++;
+            messages.push({ role: "user", content: followUp.join("\n\n") });
+            continue;
+          }
         }
         // A1: the final reply must not silently drop an earlier, fuller answer.
         const merged = mergeAnswers(answerHistory);

@@ -47,6 +47,7 @@ Every setting can go in the same file. `.env.example` lists them all with their 
 | `MAX_STEPS` | `20` | Maximum agent steps per task |
 | `SKILLS` | `on` | The skills system (see [Skills](#skills)) |
 | `SKILL_ROUTER` | `on` | Pick a skill for the task with one `COMPACT_MODEL` call before the first step |
+| `PREFINISH_MAX` | `2` | Follow-ups the pre-finish check may send before accepting a final answer (0–10; 0 turns it off) |
 
 Values are resolved in this order, and the first one found wins:
 1. Explicit options: `runAgent({...})` options, or the CLI flags `--context-limit`, `--compact-threshold`, `--recent-budget`, `--compact-model`, `--coverage-check`, `--coverage-footer`, `--max-steps`, `--no-skills`.
@@ -173,6 +174,11 @@ requires:                      # optional: the skill is unavailable without thes
   mcp: [chrome-devtools]       #   connected MCP servers
   tools: [run_shell]           #   tools
 readOnly: true                 # optional, default false
+completion:                    # optional: checked before a final answer is accepted
+  requiredSections: ['^#+\s*Conflicts']   # regexes matched against the answer's lines
+  minDistinctUrls: 2           # at least this many distinct URLs
+  text:                        # criteria only the model can judge
+    - Every factual claim is followed by its source URL.
 ---
 # Instructions (Markdown)…
 ```
@@ -194,6 +200,13 @@ readOnly: true                 # optional, default false
   - `load_skill` stays available, so the model can still load more skills itself.
   - **Why it exists:** in our evals gpt-4.1-mini never called `load_skill` on its own (0 of 24 runs), even though the skills were listed in both the system prompt and the tool description.
 - **Logging:** `run_start` lists the available and unavailable skills. Each load is logged as `skill_loaded`, and the result has `skillsLoaded`.
+
+### Completion criteria
+
+A skill can declare in its frontmatter what a finished answer looks like (`completion`, above). They are checked by the pre-finish check (see [Context management](#context-management)):
+- **Machine rules** (`requiredSections`, `minDistinctUrls`) are checked on every final answer while the skill is loaded. Only if one fails does the model get a follow-up. The follow-up names the failed rules and also lists the text criteria.
+- **A skill with only text criteria** gets one follow-up on every run, since the harness can't check them itself. That costs an extra step each time, so prefer machine rules where they fit.
+- `web-research` requires a "Conflicts" section and at least two distinct source URLs.
 
 ### Read-only skills and safety
 
@@ -327,7 +340,13 @@ Before each model call, the harness estimates the context size. The starting poi
   - **Notes:** after 3 consecutive tool-calling steps with no reply text, a reminder asks the model to write down its findings. It fires at most once every 3 steps.
 - **Long output:** tool output over 10,000 characters keeps the first 6,000 and last 2,000 characters, with a `[... truncated: N chars / M lines omitted (T lines total) ...]` marker in between.
 - **Known files and coverage:** paths from every file listing are collected and shown in a `[Harness status]` message attached to each request, together with which files have not been read yet. It is never stored in history, so compaction can't remove it. Level 2 summaries end with this harness-computed unread list.
-- **Coverage check:** if the model tries to finish a whole-project task while listed files are unread, the harness asks it once to read them or say what it skipped. Set `COVERAGE_CHECK=off` to disable.
+- **Pre-finish check:** a reply without tool calls is the final answer. Before accepting it, the harness may send a follow-up instead.
+  - **The budget:** at most `PREFINISH_MAX` follow-ups per run (default 2), each kind at most once. With a budget of 1, a plan nudge would use it up and the real answer would go unchecked.
+  - **Plan only:** if the reply only announces work ("I will read each page…", "接下来我将…"), the model is told to do it now. Such a reply is not kept as an answer.
+  - **Coverage check:** if the model tries to finish a whole-project task while listed files are unread, it is asked to read them or say what it skipped. Set `COVERAGE_CHECK=off` to disable.
+  - **Completion criteria** of loaded skills: see [Skills](#completion-criteria).
+  - **One message:** when coverage and completion both fail on the same answer, they are sent together.
+  - **The answer-merge safety net:** if an answer after a follow-up is much shorter than the one before, both are kept.
 - **Context-length errors:** if the API still returns one, the harness forces compaction and retries once. If that fails too, it stops with `stopReason: "error"`.
 - **Transient API errors** (429, 5xx, connection failures) are retried up to 5 times, for both the main and the compaction model.
   - Each wait is the longer of the provider's `Retry-After` and an exponential backoff (1, 2, 4, 8, 16 s, ±25% jitter), so short hints under a shared tokens-per-minute limit can't use up every retry within one minute.
@@ -336,7 +355,7 @@ Before each model call, the harness estimates the context size. The starting poi
 
 Everything is printed (`⟳ Compaction L1: ~6,744 → ~3,973 tokens …`) and logged to the JSONL file: `compaction`, `level2_rejected`, `level2_skipped`, `describe_failed`, `repeated_call`.
 
-See **Configuration** above for all settings (`CONTEXT_LIMIT`, `COMPACT_THRESHOLD`, `RECENT_BUDGET`, `COMPACT_MODEL`, `COVERAGE_CHECK`, `COVERAGE_FOOTER`, `MAX_STEPS`).
+See **Configuration** above for all settings (`CONTEXT_LIMIT`, `COMPACT_THRESHOLD`, `RECENT_BUDGET`, `COMPACT_MODEL`, `COVERAGE_CHECK`, `COVERAGE_FOOTER`, `MAX_STEPS`, `PREFINISH_MAX`).
 
 **Size caps:**
 - No single tool result may exceed 25% of the context limit. `read_file` results are cut at a line boundary with `[Truncated at line N of M. Use read_file with offset=N+1 …]`.
