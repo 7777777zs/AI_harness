@@ -10,12 +10,23 @@ export interface Skill {
   description: string;
   requires: { mcp: string[]; tools: string[] };
   readOnly: boolean;
+  /** Checked before a final answer is accepted while this skill is loaded (see src/prefinish.ts). */
+  completion?: CompletionCriteria;
   /** SKILL.md without its frontmatter. */
   body: string;
   /** Directory of the skill; supporting files are read from here only. */
   dir: string;
   /** Supporting files (relative paths, "/" separators), excluding SKILL.md. */
   files: string[];
+}
+
+export interface CompletionCriteria {
+  /** Regexes (case-insensitive); each must match a heading line of the answer. */
+  requiredSections: string[];
+  /** The answer must contain at least this many distinct URLs. */
+  minDistinctUrls?: number;
+  /** Criteria only the model can judge; listed in the follow-up. */
+  text: string[];
 }
 
 export interface Discovery {
@@ -27,7 +38,8 @@ export interface Discovery {
 export const SKILL_FILE = "SKILL.md";
 export const NAME_PATTERN = /^[a-z0-9-]{1,40}$/;
 export const MAX_DESCRIPTION = 300;
-const KNOWN_KEYS = new Set(["name", "description", "requires", "readOnly"]);
+const KNOWN_KEYS = new Set(["name", "description", "requires", "readOnly", "completion"]);
+const COMPLETION_KEYS = ["requiredSections", "minDistinctUrls", "text"];
 const FRONTMATTER = /^﻿?---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
 
 export function bundledSkillsDir(): string {
@@ -105,9 +117,51 @@ export function parseSkill(text: string, dir: string): Skill {
   }
 
   // A Windows checkout (core.autocrlf) gives CRLF files; the prompt gets LF.
+  const completion = fm.completion === undefined ? undefined : parseCompletion(fm.completion);
+
   const body = m[2]!.replace(/\r\n/g, "\n").trim();
   if (!body) throw new Error("the skill has no instructions after the frontmatter");
-  return { name: fm.name, description, requires, readOnly: fm.readOnly === true, body, dir, files: supportingFiles(dir) };
+  return {
+    name: fm.name,
+    description,
+    requires,
+    readOnly: fm.readOnly === true,
+    ...(completion && { completion }),
+    body,
+    dir,
+    files: supportingFiles(dir),
+  };
+}
+
+function parseCompletion(value: unknown): CompletionCriteria {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error('"completion" must be a mapping, e.g. { minDistinctUrls: 2 }');
+  }
+  const c = value as Record<string, unknown>;
+  const unknown = Object.keys(c).filter((k) => !COMPLETION_KEYS.includes(k));
+  if (unknown.length) throw new Error(`unknown "completion" key "${unknown[0]}" (allowed: ${COMPLETION_KEYS.join(", ")})`);
+  if (Object.keys(c).length === 0) throw new Error(`"completion" needs at least one of ${COMPLETION_KEYS.join(", ")}`);
+  const strings = (key: string): string[] => {
+    const v = c[key];
+    if (v === undefined) return [];
+    if (!Array.isArray(v) || v.some((x) => typeof x !== "string" || !x.trim())) {
+      throw new Error(`"completion.${key}" must be a list of non-empty strings`);
+    }
+    return v as string[];
+  };
+  const requiredSections = strings("requiredSections");
+  for (const pattern of requiredSections) {
+    try {
+      new RegExp(pattern, "i");
+    } catch {
+      throw new Error(`"completion.requiredSections" has an invalid regex ${JSON.stringify(pattern)}`);
+    }
+  }
+  const min = c.minDistinctUrls;
+  if (min !== undefined && (typeof min !== "number" || !Number.isInteger(min) || min < 1)) {
+    throw new Error('"completion.minDistinctUrls" must be a positive integer');
+  }
+  return { requiredSections, ...(min !== undefined && { minDistinctUrls: min as number }), text: strings("text") };
 }
 
 /** Files below the skill directory (two levels deep), excluding SKILL.md. */

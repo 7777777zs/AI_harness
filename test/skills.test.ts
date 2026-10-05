@@ -573,3 +573,33 @@ test("eval conditions set the router explicitly: on only for 'routed'", () => {
   assert.deepEqual([s().skillRouter, s("available").skillRouter, s("preloaded").skillRouter, s("routed").skillRouter], [false, false, false, true]);
   assert.deepEqual([s("routed").skillsEnabled, s("routed").skills.preload], [true, []]);
 });
+
+// ---- Completion criteria (frontmatter) ----
+
+test("completion criteria: requiredSections (regexes), minDistinctUrls and text are parsed", () => {
+  const root = skill(tmp(), "done-bar", fm("done-bar", "completion:\n  requiredSections: ['^#+\\s*Conflicts']\n  minDistinctUrls: 2\n  text:\n    - Every claim has a URL."));
+  const d = discoverSkills([root]);
+  assert.deepEqual(d.warnings, []);
+  assert.deepEqual(d.skills[0]!.completion, { requiredSections: ["^#+\\s*Conflicts"], minDistinctUrls: 2, text: ["Every claim has a URL."] });
+  // Without the key there are no criteria.
+  assert.equal(discoverSkills([skill(tmp(), "plain", fm("plain"))]).skills[0]!.completion, undefined);
+});
+
+test("completion criteria: invalid values skip the skill with a clear warning", () => {
+  const root = tmp();
+  skill(root, "c-scalar", fm("c-scalar", "completion: yes"));
+  skill(root, "c-empty", fm("c-empty", "completion: {}"));
+  skill(root, "c-key", fm("c-key", "completion:\n  minUrls: 2"));
+  skill(root, "c-regex", fm("c-regex", 'completion:\n  requiredSections: ["(unclosed"]'));
+  skill(root, "c-urls", fm("c-urls", "completion:\n  minDistinctUrls: 0"));
+  skill(root, "c-text", fm("c-text", "completion:\n  text: [1, 2]"));
+  const d = discoverSkills([root]);
+  assert.deepEqual(d.skills, []);
+  const w = d.warnings.join("\n");
+  assert.match(w, /c-scalar.*"completion" must be a mapping/);
+  assert.match(w, /c-empty.*"completion" needs at least one of requiredSections, minDistinctUrls, text/);
+  assert.match(w, /c-key.*unknown "completion" key "minUrls"/);
+  assert.match(w, /c-regex.*"completion\.requiredSections" has an invalid regex "\(unclosed"/);
+  assert.match(w, /c-urls.*"completion\.minDistinctUrls" must be a positive integer/);
+  assert.match(w, /c-text.*"completion\.text" must be a list of non-empty strings/);
+});
