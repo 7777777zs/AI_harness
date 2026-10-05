@@ -1,0 +1,115 @@
+{
+  "timestamp": "2026-10-05T00-36-41-934Z",
+  "model": "gpt-4.1",
+  "options": {
+    "task": "onboarding",
+    "skills": "available",
+    "runs": 2,
+    "concurrency": 1,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "onboarding",
+      "runs": 2,
+      "passes": 2,
+      "errors": 0,
+      "avgSteps": 10.5,
+      "avgTokens": 42388,
+      "avgSeconds": 83.911,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 7,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "onboarding",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 11,
+      "inputTokens": 40851,
+      "outputTokens": 1614,
+      "durationMs": 82134,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 3,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 40851,
+      "mainOutputTokens": 1614,
+      "tokenRatio": 0.9896755407614467,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-36-41-934Z\\onboarding-1\\2026-10-05T00-36-41-949Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "list_dir": 6,
+        "read_file": 18,
+        "grep": 7
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 6199,
+      "skillsCondition": "available",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "trigger": "correct"
+    },
+    {
+      "taskId": "onboarding",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 10,
+      "inputTokens": 39393,
+      "outputTokens": 2918,
+      "durationMs": 85688,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 4,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 39393,
+      "mainOutputTokens": 2918,
+      "tokenRatio": 0.9638553622619298,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-36-41-934Z\\onboarding-2\\2026-10-05T00-38-04-103Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "list_dir": 6,
+        "read_file": 18,
+        "grep": 12
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 7595,
+      "skillsCondition": "available",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "trigger": "correct"
+    }
+  ]
+}

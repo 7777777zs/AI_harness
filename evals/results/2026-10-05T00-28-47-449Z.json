@@ -1,0 +1,183 @@
+{
+  "timestamp": "2026-10-05T00-28-47-449Z",
+  "model": "gpt-4.1",
+  "options": {
+    "task": "code-review",
+    "skills": "available",
+    "runs": 3,
+    "concurrency": 3,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "code-review",
+      "runs": 3,
+      "passes": 2,
+      "errors": 1,
+      "avgSteps": 5.666666666666667,
+      "avgTokens": 16705.333333333332,
+      "avgSeconds": 33.664,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 3,
+      "failures": [
+        "agent error: API call failed after 6 attempts; last error: 429: 429 Rate limit reached for gpt-4.1 in organization org-JIkX0sXwCsLgBKyvAbavU7vo on tokens per min (TPM): Limit 30000, Used 28583, Requested 2775. Please try again in 2.716s. Visit https://platform.openai.com/account/rate-limits to learn more."
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "code-review",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 6,
+      "inputTokens": 18864,
+      "outputTokens": 697,
+      "durationMs": 31938,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 18864,
+      "mainOutputTokens": 697,
+      "tokenRatio": 0.9213104706435403,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-28-47-449Z\\code-review-1\\2026-10-05T00-28-48-065Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "run_shell": 5,
+        "read_file": 4,
+        "grep": 4,
+        "read_skill_file": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 4566,
+      "skillsCondition": "available",
+      "skillsLoaded": [
+        "code-review"
+      ],
+      "trigger": "correct",
+      "details": {
+        "found": [
+          "SQL injection",
+          "pagination off-by-one",
+          "leaked file handle / swallowed error"
+        ],
+        "allThree": true,
+        "severityGrouping": true,
+        "writeAttempts": 0,
+        "readOnlyBlocked": 0
+      }
+    },
+    {
+      "taskId": "code-review",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 6,
+      "inputTokens": 19006,
+      "outputTokens": 843,
+      "durationMs": 42733,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 19006,
+      "mainOutputTokens": 843,
+      "tokenRatio": 0.9241850584346932,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-28-47-449Z\\code-review-2\\2026-10-05T00-28-48-115Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "run_shell": 5,
+        "read_file": 4,
+        "grep": 6,
+        "read_skill_file": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 4641,
+      "skillsCondition": "available",
+      "skillsLoaded": [
+        "code-review"
+      ],
+      "trigger": "correct",
+      "details": {
+        "found": [
+          "SQL injection",
+          "pagination off-by-one",
+          "leaked file handle / swallowed error"
+        ],
+        "allThree": true,
+        "severityGrouping": true,
+        "writeAttempts": 0,
+        "readOnlyBlocked": 0
+      }
+    },
+    {
+      "taskId": "code-review",
+      "run": 3,
+      "pass": false,
+      "outcome": "error",
+      "stopReason": "error",
+      "steps": 5,
+      "inputTokens": 10411,
+      "outputTokens": 295,
+      "durationMs": 26321,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 10411,
+      "mainOutputTokens": 295,
+      "tokenRatio": 0.8447274686960012,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-28-47-449Z\\code-review-3\\2026-10-05T00-28-48-155Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "run_shell": 2,
+        "read_file": 4,
+        "read_skill_file": 1,
+        "grep": 6
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 3670,
+      "skillsCondition": "available",
+      "skillsLoaded": [
+        "code-review"
+      ],
+      "trigger": "correct",
+      "reason": "agent error: API call failed after 6 attempts; last error: 429: 429 Rate limit reached for gpt-4.1 in organization org-JIkX0sXwCsLgBKyvAbavU7vo on tokens per min (TPM): Limit 30000, Used 28583, Requested 2775. Please try again in 2.716s. Visit https://platform.openai.com/account/rate-limits to learn more."
+    }
+  ]
+}

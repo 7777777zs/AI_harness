@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-10-05T00-36-31-351Z",
+  "model": "gpt-4.1",
+  "options": {
+    "task": "code-review",
+    "skills": "available",
+    "runs": 1,
+    "concurrency": 1,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "code-review",
+      "runs": 1,
+      "passes": 1,
+      "errors": 0,
+      "avgSteps": 5,
+      "avgTokens": 15283,
+      "avgSeconds": 8.198,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "code-review",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 5,
+      "inputTokens": 14519,
+      "outputTokens": 764,
+      "durationMs": 8198,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 14519,
+      "mainOutputTokens": 764,
+      "tokenRatio": 0.8828656286930685,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-36-31-351Z\\code-review-1\\2026-10-05T00-36-31-573Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "run_shell": 5,
+        "read_file": 4,
+        "read_skill_file": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 4378,
+      "skillsCondition": "available",
+      "skillsLoaded": [
+        "code-review"
+      ],
+      "trigger": "correct",
+      "details": {
+        "found": [
+          "SQL injection",
+          "pagination off-by-one",
+          "leaked file handle / swallowed error"
+        ],
+        "allThree": true,
+        "severityGrouping": true,
+        "writeAttempts": 0,
+        "readOnlyBlocked": 0
+      }
+    }
+  ]
+}

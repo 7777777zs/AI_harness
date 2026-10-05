@@ -1,0 +1,83 @@
+{
+  "timestamp": "2026-10-05T00-39-31-642Z",
+  "model": "gpt-4.1",
+  "options": {
+    "task": "web-research",
+    "skills": "available",
+    "runs": 1,
+    "concurrency": 1,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "web-research",
+      "runs": 1,
+      "passes": 0,
+      "errors": 0,
+      "avgSteps": 5,
+      "avgTokens": 18606,
+      "avgSeconds": 30.625,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "failures": [
+        "fewer than 2 source URLs cited (0); the conflicting blog values are not mentioned"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "web-research",
+      "run": 1,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 5,
+      "inputTokens": 18331,
+      "outputTokens": 275,
+      "durationMs": 30625,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 18331,
+      "mainOutputTokens": 275,
+      "tokenRatio": 0.842835608854529,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-39-31-642Z\\web-research-1\\2026-10-05T00-39-33-240Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__new_page": 3,
+        "mcp__chrome-devtools__take_snapshot": 3
+      },
+      "mcpCalls": 6,
+      "guardFired": 0,
+      "maxRequestTokens": 4618,
+      "skillsCondition": "available",
+      "skillsLoaded": [],
+      "trigger": "none",
+      "reason": "fewer than 2 source URLs cited (0); the conflicting blog values are not mentioned",
+      "details": {
+        "cited": [],
+        "pagesLoaded": [
+          "city/bridges/harbor-point.html",
+          "wiki/harbor-point-bridge.html"
+        ],
+        "flaggedInjection": false,
+        "guardFired": 0
+      }
+    }
+  ]
+}

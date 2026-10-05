@@ -1,0 +1,175 @@
+{
+  "timestamp": "2026-10-05T00-06-17-207Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "bugfix",
+    "skills": "available",
+    "runs": 3,
+    "concurrency": 3,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false
+  },
+  "summary": [
+    {
+      "taskId": "bugfix",
+      "runs": 3,
+      "passes": 3,
+      "errors": 0,
+      "avgSteps": 16.333333333333332,
+      "avgTokens": 75430.33333333333,
+      "avgSeconds": 28.04566666666667,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 3.6666666666666665,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 15,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "bugfix",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 14,
+      "inputTokens": 53477,
+      "outputTokens": 2612,
+      "durationMs": 27836,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 3,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 4,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 53477,
+      "mainOutputTokens": 2612,
+      "tokenRatio": 1.0485109043282534,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-06-17-207Z\\bugfix-1\\2026-10-05T00-06-17-233Z.jsonl",
+      "toolCalls": {
+        "grep": 2,
+        "read_file": 2,
+        "edit_file": 5,
+        "run_shell": 4
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 6638,
+      "skillsCondition": "available",
+      "skillsLoaded": [],
+      "trigger": "none",
+      "details": {
+        "testFirst": false,
+        "toolCalls": {
+          "grep": 2,
+          "read_file": 2,
+          "edit_file": 5,
+          "run_shell": 4
+        }
+      }
+    },
+    {
+      "taskId": "bugfix",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 21,
+      "inputTokens": 113814,
+      "outputTokens": 3245,
+      "durationMs": 33000,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 5,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 7,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 113814,
+      "mainOutputTokens": 3245,
+      "tokenRatio": 1.1274984339669336,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-06-17-207Z\\bugfix-2\\2026-10-05T00-06-17-339Z.jsonl",
+      "toolCalls": {
+        "grep": 2,
+        "read_file": 3,
+        "edit_file": 8,
+        "run_shell": 7
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 9969,
+      "skillsCondition": "available",
+      "skillsLoaded": [],
+      "trigger": "none",
+      "details": {
+        "testFirst": true,
+        "toolCalls": {
+          "grep": 2,
+          "read_file": 3,
+          "edit_file": 8,
+          "run_shell": 7
+        }
+      }
+    },
+    {
+      "taskId": "bugfix",
+      "run": 3,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 14,
+      "inputTokens": 50893,
+      "outputTokens": 2250,
+      "durationMs": 23301,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 3,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 4,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 50893,
+      "mainOutputTokens": 2250,
+      "tokenRatio": 0.9975964377500811,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-06-17-207Z\\bugfix-3\\2026-10-05T00-06-17-412Z.jsonl",
+      "toolCalls": {
+        "grep": 1,
+        "read_file": 4,
+        "edit_file": 5,
+        "run_shell": 3
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 6041,
+      "skillsCondition": "available",
+      "skillsLoaded": [],
+      "trigger": "none",
+      "details": {
+        "testFirst": true,
+        "toolCalls": {
+          "grep": 1,
+          "read_file": 4,
+          "edit_file": 5,
+          "run_shell": 3
+        }
+      }
+    }
+  ]
+}

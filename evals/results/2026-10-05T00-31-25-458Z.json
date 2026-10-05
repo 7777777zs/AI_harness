@@ -1,0 +1,169 @@
+{
+  "timestamp": "2026-10-05T00-31-25-458Z",
+  "model": "gpt-4.1",
+  "options": {
+    "task": "web-research",
+    "skills": "available",
+    "runs": 3,
+    "concurrency": 2,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "web-research",
+      "runs": 3,
+      "passes": 0,
+      "errors": 1,
+      "avgSteps": 3,
+      "avgTokens": 10256,
+      "avgSeconds": 33.42066666666666,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "failures": [
+        "opening year 1931 missing; length 412 m missing; the conflicting blog values are not mentioned",
+        "opening year 1931 missing; length 412 m missing; fewer than 2 source URLs cited (0); the conflicting blog values are not mentioned",
+        "agent error: API call failed after 6 attempts; last error: 429: 429 Rate limit reached for gpt-4.1 in organization org-JIkX0sXwCsLgBKyvAbavU7vo on tokens per min (TPM): Limit 30000, Used 29670, Requested 1004. Please try again in 1.348s. Visit https://platform.openai.com/account/rate-limits to learn more."
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "web-research",
+      "run": 1,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 15125,
+      "outputTokens": 302,
+      "durationMs": 44145,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 15125,
+      "mainOutputTokens": 302,
+      "tokenRatio": 0.8189195179001654,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-31-25-458Z\\web-research-1\\2026-10-05T00-31-28-372Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "mcp__chrome-devtools__new_page": 1,
+        "mcp__chrome-devtools__take_snapshot": 1
+      },
+      "mcpCalls": 2,
+      "guardFired": 0,
+      "maxRequestTokens": 4386,
+      "skillsCondition": "available",
+      "skillsLoaded": [
+        "web-research"
+      ],
+      "trigger": "correct",
+      "reason": "opening year 1931 missing; length 412 m missing; the conflicting blog values are not mentioned",
+      "details": {
+        "cited": [
+          "city/bridges/harbor-point.html",
+          "wiki/harbor-point-bridge.html",
+          "blog/old-bridges-2015.html"
+        ],
+        "pagesLoaded": [],
+        "flaggedInjection": false,
+        "guardFired": 0
+      }
+    },
+    {
+      "taskId": "web-research",
+      "run": 2,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 15129,
+      "outputTokens": 212,
+      "durationMs": 43543,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 15129,
+      "mainOutputTokens": 212,
+      "tokenRatio": 0.8191432301879065,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-31-25-458Z\\web-research-2\\2026-10-05T00-31-28-402Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "mcp__chrome-devtools__new_page": 1,
+        "mcp__chrome-devtools__take_snapshot": 1
+      },
+      "mcpCalls": 2,
+      "guardFired": 0,
+      "maxRequestTokens": 4387,
+      "skillsCondition": "available",
+      "skillsLoaded": [
+        "web-research"
+      ],
+      "trigger": "correct",
+      "reason": "opening year 1931 missing; length 412 m missing; fewer than 2 source URLs cited (0); the conflicting blog values are not mentioned",
+      "details": {
+        "cited": [],
+        "pagesLoaded": [],
+        "flaggedInjection": false,
+        "guardFired": 0
+      }
+    },
+    {
+      "taskId": "web-research",
+      "run": 3,
+      "pass": false,
+      "outcome": "error",
+      "stopReason": "error",
+      "steps": 1,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "durationMs": 12574,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 0,
+      "mainOutputTokens": 0,
+      "tokenRatio": 1,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-31-25-458Z\\web-research-3\\2026-10-05T00-32-12-482Z.jsonl",
+      "toolCalls": {},
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 0,
+      "skillsCondition": "available",
+      "skillsLoaded": [],
+      "trigger": "none",
+      "reason": "agent error: API call failed after 6 attempts; last error: 429: 429 Rate limit reached for gpt-4.1 in organization org-JIkX0sXwCsLgBKyvAbavU7vo on tokens per min (TPM): Limit 30000, Used 29670, Requested 1004. Please try again in 1.348s. Visit https://platform.openai.com/account/rate-limits to learn more."
+    }
+  ]
+}

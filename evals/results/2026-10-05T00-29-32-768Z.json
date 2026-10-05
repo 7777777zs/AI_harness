@@ -1,0 +1,157 @@
+{
+  "timestamp": "2026-10-05T00-29-32-768Z",
+  "model": "gpt-4.1",
+  "options": {
+    "task": "onboarding",
+    "skills": "available",
+    "runs": 3,
+    "concurrency": 3,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "onboarding",
+      "runs": 3,
+      "passes": 1,
+      "errors": 2,
+      "avgSteps": 6.333333333333333,
+      "avgTokens": 18989,
+      "avgSeconds": 69.878,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 4,
+      "failures": [
+        "agent error: API call failed after 6 attempts; last error: 429: 429 Rate limit reached for gpt-4.1 in organization org-JIkX0sXwCsLgBKyvAbavU7vo on tokens per min (TPM): Limit 30000, Used 28964, Requested 2316. Please try again in 2.56s. Visit https://platform.openai.com/account/rate-limits to learn more.",
+        "agent error: API call failed after 6 attempts; last error: 429: 429 Rate limit reached for gpt-4.1 in organization org-JIkX0sXwCsLgBKyvAbavU7vo on tokens per min (TPM): Limit 30000, Used 30000, Requested 1690. Please try again in 3.38s. Visit https://platform.openai.com/account/rate-limits to learn more."
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "onboarding",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 10,
+      "inputTokens": 37190,
+      "outputTokens": 1680,
+      "durationMs": 110717,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 3,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 37190,
+      "mainOutputTokens": 1680,
+      "tokenRatio": 0.9815092027243947,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-29-32-768Z\\onboarding-1\\2026-10-05T00-29-32-799Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "list_dir": 2,
+        "read_file": 18,
+        "grep": 8
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 6224,
+      "skillsCondition": "available",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "trigger": "correct"
+    },
+    {
+      "taskId": "onboarding",
+      "run": 2,
+      "pass": false,
+      "outcome": "error",
+      "stopReason": "error",
+      "steps": 6,
+      "inputTokens": 13389,
+      "outputTokens": 258,
+      "durationMs": 68989,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 13389,
+      "mainOutputTokens": 258,
+      "tokenRatio": 0.8453818688420294,
+      "answerMerged": false,
+      "unreadAtEnd": 10,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-29-32-768Z\\onboarding-2\\2026-10-05T00-29-32-856Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "list_dir": 7,
+        "read_file": 5
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 3187,
+      "skillsCondition": "available",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "trigger": "correct",
+      "reason": "agent error: API call failed after 6 attempts; last error: 429: 429 Rate limit reached for gpt-4.1 in organization org-JIkX0sXwCsLgBKyvAbavU7vo on tokens per min (TPM): Limit 30000, Used 28964, Requested 2316. Please try again in 2.56s. Visit https://platform.openai.com/account/rate-limits to learn more."
+    },
+    {
+      "taskId": "onboarding",
+      "run": 3,
+      "pass": false,
+      "outcome": "error",
+      "stopReason": "error",
+      "steps": 3,
+      "inputTokens": 4415,
+      "outputTokens": 35,
+      "durationMs": 29928,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 4415,
+      "mainOutputTokens": 35,
+      "tokenRatio": 0.7894480491597191,
+      "answerMerged": false,
+      "unreadAtEnd": 6,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-29-32-768Z\\onboarding-3\\2026-10-05T00-29-32-898Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "list_dir": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 2615,
+      "skillsCondition": "available",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "trigger": "correct",
+      "reason": "agent error: API call failed after 6 attempts; last error: 429: 429 Rate limit reached for gpt-4.1 in organization org-JIkX0sXwCsLgBKyvAbavU7vo on tokens per min (TPM): Limit 30000, Used 30000, Requested 1690. Please try again in 3.38s. Visit https://platform.openai.com/account/rate-limits to learn more."
+    }
+  ]
+}

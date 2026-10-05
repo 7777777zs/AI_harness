@@ -1,0 +1,179 @@
+{
+  "timestamp": "2026-10-05T00-12-03-878Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "code-review",
+    "skills": "preloaded",
+    "runs": 3,
+    "concurrency": 3,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false
+  },
+  "summary": [
+    {
+      "taskId": "code-review",
+      "runs": 3,
+      "passes": 3,
+      "errors": 0,
+      "avgSteps": 4.333333333333333,
+      "avgTokens": 13074,
+      "avgSeconds": 7.813666666666667,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 3,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "code-review",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 11336,
+      "outputTokens": 690,
+      "durationMs": 7236,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 11336,
+      "mainOutputTokens": 690,
+      "tokenRatio": 0.8535622506696786,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-12-03-878Z\\code-review-1\\2026-10-05T00-12-05-027Z.jsonl",
+      "toolCalls": {
+        "run_shell": 2,
+        "read_skill_file": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 3500,
+      "skillsCondition": "preloaded",
+      "skillsLoaded": [
+        "code-review"
+      ],
+      "details": {
+        "found": [
+          "SQL injection",
+          "pagination off-by-one",
+          "leaked file handle / swallowed error"
+        ],
+        "allThree": true,
+        "severityGrouping": true,
+        "writeAttempts": 0,
+        "readOnlyBlocked": 0
+      }
+    },
+    {
+      "taskId": "code-review",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 11551,
+      "outputTokens": 589,
+      "durationMs": 8358,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 11551,
+      "mainOutputTokens": 589,
+      "tokenRatio": 0.8554550681275008,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-12-03-878Z\\code-review-2\\2026-10-05T00-12-05-138Z.jsonl",
+      "toolCalls": {
+        "run_shell": 2,
+        "read_skill_file": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 3572,
+      "skillsCondition": "preloaded",
+      "skillsLoaded": [
+        "code-review"
+      ],
+      "details": {
+        "found": [
+          "SQL injection",
+          "pagination off-by-one",
+          "leaked file handle / swallowed error"
+        ],
+        "allThree": true,
+        "severityGrouping": true,
+        "writeAttempts": 0,
+        "readOnlyBlocked": 0
+      }
+    },
+    {
+      "taskId": "code-review",
+      "run": 3,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 5,
+      "inputTokens": 14414,
+      "outputTokens": 642,
+      "durationMs": 7847,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 14414,
+      "mainOutputTokens": 642,
+      "tokenRatio": 0.8767968510476419,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-12-03-878Z\\code-review-3\\2026-10-05T00-12-05-216Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "run_shell": 2,
+        "read_file": 4
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 3929,
+      "skillsCondition": "preloaded",
+      "skillsLoaded": [
+        "code-review"
+      ],
+      "details": {
+        "found": [
+          "SQL injection",
+          "pagination off-by-one",
+          "leaked file handle / swallowed error"
+        ],
+        "allThree": true,
+        "severityGrouping": false,
+        "writeAttempts": 0,
+        "readOnlyBlocked": 0
+      }
+    }
+  ]
+}

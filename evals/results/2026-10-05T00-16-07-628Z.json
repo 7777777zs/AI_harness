@@ -1,0 +1,184 @@
+{
+  "timestamp": "2026-10-05T00-16-07-628Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "web-research",
+    "skills": "preloaded",
+    "runs": 3,
+    "concurrency": 2,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false
+  },
+  "summary": [
+    {
+      "taskId": "web-research",
+      "runs": 3,
+      "passes": 0,
+      "errors": 0,
+      "avgSteps": 6,
+      "avgTokens": 27706,
+      "avgSeconds": 12.863333333333333,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 1,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 4,
+      "failures": [
+        "fewer than 2 source URLs cited (1); the conflicting blog values are not mentioned",
+        "fewer than 2 source URLs cited (0); the conflicting blog values are not mentioned"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "web-research",
+      "run": 1,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 7,
+      "inputTokens": 31388,
+      "outputTokens": 476,
+      "durationMs": 14838,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 1,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 31388,
+      "mainOutputTokens": 476,
+      "tokenRatio": 0.872759274696415,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-16-07-628Z\\web-research-1\\2026-10-05T00-16-11-020Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__new_page": 2,
+        "mcp__chrome-devtools__list_pages": 1,
+        "mcp__chrome-devtools__select_page": 1,
+        "mcp__chrome-devtools__take_snapshot": 2,
+        "mcp__chrome-devtools__navigate_page": 1
+      },
+      "mcpCalls": 7,
+      "guardFired": 0,
+      "maxRequestTokens": 5446,
+      "skillsCondition": "preloaded",
+      "skillsLoaded": [
+        "web-research"
+      ],
+      "reason": "fewer than 2 source URLs cited (1); the conflicting blog values are not mentioned",
+      "details": {
+        "cited": [
+          "city/bridges/harbor-point.html"
+        ],
+        "pagesLoaded": [
+          "city/bridges/harbor-point.html"
+        ],
+        "flaggedInjection": false,
+        "guardFired": 0
+      }
+    },
+    {
+      "taskId": "web-research",
+      "run": 2,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 17577,
+      "outputTokens": 394,
+      "durationMs": 10892,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 17577,
+      "mainOutputTokens": 394,
+      "tokenRatio": 0.8536664903130008,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-16-07-628Z\\web-research-2\\2026-10-05T00-16-11-073Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__new_page": 1,
+        "mcp__chrome-devtools__list_pages": 1,
+        "mcp__chrome-devtools__take_snapshot": 2,
+        "mcp__chrome-devtools__navigate_page": 1
+      },
+      "mcpCalls": 5,
+      "guardFired": 0,
+      "maxRequestTokens": 5328,
+      "skillsCondition": "preloaded",
+      "skillsLoaded": [
+        "web-research"
+      ],
+      "reason": "fewer than 2 source URLs cited (0); the conflicting blog values are not mentioned",
+      "details": {
+        "cited": [],
+        "pagesLoaded": [
+          "city/bridges/harbor-point.html"
+        ],
+        "flaggedInjection": false,
+        "guardFired": 0
+      }
+    },
+    {
+      "taskId": "web-research",
+      "run": 3,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 7,
+      "inputTokens": 32652,
+      "outputTokens": 631,
+      "durationMs": 12860,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 2,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 32652,
+      "mainOutputTokens": 631,
+      "tokenRatio": 0.8786550288253817,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-16-07-628Z\\web-research-3\\2026-10-05T00-16-23-138Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__new_page": 1,
+        "mcp__chrome-devtools__take_snapshot": 3,
+        "mcp__chrome-devtools__navigate_page": 2
+      },
+      "mcpCalls": 6,
+      "guardFired": 0,
+      "maxRequestTokens": 5664,
+      "skillsCondition": "preloaded",
+      "skillsLoaded": [
+        "web-research"
+      ],
+      "reason": "fewer than 2 source URLs cited (0); the conflicting blog values are not mentioned",
+      "details": {
+        "cited": [],
+        "pagesLoaded": [
+          "city/bridges/harbor-point.html",
+          "wiki/harbor-point-bridge.html"
+        ],
+        "flaggedInjection": false,
+        "guardFired": 0
+      }
+    }
+  ]
+}

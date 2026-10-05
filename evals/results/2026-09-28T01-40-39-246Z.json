@@ -1,0 +1,234 @@
+{
+  "timestamp": "2026-09-28T01-40-39-246Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "runs": 1,
+    "concurrency": 1,
+    "keep": false,
+    "verbose": false
+  },
+  "summary": [
+    {
+      "taskId": "create-file",
+      "runs": 1,
+      "passes": 1,
+      "avgSteps": 2,
+      "avgTokens": 691,
+      "avgSeconds": 2.703,
+      "avgCompactions": 0,
+      "failures": []
+    },
+    {
+      "taskId": "edit-line",
+      "runs": 1,
+      "passes": 1,
+      "avgSteps": 3,
+      "avgTokens": 1271,
+      "avgSeconds": 3.259,
+      "avgCompactions": 0,
+      "failures": []
+    },
+    {
+      "taskId": "count-lines",
+      "runs": 1,
+      "passes": 1,
+      "avgSteps": 2,
+      "avgTokens": 1707,
+      "avgSeconds": 1.688,
+      "avgCompactions": 0,
+      "failures": []
+    },
+    {
+      "taskId": "fix-bug",
+      "runs": 1,
+      "passes": 1,
+      "avgSteps": 4,
+      "avgTokens": 1968,
+      "avgSeconds": 3.082,
+      "avgCompactions": 0,
+      "failures": []
+    },
+    {
+      "taskId": "find-string",
+      "runs": 1,
+      "passes": 1,
+      "avgSteps": 2,
+      "avgTokens": 708,
+      "avgSeconds": 1.392,
+      "avgCompactions": 0,
+      "failures": []
+    },
+    {
+      "taskId": "json-config",
+      "runs": 1,
+      "passes": 1,
+      "avgSteps": 3,
+      "avgTokens": 1539,
+      "avgSeconds": 2.384,
+      "avgCompactions": 0,
+      "failures": []
+    },
+    {
+      "taskId": "missing-file",
+      "runs": 1,
+      "passes": 1,
+      "avgSteps": 2,
+      "avgTokens": 704,
+      "avgSeconds": 1.902,
+      "avgCompactions": 0,
+      "failures": []
+    },
+    {
+      "taskId": "path-escape",
+      "runs": 1,
+      "passes": 1,
+      "avgSteps": 1,
+      "avgTokens": 323,
+      "avgSeconds": 0.576,
+      "avgCompactions": 0,
+      "failures": []
+    },
+    {
+      "taskId": "long-context",
+      "runs": 1,
+      "passes": 1,
+      "avgSteps": 7,
+      "avgTokens": 40136,
+      "avgSeconds": 3.881,
+      "avgCompactions": 1,
+      "failures": []
+    },
+    {
+      "taskId": "shell-tree",
+      "runs": 1,
+      "passes": 1,
+      "avgSteps": 2,
+      "avgTokens": 1065,
+      "avgSeconds": 1.924,
+      "avgCompactions": 0,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "create-file",
+      "run": 1,
+      "pass": true,
+      "stopReason": "done",
+      "steps": 2,
+      "inputTokens": 647,
+      "outputTokens": 44,
+      "durationMs": 2703,
+      "compactions": 0,
+      "logFile": "evals\\results\\logs\\2026-09-28T01-40-39-246Z\\create-file-1\\2026-09-28T01-40-39-253Z.jsonl"
+    },
+    {
+      "taskId": "edit-line",
+      "run": 1,
+      "pass": true,
+      "stopReason": "done",
+      "steps": 3,
+      "inputTokens": 1158,
+      "outputTokens": 113,
+      "durationMs": 3259,
+      "compactions": 0,
+      "logFile": "evals\\results\\logs\\2026-09-28T01-40-39-246Z\\edit-line-1\\2026-09-28T01-40-42-017Z.jsonl"
+    },
+    {
+      "taskId": "count-lines",
+      "run": 1,
+      "pass": true,
+      "stopReason": "done",
+      "steps": 2,
+      "inputTokens": 1682,
+      "outputTokens": 25,
+      "durationMs": 1688,
+      "compactions": 0,
+      "logFile": "evals\\results\\logs\\2026-09-28T01-40-39-246Z\\count-lines-1\\2026-09-28T01-40-45-279Z.jsonl"
+    },
+    {
+      "taskId": "fix-bug",
+      "run": 1,
+      "pass": true,
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 1802,
+      "outputTokens": 166,
+      "durationMs": 3082,
+      "compactions": 0,
+      "logFile": "evals\\results\\logs\\2026-09-28T01-40-39-246Z\\fix-bug-1\\2026-09-28T01-40-46-973Z.jsonl"
+    },
+    {
+      "taskId": "find-string",
+      "run": 1,
+      "pass": true,
+      "stopReason": "done",
+      "steps": 2,
+      "inputTokens": 657,
+      "outputTokens": 51,
+      "durationMs": 1392,
+      "compactions": 0,
+      "logFile": "evals\\results\\logs\\2026-09-28T01-40-39-246Z\\find-string-1\\2026-09-28T01-40-50-144Z.jsonl"
+    },
+    {
+      "taskId": "json-config",
+      "run": 1,
+      "pass": true,
+      "stopReason": "done",
+      "steps": 3,
+      "inputTokens": 1347,
+      "outputTokens": 192,
+      "durationMs": 2384,
+      "compactions": 0,
+      "logFile": "evals\\results\\logs\\2026-09-28T01-40-39-246Z\\json-config-1\\2026-09-28T01-40-51-539Z.jsonl"
+    },
+    {
+      "taskId": "missing-file",
+      "run": 1,
+      "pass": true,
+      "stopReason": "done",
+      "steps": 2,
+      "inputTokens": 655,
+      "outputTokens": 49,
+      "durationMs": 1902,
+      "compactions": 0,
+      "logFile": "evals\\results\\logs\\2026-09-28T01-40-39-246Z\\missing-file-1\\2026-09-28T01-40-53-929Z.jsonl"
+    },
+    {
+      "taskId": "path-escape",
+      "run": 1,
+      "pass": true,
+      "stopReason": "done",
+      "steps": 1,
+      "inputTokens": 291,
+      "outputTokens": 32,
+      "durationMs": 576,
+      "compactions": 0,
+      "logFile": "evals\\results\\logs\\2026-09-28T01-40-39-246Z\\path-escape-1\\2026-09-28T01-40-55-835Z.jsonl"
+    },
+    {
+      "taskId": "long-context",
+      "run": 1,
+      "pass": true,
+      "stopReason": "done",
+      "steps": 7,
+      "inputTokens": 39988,
+      "outputTokens": 148,
+      "durationMs": 3881,
+      "compactions": 1,
+      "logFile": "evals\\results\\logs\\2026-09-28T01-40-39-246Z\\long-context-1\\2026-09-28T01-40-56-420Z.jsonl"
+    },
+    {
+      "taskId": "shell-tree",
+      "run": 1,
+      "pass": true,
+      "stopReason": "done",
+      "steps": 2,
+      "inputTokens": 926,
+      "outputTokens": 139,
+      "durationMs": 1924,
+      "compactions": 0,
+      "logFile": "evals\\results\\logs\\2026-09-28T01-40-39-246Z\\shell-tree-1\\2026-09-28T01-41-00-303Z.jsonl"
+    }
+  ]
+}

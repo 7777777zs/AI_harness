@@ -1,0 +1,187 @@
+{
+  "timestamp": "2026-10-05T00-12-16-753Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "bugfix",
+    "skills": "preloaded",
+    "runs": 3,
+    "concurrency": 3,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false
+  },
+  "summary": [
+    {
+      "taskId": "bugfix",
+      "runs": 3,
+      "passes": 2,
+      "errors": 0,
+      "avgSteps": 16.333333333333332,
+      "avgTokens": 91436.66666666667,
+      "avgSeconds": 25.03933333333333,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 3.3333333333333335,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 18,
+      "failures": [
+        "not fixed: 90: got \"1m 3\", want \"1m 30s\"; 10: got \"1\", want \"10s\"; 50: got \"5\", want \"50s\"; no added test fails on the original code (the bug is not covered by a test)"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "bugfix",
+      "run": 1,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 7,
+      "inputTokens": 21752,
+      "outputTokens": 544,
+      "durationMs": 6938,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 21752,
+      "mainOutputTokens": 544,
+      "tokenRatio": 0.9018287214011127,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-12-16-753Z\\bugfix-1\\2026-10-05T00-12-16-779Z.jsonl",
+      "toolCalls": {
+        "grep": 1,
+        "read_file": 2,
+        "glob": 1,
+        "edit_file": 1,
+        "run_shell": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 3693,
+      "skillsCondition": "preloaded",
+      "skillsLoaded": [
+        "bugfix-with-test"
+      ],
+      "reason": "not fixed: 90: got \"1m 3\", want \"1m 30s\"; 10: got \"1\", want \"10s\"; 50: got \"5\", want \"50s\"; no added test fails on the original code (the bug is not covered by a test)",
+      "details": {
+        "testFirst": false,
+        "toolCalls": {
+          "grep": 1,
+          "read_file": 2,
+          "glob": 1,
+          "edit_file": 1,
+          "run_shell": 1
+        }
+      }
+    },
+    {
+      "taskId": "bugfix",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 17,
+      "inputTokens": 102992,
+      "outputTokens": 3236,
+      "durationMs": 28468,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 5,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 6,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 102992,
+      "mainOutputTokens": 3236,
+      "tokenRatio": 1.0935130407021527,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-12-16-753Z\\bugfix-2\\2026-10-05T00-12-16-895Z.jsonl",
+      "toolCalls": {
+        "grep": 1,
+        "read_file": 3,
+        "write_file": 1,
+        "run_shell": 6,
+        "edit_file": 6
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 10083,
+      "skillsCondition": "preloaded",
+      "skillsLoaded": [
+        "bugfix-with-test"
+      ],
+      "details": {
+        "testFirst": true,
+        "toolCalls": {
+          "grep": 1,
+          "read_file": 3,
+          "write_file": 1,
+          "run_shell": 6,
+          "edit_file": 6
+        }
+      }
+    },
+    {
+      "taskId": "bugfix",
+      "run": 3,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "max_steps",
+      "steps": 25,
+      "inputTokens": 142552,
+      "outputTokens": 3234,
+      "durationMs": 39712,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 5,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 10,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 142552,
+      "mainOutputTokens": 3234,
+      "tokenRatio": 1.0618492637411305,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-12-16-753Z\\bugfix-3\\2026-10-05T00-12-16-970Z.jsonl",
+      "toolCalls": {
+        "grep": 4,
+        "read_file": 3,
+        "edit_file": 8,
+        "run_shell": 9,
+        "write_file": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 9050,
+      "skillsCondition": "preloaded",
+      "skillsLoaded": [
+        "bugfix-with-test"
+      ],
+      "details": {
+        "testFirst": true,
+        "toolCalls": {
+          "grep": 4,
+          "read_file": 3,
+          "edit_file": 8,
+          "run_shell": 9,
+          "write_file": 1
+        }
+      }
+    }
+  ]
+}

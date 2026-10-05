@@ -1,0 +1,184 @@
+{
+  "timestamp": "2026-10-05T00-49-15-331Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "onboarding",
+    "skills": "routed",
+    "runs": 3,
+    "concurrency": 3,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "onboarding",
+      "runs": 3,
+      "passes": 1,
+      "errors": 0,
+      "avgSteps": 6.333333333333333,
+      "avgTokens": 27912,
+      "avgSeconds": 12.050666666666666,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 4,
+      "failures": [
+        "missing: flow handler → service → event → audit (got 0 of 4 in order)"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "onboarding",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 6,
+      "inputTokens": 24480,
+      "outputTokens": 1229,
+      "durationMs": 12389,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 24234,
+      "mainOutputTokens": 1193,
+      "tokenRatio": 0.9441400298615779,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-49-15-331Z\\onboarding-1\\2026-10-05T00-49-15-363Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 15
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 5054,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The task clearly asks to explain the codebase structure and workings, which matches the codebase-onboarding skill.",
+      "trigger": "correct",
+      "details": {
+        "outcome": true,
+        "process": true,
+        "missingOutcome": [],
+        "coverageNote": true,
+        "formatHeadings": 7
+      }
+    },
+    {
+      "taskId": "onboarding",
+      "run": 2,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 5,
+      "inputTokens": 19387,
+      "outputTokens": 1170,
+      "durationMs": 10326,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 19141,
+      "mainOutputTokens": 1139,
+      "tokenRatio": 0.9259012846030086,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-49-15-331Z\\onboarding-2\\2026-10-05T00-49-15-423Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 15
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 5070,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The task is to explain the structure and working of the codebase for onboarding purposes.",
+      "trigger": "correct",
+      "reason": "missing: flow handler → service → event → audit (got 0 of 4 in order)",
+      "details": {
+        "outcome": false,
+        "process": true,
+        "missingOutcome": [
+          "flow handler → service → event → audit (got 0 of 4 in order)"
+        ],
+        "coverageNote": true,
+        "formatHeadings": 7
+      }
+    },
+    {
+      "taskId": "onboarding",
+      "run": 3,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 8,
+      "inputTokens": 36006,
+      "outputTokens": 1464,
+      "durationMs": 13437,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 2,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 35760,
+      "mainOutputTokens": 1433,
+      "tokenRatio": 1.0251980520129682,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-49-15-331Z\\onboarding-3\\2026-10-05T00-49-15-463Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 15
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 5935,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The task is to explain the codebase structure and how it works for onboarding purposes.",
+      "trigger": "correct",
+      "reason": "missing: flow handler → service → event → audit (got 0 of 4 in order)",
+      "details": {
+        "outcome": false,
+        "process": true,
+        "missingOutcome": [
+          "flow handler → service → event → audit (got 0 of 4 in order)"
+        ],
+        "coverageNote": true,
+        "formatHeadings": 7
+      }
+    }
+  ]
+}

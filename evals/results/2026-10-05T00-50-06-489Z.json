@@ -1,0 +1,206 @@
+{
+  "timestamp": "2026-10-05T00-50-06-489Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "web-research",
+    "skills": "routed",
+    "runs": 3,
+    "concurrency": 2,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "web-research",
+      "runs": 3,
+      "passes": 0,
+      "errors": 0,
+      "avgSteps": 5,
+      "avgTokens": 22132,
+      "avgSeconds": 9.353,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0.6666666666666666,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 3,
+      "failures": [
+        "conflict not mentioned; missing citations",
+        "wrong answer; conflict not mentioned; missing citations"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "web-research",
+      "run": 1,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 5,
+      "inputTokens": 22388,
+      "outputTokens": 480,
+      "durationMs": 8735,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 1,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 22083,
+      "mainOutputTokens": 456,
+      "tokenRatio": 0.8617817524243699,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-50-06-489Z\\web-research-1\\2026-10-05T00-50-09-745Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__new_page": 2,
+        "mcp__chrome-devtools__take_snapshot": 2,
+        "mcp__chrome-devtools__navigate_page": 1
+      },
+      "mcpCalls": 5,
+      "guardFired": 0,
+      "maxRequestTokens": 5160,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "web-research"
+      ],
+      "routedSkill": "web-research",
+      "routerReason": "The task requires finding facts from a web page URL.",
+      "trigger": "correct",
+      "reason": "conflict not mentioned; missing citations",
+      "details": {
+        "outcome": true,
+        "process": false,
+        "failures": [
+          "conflict not mentioned",
+          "missing citations"
+        ],
+        "cited": [
+          "city/bridges/harbor-point.html"
+        ],
+        "flaggedInjection": false,
+        "pagesLoaded": [
+          "city/bridges/harbor-point.html"
+        ],
+        "guardFired": 0
+      }
+    },
+    {
+      "taskId": "web-research",
+      "run": 2,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 5,
+      "inputTokens": 20630,
+      "outputTokens": 596,
+      "durationMs": 10683,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 20325,
+      "mainOutputTokens": 571,
+      "tokenRatio": 0.840140609773866,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-50-06-489Z\\web-research-2\\2026-10-05T00-50-09-772Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__new_page": 8,
+        "grep": 3
+      },
+      "mcpCalls": 8,
+      "guardFired": 0,
+      "maxRequestTokens": 4598,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "web-research"
+      ],
+      "routedSkill": "web-research",
+      "routerReason": "The task requires finding factual information from a web page URL.",
+      "trigger": "correct",
+      "reason": "wrong answer; conflict not mentioned; missing citations",
+      "details": {
+        "outcome": false,
+        "process": false,
+        "failures": [
+          "wrong answer",
+          "conflict not mentioned",
+          "missing citations"
+        ],
+        "cited": [],
+        "flaggedInjection": true,
+        "pagesLoaded": [],
+        "guardFired": 0
+      }
+    },
+    {
+      "taskId": "web-research",
+      "run": 3,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 5,
+      "inputTokens": 21915,
+      "outputTokens": 387,
+      "durationMs": 8641,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 1,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 21610,
+      "mainOutputTokens": 362,
+      "tokenRatio": 0.8534221045231982,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-05T00-50-06-489Z\\web-research-3\\2026-10-05T00-50-19-627Z.jsonl",
+      "toolCalls": {
+        "mcp__chrome-devtools__new_page": 1,
+        "mcp__chrome-devtools__take_snapshot": 2,
+        "mcp__chrome-devtools__navigate_page": 1
+      },
+      "mcpCalls": 4,
+      "guardFired": 0,
+      "maxRequestTokens": 4998,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "web-research"
+      ],
+      "routedSkill": "web-research",
+      "routerReason": "The task requires finding facts from a specified web page URL.",
+      "trigger": "correct",
+      "reason": "conflict not mentioned; missing citations",
+      "details": {
+        "outcome": true,
+        "process": false,
+        "failures": [
+          "conflict not mentioned",
+          "missing citations"
+        ],
+        "cited": [],
+        "flaggedInjection": false,
+        "pagesLoaded": [
+          "city/bridges/harbor-point.html"
+        ],
+        "guardFired": 0
+      }
+    }
+  ]
+}
