@@ -23,7 +23,7 @@ The decisions below come from a review of the open issues after Phase 6 (2026-10
 | 8 | [D6: commit sanitized eval result files](#d6-eval-results-in-the-repository) | Done (`6774853`) | /tdd |
 | 9 | [D5: validation and re-runs (one round, ≤ $1)](#d5-re-runs-and-validation) | Done ($0.46; see TEST_REPORT.md) | — |
 | 10 | [D2: same-turn guard gap: document](#d2-same-turn-guard-gap) | Accept, documented (`86217b8`) | — |
-| – | [N1: codebase-onboarding matches per-file summaries](#new-findings-from-d5) | Todo | /tdd |
+| – | [N1: codebase-onboarding matches per-file summaries](#new-findings-from-d5) | Done (description narrowed; router check 18/18, 18/18) | — |
 | – | [N2: completion rules check format, not substance](#new-findings-from-d5) | Accept, documented | — |
 | – | [N3: no Chinese final answers to evaluate plan detection on](#new-findings-from-d5) | Defer | — |
 | – | [D3b: re-run only errored eval jobs](#d3-rate-limits) | Defer | — |

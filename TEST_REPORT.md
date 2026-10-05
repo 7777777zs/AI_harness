@@ -1452,3 +1452,10 @@ None of the failures came from the proxy (no `ERR_PROXY` in the logs).
 - **Not committed:** the per-run logs (`evals/results/logs/`, about 45 MB). They stay local and gitignored, so log-based re-scoring (`evals/rescore-skills.ts`, `evals/plan-detect-eval.ts`) only works on the machine that ran the evals.
 
 Results files of this round: `2026-10-05T10-34-05-434Z`, `2026-10-05T10-34-50-119Z`, `2026-10-05T10-35-36-458Z`, `2026-10-05T10-35-52-542Z`, `2026-10-05T10-36-04-972Z`, `2026-10-05T10-36-29-510Z`, `2026-10-05T10-37-06-628Z`, `2026-10-05T10-37-24-715Z`, `2026-10-05T10-37-54-508Z`, `2026-10-05T10-38-04-405Z`, `2026-10-05T10-38-18-280Z`, `2026-10-05T10-39-23-086Z`.
+
+### N1: codebase-onboarding no longer matches per-file summaries
+- **Change:** the description now reads "…Use when asked for an overview of a project, or how it works or is structured as a whole (modules, entry points, routes, main flow), or to onboard onto it; not for summarizing files one by one."
+- **Router-only check** (`evals/route-check.ts --runs 3`, gpt-4.1-mini, 69 decisions, ~$0.01): precision **18/18**, recall **18/18**.
+  - The three per-file summary tasks are now routed to no skill in 9/9 decisions (before: codebase-onboarding in 8/9).
+  - `project-overview` and `onboarding` still go to codebase-onboarding (3/3 each).
+- **An intermediate wording was rejected:** "…how a project works or is structured…; not for describing or summarizing files one by one". It fixed the per-file tasks but lost `project-overview` (recall 15/18). Putting "overview" back in the trigger restored it.

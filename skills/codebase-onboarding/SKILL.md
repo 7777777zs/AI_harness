@@ -1,6 +1,6 @@
 ---
 name: codebase-onboarding
-description: Map an unfamiliar codebase into an architecture overview. Use when asked to explain, summarize or onboard onto a project as a whole — its structure, modules, entry points, or how it works end to end.
+description: Map an unfamiliar codebase into an architecture overview. Use when asked for an overview of a project, or how it works or is structured as a whole (modules, entry points, routes, main flow), or to onboard onto it; not for summarizing files one by one.
 readOnly: true
 ---
 
