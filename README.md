@@ -327,6 +327,10 @@ Before each model call, the harness estimates the context size. The starting poi
 - **Known files and coverage:** paths from every file listing are collected and shown in a `[Harness status]` message attached to each request, together with which files have not been read yet. It is never stored in history, so compaction can't remove it. Level 2 summaries end with this harness-computed unread list.
 - **Coverage check:** if the model tries to finish a whole-project task while listed files are unread, the harness asks it once to read them or say what it skipped. Set `COVERAGE_CHECK=off` to disable.
 - **Context-length errors:** if the API still returns one, the harness forces compaction and retries once. If that fails too, it stops with `stopReason: "error"`.
+- **Transient API errors** (429, 5xx, connection failures) are retried up to 5 times, for both the main and the compaction model.
+  - Each wait is the longer of the provider's `Retry-After` and an exponential backoff (1, 2, 4, 8, 16 s, ±25% jitter), so short hints under a shared tokens-per-minute limit can't use up every retry within one minute.
+  - Each wait is capped at 60 s.
+  - Every retry is logged as `api_retry`.
 
 Everything is printed (`⟳ Compaction L1: ~6,744 → ~3,973 tokens …`) and logged to the JSONL file: `compaction`, `level2_rejected`, `level2_skipped`, `describe_failed`, `repeated_call`.
 

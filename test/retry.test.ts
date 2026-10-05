@@ -40,7 +40,8 @@ test("retry-after from the provider is honored", async () => {
   const sleeps: number[] = [];
   const reasons: string[] = [];
   const { client, calls } = flaky([api(429, 1_234)]);
-  const r = await withRetry(client, { sleep: async (ms) => void sleeps.push(ms), onRetry: (i) => void reasons.push(i.reason) }).chat(messages, []);
+  // random 0: the first backoff is 750 ms, shorter than the provider's 1,234 ms.
+  const r = await withRetry(client, { sleep: async (ms) => void sleeps.push(ms), random: () => 0, onRetry: (i) => void reasons.push(i.reason) }).chat(messages, []);
   assert.equal(r.text, "ok");
   assert.equal(calls(), 2);
   assert.deepEqual(sleeps, [1_234]);
@@ -60,6 +61,34 @@ test("without retry-after: exponential backoff 1s, 2s, 4s, 8s, 16s, then give up
   );
   assert.deepEqual(sleeps, [1_000, 2_000, 4_000, 8_000, 16_000]);
   assert.equal(calls(), 6, "1 attempt + 5 retries");
+});
+
+test("a short Retry-After doesn't shorten the exponential backoff: each wait is the larger of the two", async () => {
+  // 2 s hints, as OpenAI sends under a shared TPM limit; five such waits would end in ~10 s.
+  const sleeps: number[] = [];
+  const reasons: string[] = [];
+  const { client } = flaky(Array.from({ length: 5 }, () => api(429, 2_000)));
+  const r = await withRetry(client, {
+    sleep: async (ms) => void sleeps.push(ms),
+    random: () => 0.5,
+    onRetry: (i) => void reasons.push(i.reason),
+  }).chat(messages, []);
+  assert.equal(r.text, "ok");
+  assert.deepEqual(sleeps, [2_000, 2_000, 4_000, 8_000, 16_000]);
+  assert.deepEqual(reasons, ["retry-after", "retry-after", "backoff", "backoff", "backoff"]);
+});
+
+test("each wait is capped at 60 s, even when Retry-After is larger; a capped wait still counts as an attempt", async () => {
+  const sleeps: number[] = [];
+  const capped: boolean[] = [];
+  const { client, calls } = flaky(Array.from({ length: 10 }, () => api(429, 90_000)));
+  await assert.rejects(
+    withRetry(client, { sleep: async (ms) => void sleeps.push(ms), random: () => 0.5, onRetry: (i) => void capped.push(i.capped) }).chat(messages, []),
+    /^LLMApiError: API call failed after 6 attempts/,
+  );
+  assert.deepEqual(sleeps, [60_000, 60_000, 60_000, 60_000, 60_000]);
+  assert.deepEqual(capped, [true, true, true, true, true]);
+  assert.equal(calls(), 6);
 });
 
 test("backoff has ±25% jitter", () => {
@@ -151,7 +180,8 @@ test("agent: transient errors are retried and logged; the run finishes normally"
   const result = await runAgent({ task: "x", cwd: sandbox(), client, quiet: true, retry: { sleep: async () => {} } });
   assert.equal(result.stopReason, "done");
   const retries = logOf(result.logFile).filter((l) => l.type === "api_retry");
-  assert.deepEqual(retries.map((l) => [l.source, l.status, l.retry, l.reason]), [["main", 429, 1, "retry-after"], ["main", 503, 2, "backoff"]]);
+  // The 10 ms retry-after is shorter than the first backoff (≥ 750 ms), so the backoff wins.
+  assert.deepEqual(retries.map((l) => [l.source, l.status, l.retry, l.reason]), [["main", 429, 1, "backoff"], ["main", 503, 2, "backoff"]]);
 });
 
 test("agent: after the last retry the run stops with stopReason error, errorKind api and a clear message", async () => {

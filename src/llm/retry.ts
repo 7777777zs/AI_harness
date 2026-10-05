@@ -5,14 +5,18 @@ import { LLMApiError, type LLMClient } from "./types.js";
 /** Retries after the first attempt (delays 1s, 2s, 4s, 8s, 16s with the default base). */
 export const DEFAULT_MAX_RETRIES = 5;
 export const DEFAULT_BASE_DELAY_MS = 1_000;
+/** No single wait is longer than this, whatever the provider asks for. */
+export const MAX_WAIT_MS = 60_000;
 
 export interface RetryInfo {
   /** 1 for the first retry. */
   retry: number;
   maxRetries: number;
   delayMs: number;
-  /** "retry-after" when the provider said how long to wait, else "backoff". */
+  /** Which wait was longer: the provider's retry-after or the exponential backoff. */
   reason: "retry-after" | "backoff";
+  /** The wait was cut to MAX_WAIT_MS. */
+  capped: boolean;
   status: number | undefined;
   message: string;
 }
@@ -35,10 +39,12 @@ export function backoffDelay(retry: number, baseDelayMs = DEFAULT_BASE_DELAY_MS,
 const realSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * Wrap a client so retryable LLMApiErrors (429, 5xx, connection failures) are retried, honoring
- * the provider's retry-after when given, otherwise with exponential backoff and jitter. Other
- * errors (non-429 4xx, context length, bugs) are thrown immediately. After the last retry it
- * throws a non-retryable LLMApiError saying how many attempts were made.
+ * Wrap a client so retryable LLMApiErrors (429, 5xx, connection failures) are retried. Each wait
+ * is the longer of the provider's retry-after and the exponential backoff (with jitter), capped at
+ * MAX_WAIT_MS: under a shared tokens-per-minute limit the provider's hints are a few seconds, and
+ * concurrent jobs would use up every retry inside one window. Other errors (non-429 4xx, context
+ * length, bugs) are thrown immediately. After the last retry it throws a non-retryable
+ * LLMApiError saying how many attempts were made.
  */
 export function withRetry(client: LLMClient, opts: RetryOptions = {}): LLMClient {
   const maxRetries = opts.maxRetries ?? DEFAULT_MAX_RETRIES;
@@ -56,12 +62,16 @@ export function withRetry(client: LLMClient, opts: RetryOptions = {}): LLMClient
               retryable: false,
             });
           }
-          const delayMs = err.retryAfterMs ?? backoffDelay(retry, opts.baseDelayMs, opts.random);
+          const backoff = backoffDelay(retry, opts.baseDelayMs, opts.random);
+          const providerWins = err.retryAfterMs !== undefined && err.retryAfterMs >= backoff;
+          const wanted = providerWins ? err.retryAfterMs! : backoff;
+          const delayMs = Math.min(wanted, MAX_WAIT_MS);
           opts.onRetry?.({
             retry,
             maxRetries,
             delayMs,
-            reason: err.retryAfterMs !== undefined ? "retry-after" : "backoff",
+            reason: providerWins ? "retry-after" : "backoff",
+            capped: wanted > MAX_WAIT_MS,
             status: err.status,
             message: err.message,
           });
