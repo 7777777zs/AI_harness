@@ -93,3 +93,16 @@ test("Ctrl+C during an eval run: sandboxes are removed and completed runs are sa
     api.close();
   }
 });
+
+test("bad runner arguments print a one-line usage, not a stack trace (P6: `npm run eval --runs 1` passes a bare 1)", async () => {
+  for (const argv of [["1"], ["--runz", "1"]]) {
+    const child = spawn(process.execPath, ["--import", "tsx", "evals/run.ts", ...argv], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+    let stderr = "";
+    child.stderr.on("data", (d) => (stderr += d));
+    const code = await new Promise<number | null>((r) => child.on("exit", r));
+    assert.equal(code, 1, argv.join(" "));
+    assert.match(stderr, /^Error: .+\nUsage: npm run eval -- \[--task id\] \[--runs N\]/, stderr);
+    assert.match(stderr, /Put -- after "npm run eval" so npm passes the options on/);
+    assert.ok(!/\n\s+at /.test(stderr), "no stack trace");
+  }
+});

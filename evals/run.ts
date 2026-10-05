@@ -86,24 +86,38 @@ interface TaskSummary {
 const EVALS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const RESULTS_DIR = path.join(EVALS_DIR, "results");
 
-const { values: args } = parseArgs({
-  options: {
-    task: { type: "string" },
-    runs: { type: "string", default: "1" },
-    concurrency: { type: "string", default: "1" },
-    keep: { type: "boolean", default: false },
-    verbose: { type: "boolean", default: false },
-    "compact-model": { type: "string" },
-    /** Skip tasks that need an MCP server (e.g. to check the core suite alone). */
-    "without-mcp": { type: "boolean", default: false },
-    /** Skip the with/without-skills tasks (those with an expected skill). */
-    "without-skill-tasks": { type: "boolean", default: false },
-    /** "off" (default), "available" (listed, none preloaded), "preloaded" (the task's skill up front) or "routed" (the skill router picks). */
-    skills: { type: "string", default: "off" },
-    /** Where results (and logs/) go; default evals/results. */
-    "results-dir": { type: "string" },
-  },
-});
+const USAGE =
+  "Usage: npm run eval -- [--task id] [--runs N] [--concurrency N] [--skills off|available|preloaded|routed] " +
+  "[--without-mcp] [--without-skill-tasks] [--compact-model M] [--results-dir DIR] [--keep] [--verbose]\n" +
+  'Put -- after "npm run eval" so npm passes the options on, e.g. npm run eval -- --runs 3';
+
+function parseRunnerArgs() {
+  try {
+    return parseArgs({
+      options: {
+        task: { type: "string" },
+        runs: { type: "string", default: "1" },
+        concurrency: { type: "string", default: "1" },
+        keep: { type: "boolean", default: false },
+        verbose: { type: "boolean", default: false },
+        "compact-model": { type: "string" },
+        /** Skip tasks that need an MCP server (e.g. to check the core suite alone). */
+        "without-mcp": { type: "boolean", default: false },
+        /** Skip the with/without-skills tasks (those with an expected skill). */
+        "without-skill-tasks": { type: "boolean", default: false },
+        /** "off" (default), "available" (listed, none preloaded), "preloaded" (the task's skill up front) or "routed" (the skill router picks). */
+        skills: { type: "string", default: "off" },
+        /** Where results (and logs/) go; default evals/results. */
+        "results-dir": { type: "string" },
+      },
+    });
+  } catch (err) {
+    // npm swallows options given without "--" (npm run eval --runs 1 passes a bare "1").
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}\n${USAGE}`);
+    process.exit(1);
+  }
+}
+const { values: args } = parseRunnerArgs();
 
 function positiveInt(name: string, raw: string): number {
   const n = Number(raw);
