@@ -106,3 +106,21 @@ test("bad runner arguments print a one-line usage, not a stack trace (P6: `npm r
     assert.ok(!/\n\s+at /.test(stderr), "no stack trace");
   }
 });
+
+test("test/agent.test.ts leaves no temp directories behind (P7)", async () => {
+  const leftovers = () => new Set(fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith("ai-harness-test-")));
+  const before = leftovers();
+  // A nested `node --test` must not inherit this runner's test context, or it won't run the file.
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const child = spawn(process.execPath, ["--import", "tsx", "--import", "./test/setup.ts", "--test", "test/agent.test.ts"], {
+    cwd: ROOT,
+    env,
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  let out = "";
+  child.stdout.on("data", (d) => (out += d));
+  assert.equal(await new Promise<number | null>((r) => child.on("exit", r)), 0, "agent tests pass");
+  assert.match(out, /ℹ pass [1-9]\d*/, "the agent tests actually ran");
+  assert.deepEqual([...leftovers()].filter((n) => !before.has(n)), []);
+});

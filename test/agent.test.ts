@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -16,8 +16,13 @@ const call = (id: string, name: string, args: Record<string, unknown>): LLMRespo
   raw: null,
 });
 
+const created: string[] = [];
+after(() => created.forEach((d) => fs.rmSync(d, { recursive: true, force: true })));
+
 function sandbox(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "ai-harness-test-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ai-harness-test-"));
+  created.push(dir);
+  return dir;
 }
 
 /** A fake client: `script` is called for every agent request (not summarizer requests). */
