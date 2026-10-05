@@ -26,9 +26,10 @@ export interface EvalRunSettings {
   /**
    * "off" (default): no skills. "available": the bundled skills are listed, none preloaded, so the
    * model has to decide. "preloaded": the task's expected skill is loaded before the first step
-   * (measures what the skill's instructions do, independent of triggering).
+   * (measures what the skill's instructions do, independent of triggering). "routed": skills are
+   * listed and the skill router picks one before the first step.
    */
-  skills?: "off" | "available" | "preloaded";
+  skills?: "off" | "available" | "preloaded" | "routed";
 }
 
 export function evalSettings(
@@ -46,7 +47,8 @@ export function evalSettings(
     maxSteps: task.maxSteps ?? DEFAULTS.maxSteps,
     ...(compactModel !== undefined && { compactModel }),
     mcp: { servers: task.mcpServers ?? {} },
-    skillsEnabled: run.skills === "available" || run.skills === "preloaded",
+    skillsEnabled: run.skills === "available" || run.skills === "preloaded" || run.skills === "routed",
+    skillRouter: run.skills === "routed",
     skills: { dirs: [bundledSkillsDir()], preload: run.skills === "preloaded" && task.expectedSkill ? [task.expectedSkill] : [] },
   };
 }

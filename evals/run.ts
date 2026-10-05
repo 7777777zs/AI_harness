@@ -1,4 +1,4 @@
-// Eval runner: npm run eval -- [--task id] [--runs N] [--concurrency N] [--skills off|available|preloaded] [--without-mcp] [--without-skill-tasks] [--keep] [--verbose]
+// Eval runner: npm run eval -- [--task id] [--runs N] [--concurrency N] [--skills off|available|preloaded|routed] [--without-mcp] [--without-skill-tasks] [--keep] [--verbose]
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -59,6 +59,9 @@ interface RunRecord {
   skillsLoaded?: string[];
   /** "available" runs of tasks with an expected skill: did the model load it? */
   trigger?: "correct" | "none" | "wrong";
+  /** "routed" runs: the router's choice and reason. */
+  routedSkill?: string | null;
+  routerReason?: string;
 }
 
 interface TaskSummary {
@@ -95,7 +98,7 @@ const { values: args } = parseArgs({
     "without-mcp": { type: "boolean", default: false },
     /** Skip the with/without-skills tasks (those with an expected skill). */
     "without-skill-tasks": { type: "boolean", default: false },
-    /** "off" (default), "available" (listed, none preloaded) or "preloaded" (the task's skill loaded up front). */
+    /** "off" (default), "available" (listed, none preloaded), "preloaded" (the task's skill up front) or "routed" (the skill router picks). */
     skills: { type: "string", default: "off" },
   },
 });
@@ -118,11 +121,11 @@ if (missing) {
 
 const runs = positiveInt("runs", args.runs!);
 const concurrency = positiveInt("concurrency", args.concurrency!);
-if (args.skills !== "off" && args.skills !== "available" && args.skills !== "preloaded") {
-  console.error(`Error: --skills must be off, available or preloaded, got "${args.skills}"`);
+if (!["off", "available", "preloaded", "routed"].includes(args.skills!)) {
+  console.error(`Error: --skills must be off, available, preloaded or routed, got "${args.skills}"`);
   process.exit(1);
 }
-const skillsCondition = args.skills as "off" | "available" | "preloaded";
+const skillsCondition = args.skills as "off" | "available" | "preloaded" | "routed";
 const selected = (args.task ? tasks.filter((t) => t.id === args.task) : tasks).filter((t) => !(args["without-mcp"] && t.mcpServers))
   .filter((t) => !(args["without-skill-tasks"] && t.expectedSkill));
 if (selected.length === 0) {
@@ -214,7 +217,8 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       maxRequestTokens: maxRequestTokens(result.logFile),
       skillsCondition,
       skillsLoaded: result.skillsLoaded,
-      ...(skillsCondition === "available" &&
+      ...(result.skillRouting && { routedSkill: result.skillRouting.skill, routerReason: result.skillRouting.reason }),
+      ...((skillsCondition === "available" || skillsCondition === "routed") &&
         task.expectedSkill && {
           trigger: result.skillsLoaded.length === 0 ? "none" : result.skillsLoaded.includes(task.expectedSkill) ? "correct" : "wrong",
         }),

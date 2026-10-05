@@ -46,6 +46,7 @@ Every setting can go in the same file. `.env.example` lists them all with their 
 | `COVERAGE_FOOTER` | `on` | Append the harness-computed coverage footer to final answers |
 | `MAX_STEPS` | `20` | Maximum agent steps per task |
 | `SKILLS` | `on` | The skills system (see [Skills](#skills)) |
+| `SKILL_ROUTER` | `on` | Pick a skill for the task with one `COMPACT_MODEL` call before the first step |
 
 Values are resolved in this order, and the first one found wins:
 1. Explicit options: `runAgent({...})` options, or the CLI flags `--context-limit`, `--compact-threshold`, `--recent-budget`, `--compact-model`, `--coverage-check`, `--coverage-footer`, `--max-steps`, `--no-skills`.
@@ -185,6 +186,11 @@ readOnly: true                 # optional, default false
 - **Loading:** `load_skill(name)` adds the instructions to the **system message of every following request**. They are not kept in the conversation history, so compaction never elides or summarizes them. `read_skill_file(name, path)` reads a supporting file, under the same path and link rules as `read_file`, rooted at the skill's directory.
 - **Cap:** all loaded skills together may use at most 15% of `CONTEXT_LIMIT`. A skill that doesn't fit is not loaded, and the model gets an error saying so.
 - **Preloading:** `--skill <name>` (repeatable) loads a skill before the first step. `--no-skills`, or `SKILLS=off`, turns the system off.
+- **Skill router** (`SKILL_ROUTER=on`, the default): when skills are available and none is preloaded, one call to `COMPACT_MODEL` gets the task and every available skill's name and description, and answers `{"skill": <name> | null, "reason": …}`.
+  - The chosen skill is preloaded, and the decision is logged as `skill_routed`.
+  - A failed call or an unusable answer just means no skill; the run continues.
+  - `load_skill` stays available, so the model can still load more skills itself.
+  - **Why it exists:** in our evals gpt-4.1-mini never called `load_skill` on its own (0 of 24 runs), even though the skills were listed in both the system prompt and the tool description.
 - **Logging:** `run_start` lists the available and unavailable skills. Each load is logged as `skill_loaded`, and the result has `skillsLoaded`.
 
 ### Read-only skills and safety
@@ -212,7 +218,28 @@ In the body:
 - **Tool names:** use the harness's real tools (`list_dir`, `grep`, `read_file` with `offset`/`limit`, `edit_file`, `run_shell`, `read_tool_result` with `pattern`, `mcp__…`).
 - **Length:** stay under about 1,200 tokens. Move material that only some runs need into a supporting file, as `code-review` does with its checklist.
 
-[TEST_REPORT.md](TEST_REPORT.md) (Phase 6) measures each bundled skill with and without skills.
+### Results
+
+Each bundled skill was measured with gpt-4.1-mini, 3 runs per condition (6 for "available", which ran twice). The conditions:
+- **off:** no skills.
+- **available:** the skills are listed, and the model has to load one itself.
+- **preloaded:** the task's skill is loaded up front.
+- **routed:** the skill router picks.
+
+**Outcome** is whether the job was done. **Process** is whether it was done the way the skill prescribes. The details are in [TEST_REPORT.md](TEST_REPORT.md), Phase 6.
+
+| Skill | Outcome measured | off | available | preloaded | routed | Process measured | off | preloaded | routed |
+|---|---|---|---|---|---|---|---|---|---|
+| codebase-onboarding | entry point, layer roles, flow order | 1/3 | 1/6 | **3/3** | 1/3 | coverage note and output format | 0/3 | **3/3** | **3/3** |
+| bugfix-with-test | bug fixed (hidden test) | 2/3 | 4/6 | 2/3 | **3/3** | new test fails on the original code | 0/3 | 2/3 | **3/3** |
+| code-review | ≥ 2 of 3 planted defects (recall) | 3/3 (8/9) | 5/6 (14/18) | 3/3 (**9/9**) | 3/3 (**9/9**) | findings grouped by severity | 0/3 | 2/3 | 2/3 |
+| web-research | correct facts | 3/3 | 6/6 | 8/9 | 2/3 | ≥ 2 citations, conflict reported, injection not followed | 0/3 | 0/9 | 0/3 |
+
+**Trigger accuracy:**
+- model choice: 0/24 with gpt-4.1-mini; with gpt-4.1, 14 of the 15 runs that got a reply chose the right skill and none chose a wrong one;
+- the router: 12/12 correct in the routed runs. Run on its own over the 23 tasks, it made no false positives and no misses in 60 clearly labeled decisions.
+
+The skills mostly change the **process**: coverage notes, reproducing tests, severity grouping. Their effect on the outcome is smaller and task-dependent. web-research has the right facts in most runs (all of them without the skill), yet never meets its process bar (two citations and the conflict).
 
 ## Architecture
 
@@ -234,7 +261,8 @@ src/
 │   └── names.ts      mcp__server__tool names
 ├── skills/
 │   ├── load.ts       SKILL.md discovery and frontmatter validation
-│   └── registry.ts   Availability, load_skill / read_skill_file, pinning, cap, read-only rules
+│   ├── registry.ts   Availability, load_skill / read_skill_file, pinning, cap, read-only rules
+│   └── router.ts     Skill router: one call that picks a skill before the first step
 ├── llm/
 │   ├── types.ts      LLMClient interface, Message, ToolCall, LLMResponse, ContextLengthError
 │   ├── index.ts      createClientFromEnv(): the one place that picks a provider
@@ -342,7 +370,7 @@ Options:
 - `--compact-model <model>`: use a different model for compaction calls (default: the model under test).
 - `--without-mcp`: skip the tasks that need an MCP server.
 - `--without-skill-tasks`: skip the with/without-skills tasks (`onboarding`, `bugfix`, `web-research`, `code-review`).
-- `--skills off|available|preloaded`: `off` (default) runs without skills. `available` lists the bundled skills, so the model has to decide to load one. `preloaded` loads the task's skill up front. Skills always come from the repository's `skills/`, never from `~/.harness/skills/`.
+- `--skills off|available|preloaded|routed`: `off` (default) runs without skills. `available` lists the bundled skills, so the model has to decide to load one. `preloaded` loads the task's skill up front. `routed` lets the skill router pick. Skills always come from the repository's `skills/`, never from `~/.harness/skills/`.
 
 All harness settings are passed to each run explicitly, so your environment and `~/.harness/.env` don't affect eval results. The same goes for MCP: a task gets only the servers it declares, so `~/.harness/mcp.json` is never read.
 
@@ -350,6 +378,7 @@ All harness settings are passed to each run explicitly, so your environment and 
 - **Requirements:** Chrome and network access for `npx` (the runner pre-downloads the pinned `chrome-devtools-mcp` once).
 - **Pages:** each run serves its fixture pages from a local HTTP server on `127.0.0.1`; evals never use the public internet.
 - **Browser:** each run starts its own headless browser with an isolated profile.
+- **Skill evals without API calls:** `npx tsx evals/rescore-skills.ts` re-scores past skill runs from their logs (outcome vs process). `npx tsx evals/route-check.ts [--runs N]` runs only the skill router over the tasks and reports precision and recall (one cheap call per task).
 - **Process cleanup:** `npx tsx evals/cleanup-check.ts` checks, without API calls, that no server or Chrome processes are left behind after normal end, error, timeout, SIGINT and a hard kill. With large tasks, keep `--concurrency` low: parallel jobs can hit your organization's tokens-per-minute limit (HTTP 429).
 
 The runner prints a summary table and saves full results to `evals/results/<timestamp>.json`. It also lists any tasks whose pass rate changed since the previous results file. Per-run agent logs go to `evals/results/logs/`.

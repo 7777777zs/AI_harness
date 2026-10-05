@@ -13,6 +13,7 @@ import type { LLMClient, LLMResponse, Message, ToolDefinition } from "../src/llm
 import type { McpServerInput } from "../src/mcp/config.js";
 import { bundledSkillsDir, discoverSkills } from "../src/skills/load.js";
 import { readOnlyShellViolation } from "../src/skills/registry.js";
+import { parseDecision, ROUTER_SYSTEM } from "../src/skills/router.js";
 import { DENIED } from "../src/types.js";
 import { evalSettings } from "../evals/options.js";
 import type { EvalTask } from "../evals/types.js";
@@ -472,4 +473,103 @@ test("CRLF SKILL.md (e.g. a Windows checkout) parses, and the body is normalized
   const d = discoverSkills([root]);
   assert.deepEqual(d.warnings, []);
   assert.equal(d.skills[0]!.body, "# Title\n1. Step.");
+});
+
+// ---- Skill router ----
+
+test("router reply parsing: JSON with extra text, null, unknown names, garbage", () => {
+  const names = ["alpha", "beta"];
+  assert.deepEqual(parseDecision('```json\n{"skill": "alpha", "reason": "matches"}\n```', names), { skill: "alpha", reason: "matches" });
+  assert.deepEqual(parseDecision('{"skill": null, "reason": "plain edit"}', names), { skill: null, reason: "plain edit" });
+  assert.deepEqual(parseDecision('{"skill": "none", "reason": "x"}', names), { skill: null, reason: "x" });
+  assert.match(parseDecision('{"skill": "gamma", "reason": "x"}', names).error!, /unknown skill: "gamma"/);
+  assert.match(parseDecision("I think alpha", names).error!, /unusable router reply/);
+});
+
+/** Main replies come from `steps`; router calls (no tools) get `route`, which may throw. */
+function routedClient(route: () => string, steps: Call[][] = []) {
+  const main = scripted(steps);
+  const routerRequests: Message[][] = [];
+  const client: LLMClient = {
+    async chat(messages, tools) {
+      if (tools.length === 0) {
+        routerRequests.push(structuredClone(messages));
+        return { text: route(), toolCalls: [], usage: { inputTokens: 100, outputTokens: 10 }, raw: null };
+      }
+      return main.client.chat(messages, tools);
+    },
+  };
+  return { client, routerRequests, requests: main.requests };
+}
+
+test("router: one call with the task and every available skill; the chosen skill is preloaded and logged", async () => {
+  const root = skill(tmp(), "alpha", fm("alpha"), "ALPHA-BODY");
+  skill(root, "beta", fm("beta"));
+  skill(root, "web", fm("web", "requires:\n  mcp: [chrome-devtools]"));
+  const r = routedClient(() => '{"skill": "alpha", "reason": "the task is alpha work"}');
+  const result = await runAgent({ task: "Do alpha things.", cwd: tmp(), client: r.client, quiet: true, skillsEnabled: true, skillRouter: true, skills: { dirs: [root] } });
+  assert.equal(r.routerRequests.length, 1);
+  assert.equal(r.routerRequests[0]![0]!.content, ROUTER_SYSTEM);
+  const prompt = r.routerRequests[0]![1]!.content!;
+  assert.match(prompt, /^Task:\nDo alpha things\.\n\nSkills:\n- alpha: Use when testing alpha\.\n- beta: Use when testing beta\.$/);
+  assert.ok(!prompt.includes("web"), "unavailable skills are not offered");
+  assert.ok(r.requests[0]!.messages[0]!.content!.includes("ALPHA-BODY"), "pinned before the first main call");
+  assert.ok(r.requests[0]!.tools.some((t) => t.name === "load_skill"), "load_skill stays available");
+  assert.deepEqual(result.skillsLoaded, ["alpha"]);
+  assert.deepEqual(result.skillRouting, { skill: "alpha", reason: "the task is alpha work" });
+  assert.deepEqual(result.routerUsage, { inputTokens: 100, outputTokens: 10 });
+  assert.equal(result.mainUsage.inputTokens, result.usage.inputTokens - 100);
+  const log = logOf(result.logFile);
+  assert.equal(log.find((l) => l.type === "skill_routed").skill, "alpha");
+  assert.equal(log.find((l) => l.type === "skill_loaded").source, "router");
+});
+
+test("router: no skill, an unknown skill, or a failed call leave the run without a skill (never fatal)", async () => {
+  const root = skill(tmp(), "alpha", fm("alpha"));
+  for (const [route, error] of [
+    [() => '{"skill": null, "reason": "a one-line edit"}', undefined],
+    [() => '{"skill": "made-up"}', /unknown skill/],
+    [() => { throw new Error("boom"); }, /router call failed: boom/],
+  ] as const) {
+    const r = routedClient(route as () => string);
+    const result = await runAgent({ task: "x", cwd: tmp(), client: r.client, quiet: true, skillsEnabled: true, skillRouter: true, skills: { dirs: [root] }, retry: { maxRetries: 0 } });
+    assert.equal(result.stopReason, "done");
+    assert.deepEqual(result.skillsLoaded, []);
+    assert.equal(result.skillRouting!.skill, null);
+    if (error) assert.match(result.skillRouting!.error!, error);
+    else assert.equal(result.skillRouting!.error, undefined);
+  }
+});
+
+test("router does not run when it is off, when a skill is preloaded, or when no skill is available", async () => {
+  const root = skill(tmp(), "alpha", fm("alpha"));
+  const web = skill(tmp(), "web", fm("web", "requires:\n  mcp: [chrome-devtools]"));
+  for (const opts of [
+    { skillRouter: false, skills: { dirs: [root] } },
+    { skillRouter: true, skills: { dirs: [root], preload: ["alpha"] } },
+    { skillRouter: true, skills: { dirs: [web] } },
+  ]) {
+    const r = routedClient(() => '{"skill": "alpha"}');
+    const result = await runAgent({ task: "x", cwd: tmp(), client: r.client, quiet: true, skillsEnabled: true, ...opts });
+    assert.equal(r.routerRequests.length, 0, JSON.stringify(opts));
+    assert.equal(result.skillRouting, null);
+  }
+  // SKILL_ROUTER follows the usual precedence (here: the environment).
+  const saved = process.env.SKILL_ROUTER;
+  process.env.SKILL_ROUTER = "on";
+  try {
+    const r = routedClient(() => '{"skill": null}');
+    const result = await runAgent({ task: "x", cwd: tmp(), client: r.client, quiet: true, skillsEnabled: true, skills: { dirs: [root] } });
+    assert.equal(r.routerRequests.length, 1);
+    assert.equal(result.config!.sources.skillRouter, "env");
+  } finally {
+    process.env.SKILL_ROUTER = saved;
+  }
+});
+
+test("eval conditions set the router explicitly: on only for 'routed'", () => {
+  const task: EvalTask = { id: "t", description: "", prompt: "x", expectedSkill: "code-review", check: () => ({ pass: true }) };
+  const s = (skills?: "off" | "available" | "preloaded" | "routed") => evalSettings(task, { mainModel: "m", ...(skills && { skills }) });
+  assert.deepEqual([s().skillRouter, s("available").skillRouter, s("preloaded").skillRouter, s("routed").skillRouter], [false, false, false, true]);
+  assert.deepEqual([s("routed").skillsEnabled, s("routed").skills.preload], [true, []]);
 });

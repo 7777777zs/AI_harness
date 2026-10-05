@@ -9,3 +9,5 @@ process.on("exit", () => fs.rmSync(process.env.HARNESS_HOME!, { recursive: true,
 // The bundled skills would change every run's system prompt and tools; tests that need
 // skills turn them on explicitly (skillsEnabled: true).
 process.env.SKILLS = "off";
+// The skill router would spend the scripted model's first reply; router tests turn it on.
+process.env.SKILL_ROUTER = "off";

@@ -31,6 +31,7 @@ import { isUntrustedToolName } from "./mcp/names.js";
 import { PAGE_CHARS, ResultPages, type PageLimits } from "./mcp/resultPages.js";
 import { discoverSkills, type Discovery } from "./skills/load.js";
 import { readOnlyViolation, SkillRegistry, SKILLS_CAP_FRACTION } from "./skills/registry.js";
+import { routeSkill } from "./skills/router.js";
 
 export const MAX_STEPS = DEFAULTS.maxSteps;
 
@@ -117,6 +118,11 @@ export interface RunAgentOptions {
    * ~/.harness/skills/, which wins on a name clash); `preload` loads skills before the first step.
    */
   skills?: { dirs?: string[]; preload?: string[] };
+  /**
+   * Before the first step, let one compaction-model call pick a skill for the task when skills
+   * are available and none is preloaded (SKILL_ROUTER, default on).
+   */
+  skillRouter?: boolean;
 }
 
 export interface AgentResult {
@@ -163,6 +169,10 @@ export interface AgentResult {
   untrustedGuard: { step: number; tool: string; args: Record<string, unknown> | null; approved: boolean }[];
   /** Skills loaded during the run (including preloaded ones), in order. */
   skillsLoaded: string[];
+  /** The skill router's decision, or null if it did not run. */
+  skillRouting: { skill: string | null; reason: string; error?: string } | null;
+  /** Tokens of the skill router call; included in `usage`. */
+  routerUsage: Usage;
   logFile: string;
 }
 
@@ -316,6 +326,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
   };
   const nudges: NudgeStats = { notes: 0, missingFile: 0, repeat: 0, coverage: 0 };
   const compactionUsage = { inputTokens: 0, outputTokens: 0, calls: 0 };
+  const routerUsage: Usage = { inputTokens: 0, outputTokens: 0 };
+  let skillRouting: AgentResult["skillRouting"] = null;
   const coverage = new Coverage(cwd);
   const answerHistory: string[] = [];
   let config: HarnessConfig | null = null;
@@ -364,8 +376,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     const footer = stopReason === "done" && finalText !== null && config?.coverageFooter ? coverage.footer() : null;
     if (footer) finalText = `${finalText}\n\n${footer}`;
     const mainUsage = {
-      inputTokens: usage.inputTokens - compactionUsage.inputTokens,
-      outputTokens: usage.outputTokens - compactionUsage.outputTokens,
+      inputTokens: usage.inputTokens - compactionUsage.inputTokens - routerUsage.inputTokens,
+      outputTokens: usage.outputTokens - compactionUsage.outputTokens - routerUsage.outputTokens,
     };
     const result: AgentResult = {
       finalText,
@@ -389,6 +401,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       mcp: { servers: mcp?.statuses ?? [], calls: mcpCalls },
       untrustedGuard,
       skillsLoaded: skills?.loaded.map((s) => s.name) ?? [],
+      skillRouting,
+      routerUsage,
       logFile,
     };
     log({ type: "result", ...result });
@@ -419,6 +433,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         ...(opts.coverageFooter !== undefined && { coverageFooter: opts.coverageFooter }),
         ...(opts.maxSteps !== undefined && { maxSteps: opts.maxSteps }),
         ...(opts.skillsEnabled !== undefined && { skillsEnabled: opts.skillsEnabled }),
+        ...(opts.skillRouter !== undefined && { skillRouter: opts.skillRouter }),
       });
     } catch (err) {
       if (err instanceof ConfigError) return finish("error", null, `Invalid configuration: ${err.message}`, "config");
@@ -468,6 +483,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
 
     // Skills: listed in the system prompt; loaded ones are pinned into the system message.
     let discovery: Discovery = { skills: [], warnings: [] };
+    const onLoad = (name: string, tokens: number, source: "model" | "preload" | "router") => {
+      out(c.magenta(`  ✦ skill loaded: ${name} (~${fmt(tokens)} tokens pinned, ${source})`));
+      log({ type: "skill_loaded", step, name, tokens, source });
+    };
     if (config.skillsEnabled) {
       discovery = discoverSkills(opts.skills?.dirs);
       for (const warning of discovery.warnings) {
@@ -484,10 +503,6 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
           Math.floor(contextLimit * SKILLS_CAP_FRACTION),
           (text) => tracker.tokensOf(text),
         );
-        const onLoad = (name: string, tokens: number, source: "model" | "preload") => {
-          out(c.magenta(`  ✦ skill loaded: ${name} (~${fmt(tokens)} tokens pinned)`));
-          log({ type: "skill_loaded", step, name, tokens, source });
-        };
         tools.push(...skills.tools((o) => onLoad(o.skill.name, o.tokens, "model")));
         toolMap = new Map(tools.map((t) => [t.name, t]));
         toolDefs = tools.map(({ name, description, parameters }) => ({ name, description, parameters }));
@@ -527,6 +542,22 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     for (const s of mcp?.statuses ?? []) {
       if (s.status !== "connected") continue;
       out(c.dim(`MCP ${s.name}: ${s.tools.length} tool(s); auto-approved: ${s.autoApproved.length ? s.autoApproved.join(", ") : "none"}`));
+    }
+
+    // Skill router: the model doesn't have to decide to load a skill itself (load_skill stays available).
+    if (skills && config.skillRouter && skills.loaded.length === 0 && skills.available.length > 0) {
+      const decision = await routeSkill(compactClient, opts.task, skills.available);
+      addUsage(decision.usage);
+      routerUsage.inputTokens += decision.usage.inputTokens;
+      routerUsage.outputTokens += decision.usage.outputTokens;
+      skillRouting = { skill: decision.skill, reason: decision.reason, ...(decision.error && { error: decision.error }) };
+      out(c.magenta(`  ✦ skill router: ${decision.skill ?? "no skill"}${decision.reason ? ` (${decision.reason})` : ""}${decision.error ? ` [${decision.error}]` : ""}`));
+      log({ type: "skill_routed", step, ...skillRouting, inputTokens: decision.usage.inputTokens, outputTokens: decision.usage.outputTokens });
+      if (decision.skill) {
+        const outcome = skills.load(decision.skill);
+        if (outcome.ok && outcome.tokens > 0) onLoad(decision.skill, outcome.tokens, "router");
+        else if (!outcome.ok) log({ type: "skill_route_failed", step, skill: decision.skill, error: outcome.error });
+      }
     }
 
     // Compaction calls count toward total usage and are also tracked (and logged) separately.

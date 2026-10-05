@@ -63,6 +63,8 @@ export interface SettingOverrides {
   maxSteps?: number;
   /** The skills system (SKILLS=on|off). */
   skillsEnabled?: boolean;
+  /** Pick a skill for the task with one COMPACT_MODEL call before the first step (SKILL_ROUTER=on|off). */
+  skillRouter?: boolean;
 }
 
 export interface HarnessConfig {
@@ -75,6 +77,7 @@ export interface HarnessConfig {
   coverageFooter: boolean;
   maxSteps: number;
   skillsEnabled: boolean;
+  skillRouter: boolean;
   sources: Record<keyof SettingOverrides, SettingSource>;
 }
 
@@ -94,6 +97,7 @@ const ENV_NAMES: Record<keyof SettingOverrides, string> = {
   coverageFooter: "COVERAGE_FOOTER",
   maxSteps: "MAX_STEPS",
   skillsEnabled: "SKILLS",
+  skillRouter: "SKILL_ROUTER",
 };
 
 export const DEFAULTS = {
@@ -105,6 +109,7 @@ export const DEFAULTS = {
   coverageFooter: true,
   maxSteps: 20,
   skillsEnabled: true,
+  skillRouter: true,
 } as const;
 
 /** Resolve settings: options > process env > .env files > defaults. Throws ConfigError on bad values. */
@@ -155,7 +160,8 @@ export function resolveConfig(overrides: SettingOverrides = {}, env: NodeJS.Proc
   const coverageFooter = pick("coverageFooter", onOff, DEFAULTS.coverageFooter);
   const maxSteps = pick("maxSteps", number(1, 500, true), DEFAULTS.maxSteps);
   const skillsEnabled = pick("skillsEnabled", onOff, DEFAULTS.skillsEnabled);
-  return { contextLimit, compactThreshold, recentBudget, compactModel, coverageCheck, coverageFooter, maxSteps, skillsEnabled, sources };
+  const skillRouter = pick("skillRouter", onOff, DEFAULTS.skillRouter);
+  return { contextLimit, compactThreshold, recentBudget, compactModel, coverageCheck, coverageFooter, maxSteps, skillsEnabled, skillRouter, sources };
 }
 
 /** One-line "NAME=value (source)" summary of the effective settings. */
@@ -170,6 +176,7 @@ export function describeConfig(config: HarnessConfig, mainModel: string | undefi
     show("coverageFooter", config.coverageFooter ? "on" : "off"),
     show("maxSteps", config.maxSteps),
     show("skillsEnabled", config.skillsEnabled ? "on" : "off"),
+    show("skillRouter", config.skillRouter ? "on" : "off"),
   ].join(" ");
 }
 

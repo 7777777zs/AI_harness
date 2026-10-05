@@ -138,7 +138,13 @@ console.log(JSON.stringify(wrong));`;
     }
     if (!reproduces) problems.push("no added test fails on the original code (the bug is not covered by a test)");
 
-    const details = { testFirst: testRunBeforeFix(result.logFile), toolCalls: result.toolCalls };
+    const details = {
+      outcome: wrong.length === 0, // the hidden expectations hold
+      process: reproduces, // a new test fails on the original code
+      testsKept: editedTests.length === 0 && suite.ok,
+      testFirst: testRunBeforeFix(result.logFile),
+      toolCalls: result.toolCalls,
+    };
     return problems.length ? { ...fail(problems.join("; ")), details } : { ...pass(), details };
   },
 };

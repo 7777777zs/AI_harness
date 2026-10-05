@@ -1,5 +1,6 @@
 import type { EvalTask } from "../types.js";
 import { fail, pass, write } from "../helpers.js";
+import { scoreOnboarding } from "../scoring.js";
 
 // A ~16-file service with an entry point, three layers (api / services / store), and one
 // non-obvious flow: a scan is saved by the service, which emits an event; main.ts wired that
@@ -199,8 +200,6 @@ test("duplicate depot scans are ignored", () => {
 `,
 };
 
-const before = (text: string) => text.split("\n\n--- Coverage (reported by harness)")[0]!;
-
 export const task: EvalTask = {
   id: "onboarding",
   description: "Explain an unfamiliar ~16-file service: entry point, three layers, and an event-based data flow",
@@ -211,34 +210,10 @@ export const task: EvalTask = {
     for (const [p, c] of Object.entries(FILES)) write(dir, p, c);
   },
   check(_dir, result) {
-    // The harness may append its own coverage footer; judge only what the model wrote.
-    const answer = before(result.finalText ?? "");
-    const missing: string[] = [];
-    if (!/src\/main\.ts|\bmain\.ts\b/.test(answer)) missing.push("entry point main.ts");
-    // Each layer's role: a line naming the layer must also say what it does.
-    const layers: [string, RegExp, RegExp][] = [
-      ["api", /\bapi\b|handlers?|routes?|server\.ts/i, /http|route|request|endpoint|handler/i],
-      ["services", /services?\b|scanService|trackingService/i, /business|logic|rule|validat|status|domain/i],
-      ["store", /\bstore\b|parcelRepo|auditLog|persist/i, /persist|stor|save|file|disk|json|audit/i],
-    ];
-    const lines = answer.split("\n");
-    for (const [name, subject, role] of layers) {
-      if (!lines.some((l) => subject.test(l) && role.test(l))) missing.push(`role of the ${name} layer`);
-    }
-    // The flow in order: handler → service → event → audit log.
-    const steps = [/handlers\/scan|handleScan|scan handler|POST \/scans/i, /recordScan|ScanService/i, /parcel\.scanned|emit|event ?bus|bus\.on/i, /audit/i];
-    let at = 0;
-    const order: number[] = [];
-    for (const step of steps) {
-      const m = step.exec(answer.slice(at));
-      if (!m) break;
-      at += m.index + m[0].length;
-      order.push(at);
-    }
-    if (order.length < steps.length) missing.push(`flow handler → service → event → audit (got ${order.length} of 4 in order)`);
-    if (!/coverage|not examined|not (?:read|opened|inspected)|did not (?:read|examine|open)|skimmed|skipped/i.test(answer)) {
-      missing.push("coverage note");
-    }
-    return missing.length ? fail(`missing: ${missing.join("; ")}`) : pass();
+    // Pass: the outcome (entry point, layer roles, flow order) plus a coverage note.
+    const score = scoreOnboarding(result.finalText);
+    const missing = [...score.missingOutcome, ...(score.coverageNote ? [] : ["coverage note"])];
+    const details = { ...score };
+    return missing.length ? { ...fail(`missing: ${missing.join("; ")}`), details } : { ...pass(), details };
   },
 };
