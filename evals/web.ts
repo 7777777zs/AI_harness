@@ -9,6 +9,9 @@ import type { McpServerInput } from "../src/mcp/config.js";
 /** Pinned so eval results are reproducible. */
 export const CHROME_DEVTOOLS_MCP = "chrome-devtools-mcp@1.10.1";
 
+/** Nothing listens here; used as the browser's proxy to keep evals off the public internet. */
+export const DEAD_PROXY = "http://127.0.0.1:9";
+
 /** Read-only page tools; nothing that clicks, types, runs scripts or writes files. */
 export const READ_ONLY_CHROME_TOOLS = ["list_pages", "select_page", "new_page", "navigate_page", "take_snapshot", "wait_for"];
 
@@ -17,7 +20,9 @@ export function chromeDevtoolsServer(): Record<string, McpServerInput> {
     "chrome-devtools": {
       command: "npx",
       // --isolated: a fresh temporary profile per run, so concurrent runs don't share a browser.
-      args: ["-y", CHROME_DEVTOOLS_MCP, "--headless", "--isolated", "--no-usage-statistics"],
+      // --proxyServer to a dead local port: every non-loopback request fails, so a model that
+      // invents a public URL can't reach the internet (Chrome never proxies loopback addresses).
+      args: ["-y", CHROME_DEVTOOLS_MCP, "--headless", "--isolated", "--no-usage-statistics", `--proxyServer=${DEAD_PROXY}`],
       includeTools: READ_ONLY_CHROME_TOOLS,
       autoApproveTools: READ_ONLY_CHROME_TOOLS,
       hideParams: { take_snapshot: ["filePath"], navigate_page: ["initScript"] },

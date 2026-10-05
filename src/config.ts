@@ -61,6 +61,8 @@ export interface SettingOverrides {
   coverageCheck?: boolean;
   coverageFooter?: boolean;
   maxSteps?: number;
+  /** The skills system (SKILLS=on|off). */
+  skillsEnabled?: boolean;
 }
 
 export interface HarnessConfig {
@@ -72,6 +74,7 @@ export interface HarnessConfig {
   coverageCheck: boolean;
   coverageFooter: boolean;
   maxSteps: number;
+  skillsEnabled: boolean;
   sources: Record<keyof SettingOverrides, SettingSource>;
 }
 
@@ -90,6 +93,7 @@ const ENV_NAMES: Record<keyof SettingOverrides, string> = {
   coverageCheck: "COVERAGE_CHECK",
   coverageFooter: "COVERAGE_FOOTER",
   maxSteps: "MAX_STEPS",
+  skillsEnabled: "SKILLS",
 };
 
 export const DEFAULTS = {
@@ -100,6 +104,7 @@ export const DEFAULTS = {
   coverageCheck: true,
   coverageFooter: true,
   maxSteps: 20,
+  skillsEnabled: true,
 } as const;
 
 /** Resolve settings: options > process env > .env files > defaults. Throws ConfigError on bad values. */
@@ -149,7 +154,8 @@ export function resolveConfig(overrides: SettingOverrides = {}, env: NodeJS.Proc
   const coverageCheck = pick("coverageCheck", onOff, DEFAULTS.coverageCheck);
   const coverageFooter = pick("coverageFooter", onOff, DEFAULTS.coverageFooter);
   const maxSteps = pick("maxSteps", number(1, 500, true), DEFAULTS.maxSteps);
-  return { contextLimit, compactThreshold, recentBudget, compactModel, coverageCheck, coverageFooter, maxSteps, sources };
+  const skillsEnabled = pick("skillsEnabled", onOff, DEFAULTS.skillsEnabled);
+  return { contextLimit, compactThreshold, recentBudget, compactModel, coverageCheck, coverageFooter, maxSteps, skillsEnabled, sources };
 }
 
 /** One-line "NAME=value (source)" summary of the effective settings. */
@@ -163,6 +169,7 @@ export function describeConfig(config: HarnessConfig, mainModel: string | undefi
     show("coverageCheck", config.coverageCheck ? "on" : "off"),
     show("coverageFooter", config.coverageFooter ? "on" : "off"),
     show("maxSteps", config.maxSteps),
+    show("skillsEnabled", config.skillsEnabled ? "on" : "off"),
   ].join(" ");
 }
 

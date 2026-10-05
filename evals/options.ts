@@ -1,9 +1,12 @@
 // Explicit harness settings for eval runs. Every setting is passed as a runAgent option, which
 // has the highest precedence, so the user's environment and ~/.harness/.env cannot change eval
 // behavior (A8). Only the model under test comes from OPENAI_MODEL. MCP servers are explicit too
-// (none unless the task declares them), so ~/.harness/mcp.json is never read by evals.
+// (none unless the task declares them), so ~/.harness/mcp.json is never read by evals. Skills
+// come from the repo's skills/ only (never ~/.harness/skills/), and are on only in the
+// "available" condition.
 import { DEFAULTS, type SettingOverrides } from "../src/config.js";
 import type { McpRunOptions } from "../src/mcp/config.js";
+import { bundledSkillsDir } from "../src/skills/load.js";
 import type { EvalTask } from "./types.js";
 
 /**
@@ -20,9 +23,18 @@ export interface EvalRunSettings {
   mainModel: string | undefined;
   /** Model for compaction calls (`--compact-model`); defaults to the main model. */
   compactModel?: string | undefined;
+  /**
+   * "off" (default): no skills. "available": the bundled skills are listed, none preloaded, so the
+   * model has to decide. "preloaded": the task's expected skill is loaded before the first step
+   * (measures what the skill's instructions do, independent of triggering).
+   */
+  skills?: "off" | "available" | "preloaded";
 }
 
-export function evalSettings(task: EvalTask, run: EvalRunSettings): SettingOverrides & { mcp: McpRunOptions } {
+export function evalSettings(
+  task: EvalTask,
+  run: EvalRunSettings,
+): SettingOverrides & { mcp: McpRunOptions; skills: { dirs: string[]; preload: string[] } } {
   const contextLimit = task.contextLimit ?? DEFAULTS.contextLimit;
   const compactModel = run.compactModel ?? run.mainModel;
   return {
@@ -34,5 +46,7 @@ export function evalSettings(task: EvalTask, run: EvalRunSettings): SettingOverr
     maxSteps: task.maxSteps ?? DEFAULTS.maxSteps,
     ...(compactModel !== undefined && { compactModel }),
     mcp: { servers: task.mcpServers ?? {} },
+    skillsEnabled: run.skills === "available" || run.skills === "preloaded",
+    skills: { dirs: [bundledSkillsDir()], preload: run.skills === "preloaded" && task.expectedSkill ? [task.expectedSkill] : [] },
   };
 }

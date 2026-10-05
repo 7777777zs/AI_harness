@@ -13,6 +13,8 @@ export interface Tool extends ToolDefinition {
   source?: { kind: "mcp"; server: string; tool: string };
   /** Its results come from outside the harness (e.g. web pages): data, never instructions. */
   untrusted?: boolean;
+  /** MCP tools: runs without confirmation (listed in autoApproveTools). */
+  autoApproved?: boolean;
 }
 
 export const DENIED = "User denied this action";

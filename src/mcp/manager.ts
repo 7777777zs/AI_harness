@@ -148,6 +148,7 @@ export class McpManager {
       parameters,
       source: { kind: "mcp", server, tool: t.name },
       untrusted: true,
+      autoApproved,
       execute: async (args, ctx) => {
         if (conn.dead) return `Error: MCP server "${server}" is not available (${conn.dead})`;
         const blocked = hidden.filter((p) => p in args);

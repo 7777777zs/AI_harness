@@ -29,6 +29,8 @@ import { resolveMcpServers, type McpRunOptions } from "./mcp/config.js";
 import { McpManager, type McpServerStatus } from "./mcp/manager.js";
 import { isUntrustedToolName } from "./mcp/names.js";
 import { PAGE_CHARS, ResultPages, type PageLimits } from "./mcp/resultPages.js";
+import { discoverSkills, type Discovery } from "./skills/load.js";
+import { readOnlyViolation, SkillRegistry, SKILLS_CAP_FRACTION } from "./skills/registry.js";
 
 export const MAX_STEPS = DEFAULTS.maxSteps;
 
@@ -108,6 +110,13 @@ export interface RunAgentOptions {
    * content, even when autoApprove is on. Defaults to `confirm`, else the terminal prompt.
    */
   confirmUntrusted?: (summary: string) => Promise<boolean>;
+  /** The skills system on or off (SKILLS, default on). */
+  skillsEnabled?: boolean;
+  /**
+   * Skill locations and preloading. `dirs` replaces the default (bundled skills/, then
+   * ~/.harness/skills/, which wins on a name clash); `preload` loads skills before the first step.
+   */
+  skills?: { dirs?: string[]; preload?: string[] };
 }
 
 export interface AgentResult {
@@ -152,6 +161,8 @@ export interface AgentResult {
   mcp: { servers: McpServerStatus[]; calls: number };
   /** Side-effecting calls that needed confirmation because they followed untrusted content. */
   untrustedGuard: { step: number; tool: string; args: Record<string, unknown> | null; approved: boolean }[];
+  /** Skills loaded during the run (including preloaded ones), in order. */
+  skillsLoaded: string[];
   logFile: string;
 }
 
@@ -285,6 +296,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
   const untrustedGuard: AgentResult["untrustedGuard"] = [];
   /** Set once the model has received a result from an untrusted tool, until a guarded action is approved. */
   let untrustedPending = false;
+  let skills: SkillRegistry | undefined;
+  /** Pinned skill tokens already included in the last request's actual token count. */
+  let pinnedSent = 0;
   const usage: Usage = { inputTokens: 0, outputTokens: 0 };
   const addUsage = (u: Usage) => {
     usage.inputTokens += u.inputTokens;
@@ -374,6 +388,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       toolCalls,
       mcp: { servers: mcp?.statuses ?? [], calls: mcpCalls },
       untrustedGuard,
+      skillsLoaded: skills?.loaded.map((s) => s.name) ?? [],
       logFile,
     };
     log({ type: "result", ...result });
@@ -403,6 +418,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         ...(opts.coverageCheck !== undefined && { coverageCheck: opts.coverageCheck }),
         ...(opts.coverageFooter !== undefined && { coverageFooter: opts.coverageFooter }),
         ...(opts.maxSteps !== undefined && { maxSteps: opts.maxSteps }),
+        ...(opts.skillsEnabled !== undefined && { skillsEnabled: opts.skillsEnabled }),
       });
     } catch (err) {
       if (err instanceof ConfigError) return finish("error", null, `Invalid configuration: ${err.message}`, "config");
@@ -450,6 +466,44 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       }
     }
 
+    // Skills: listed in the system prompt; loaded ones are pinned into the system message.
+    let discovery: Discovery = { skills: [], warnings: [] };
+    if (config.skillsEnabled) {
+      discovery = discoverSkills(opts.skills?.dirs);
+      for (const warning of discovery.warnings) {
+        out(c.yellow(`⚠ ${warning}`));
+        log({ type: "skill_warning", warning });
+      }
+      if (discovery.skills.length > 0) {
+        skills = new SkillRegistry(
+          discovery,
+          {
+            mcpServers: mcp?.statuses.filter((s) => s.status === "connected").map((s) => s.name) ?? [],
+            tools: tools.map((t) => t.name),
+          },
+          Math.floor(contextLimit * SKILLS_CAP_FRACTION),
+          (text) => tracker.tokensOf(text),
+        );
+        const onLoad = (name: string, tokens: number, source: "model" | "preload") => {
+          out(c.magenta(`  ✦ skill loaded: ${name} (~${fmt(tokens)} tokens pinned)`));
+          log({ type: "skill_loaded", step, name, tokens, source });
+        };
+        tools.push(...skills.tools((o) => onLoad(o.skill.name, o.tokens, "model")));
+        toolMap = new Map(tools.map((t) => [t.name, t]));
+        toolDefs = tools.map(({ name, description, parameters }) => ({ name, description, parameters }));
+        messages[0] = { role: "system", content: messages[0]!.content + skills.promptSection() };
+        for (const name of opts.skills?.preload ?? []) {
+          const outcome = skills.load(name);
+          if (!outcome.ok) return finish("error", null, `Invalid configuration: --skill ${name}: ${outcome.error}`, "config");
+          if (outcome.tokens > 0) onLoad(name, outcome.tokens, "preload");
+        }
+      }
+    }
+    if (!skills && (opts.skills?.preload ?? []).length > 0) {
+      const why = config.skillsEnabled ? "no skills were found" : "skills are off (SKILLS=off / --no-skills)";
+      return finish("error", null, `Invalid configuration: --skill ${opts.skills!.preload![0]}: ${why}`, "config");
+    }
+
     // A4: log the effective configuration once at the start.
     const version = harnessVersion();
     log({
@@ -459,6 +513,11 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       compactModel: config.compactModel ?? mainModel,
       config,
       mcp: mcp?.statuses ?? [],
+      skills: {
+        available: skills?.available.map((s) => s.name) ?? [],
+        unavailable: skills?.unavailable.map((u) => ({ name: u.skill.name, reason: u.reason })) ?? [],
+        preloaded: skills?.loaded.map((s) => s.name) ?? [],
+      },
       cwd,
       platform: process.platform,
       node: process.version,
@@ -486,9 +545,12 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     const turnCap = Math.floor(contextLimit * TURN_CAP_FRACTION);
     const tokensOf = (text: string) => tracker.tokensOf(text);
 
+    // Pinned skill text not yet reflected in the tracker's actual token counts.
+    const pinnedDelta = () => Math.max(0, (skills?.pinnedTokens ?? 0) - pinnedSent);
+
     const maybeCompact = async (force: boolean) => {
       const r = await compact(messages, {
-        currentTokens: tracker.estimate(messages, toolDefs),
+        currentTokens: tracker.estimate(messages, toolDefs) + pinnedDelta(),
         limit: contextLimit,
         threshold,
         recentBudget,
@@ -528,21 +590,25 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       if (r.events.length > 0) {
         messages = r.messages;
         tracker.reset(r.tokens, messages.length);
+        pinnedSent = 0; // the reset count covers history only
         compactions += r.events.length;
       }
     };
 
     // The known-files status is attached to each request instead of stored in history,
     // so it is never elided or summarized and is always current.
+    // Loaded skills are appended to the system message the same way: pinned, never compacted.
     const withStatus = () => {
       const status = coverage.statusBlock(opts.task);
-      return status ? [...messages, { role: "user" as const, content: status }] : messages;
+      const pinned = skills?.pinnedText() ?? "";
+      const base = pinned ? [{ ...messages[0]!, content: messages[0]!.content + pinned }, ...messages.slice(1)] : messages;
+      return status ? [...base, { role: "user" as const, content: status }] : base;
     };
 
     // A3 preflight: never send a request estimated above the context limit.
     const preflight = () => {
       const status = coverage.statusBlock(opts.task);
-      const estimate = tracker.estimate(messages, toolDefs) + (status ? tracker.tokensOf(status) : 0);
+      const estimate = tracker.estimate(messages, toolDefs) + (status ? tracker.tokensOf(status) : 0) + pinnedDelta();
       if (estimate <= contextLimit) return;
       const shrunk = shrinkNewest(messages, estimate - contextLimit, tokensOf);
       if (shrunk.shrunk.length === 0) return;
@@ -554,6 +620,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         }
       }
       tracker.reset(Math.max(0, tracker.estimate(messages, toolDefs) - shrunk.saved), messages.length);
+      pinnedSent = 0;
       out(c.yellow(`⟳ Preflight: request ~${fmt(estimate)} tokens > limit ${fmt(contextLimit)}; shrank ${shrunk.shrunk.length} newest result(s)`));
       log({ type: "preflight_truncated", step, estimate, limit: contextLimit, saved: shrunk.saved, shrunk: shrunk.shrunk });
     };
@@ -589,6 +656,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       }
 
       addUsage(response.usage);
+      pinnedSent = skills?.pinnedTokens ?? 0; // the actual count now includes the pinned skills
       // A5: calibrate the estimator against the API's actual count for this request.
       const heuristic = estimateTokens(request) + estimateToolDefs(toolDefs);
       const observedRatio = tracker.record(response.usage.inputTokens, sentCount, heuristic);
@@ -663,7 +731,11 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
           };
         }
 
-        const raw = await executeTool(call, toolMap, callCtx);
+        // A read-only skill disables tools that change things (the harness enforces it, not the skill).
+        const readOnly = skills?.readOnlySkill();
+        const blocked = readOnly ? readOnlyViolation(readOnly.name, tool, call.args) : null;
+        if (blocked) log({ type: "read_only_blocked", step, skill: readOnly!.name, tool: call.name, args: call.args });
+        const raw = blocked ?? (await executeTool(call, toolMap, callCtx));
         // Coverage uses the full output (a truncated listing would lose paths).
         if (!raw.startsWith("Error:")) {
           coverage.addListing(call.name, call.args, raw);

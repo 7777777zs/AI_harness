@@ -1059,3 +1059,120 @@ About **$0.80** in total (including about $0.004 for two manual CLI runs) (gpt-4
 |---|---|
 | Web evals, 5 rounds (long-page is most of it) | ~$0.62 |
 | Existing suite, no MCP | ~$0.17 |
+
+## Phase 6: skills (branch `phase6-skills`)
+
+### What was built
+- **Skills mechanism** (`src/skills/`):
+  - **Format and validation:** `SKILL.md` with YAML frontmatter (`name`, `description` ≤ 300, `requires: {mcp, tools}`, `readOnly`). Invalid skills are skipped with a warning; on a name clash the user skill wins, with a warning.
+  - **Tools:** `load_skill`, and `read_skill_file`, which reuses `read_file` and its path and link rules, rooted at the skill directory.
+  - **Pinning:** loaded skills are pinned into the system message of every request (never in history, so never compacted), capped at 15% of `CONTEXT_LIMIT`.
+  - **Read-only skills:** the `git diff/log/show/status` allowlist uses a character whitelist, and blocks `--output`/`--ext-diff`/`--textconv`.
+  - **Config and flags:** `SKILLS=on|off` (A8 precedence), `--skill`, `--no-skills`.
+  - **Logging:** `run_start` lists the skills; loads are logged as `skill_loaded`; the result has `skillsLoaded`.
+  - **Eval isolation:** evals always pass `skills: { dirs: [repo skills/] }`.
+- **Design choices beyond the spec (noted in the plan):**
+  - **Pinning in the system message:** skill bodies go into the system message rather than the status block, because the status block is labeled "not a new instruction".
+  - **More blocked under readOnly:** while a readOnly skill is loaded, MCP tools that need confirmation are also disabled.
+  - **`codebase-onboarding` is `readOnly: true`.** Onboarding never needs to write.
+  - **Skills listed twice:** in the system prompt and in the `load_skill` tool description (added after round 1; see below).
+  - **A third eval condition, `preloaded`** (added after rounds 1–2; see below).
+
+### The four skills
+| Skill | Body (est. tokens) | Frontmatter | Supporting files |
+|---|---|---|---|
+| `codebase-onboarding` | ~730 | `readOnly: true` | – |
+| `bugfix-with-test` | ~645 | – | – |
+| `web-research` (v3) | ~800 | `requires: { mcp: [chrome-devtools] }` | – |
+| `code-review` | ~525 | `readOnly: true` | `checklist.md` (7 sections) |
+
+All four follow the same structure: one-sentence goal; numbered steps, each with a "Done when"; explicit output format; stop conditions; a short "Don't" list; real tool names. A test checks that all four are valid, under 1,200 tokens, and have numbered steps, an output format and stop conditions.
+
+### Tests
+- `npx tsc --noEmit` passes.
+- `npm test`: **210 tests, 210 pass**, including 16 new tests in `test/skills.test.ts`. They cover:
+  - every frontmatter rule, plus collisions;
+  - unavailable skills (reason shown in the list and in the `load_skill` error);
+  - `load_skill`: pinned, never in history, supporting files listed, a second load is a no-op;
+  - `read_skill_file` with `..`, absolute paths and junctions pointing outside;
+  - the 15% cap (no partial load);
+  - **pinning across compaction:** the skill text stays in every request while Level 1 and Level 2 both run under a 12k limit;
+  - the read-only allowlist: 7 accepted, and 19 rejected commands, including `&&`, `;`, `|`, backticks, `$()`, `%VAR%`, `>`, newline, `^`, quotes, `--output`, `--ext-diff`, `--textconv`, `git -c`, `git commit`;
+  - a read-only skill end to end: writes, chained commands and confirmation-required MCP tools are blocked; `git status` still asks for confirmation;
+  - the untrusted guard still fires with a skill loaded;
+  - preloading, including unknown and unavailable skills as config errors;
+  - `SKILLS=off` from the environment, and `skillsEnabled: false`;
+  - the CLI `--skill`/`--no-skills` errors;
+  - eval isolation from `~/.harness/skills`;
+  - the bundled skills themselves.
+- `test/setup.ts` now sets `SKILLS=off`, so existing tests stay hermetic; skill tests turn skills on explicitly.
+
+### With/without evals (gpt-4.1-mini, 3 runs per cell)
+**Fixtures:**
+- **onboarding:** a 16-file TypeScript service. Its audit write is reached only through an event bus wired up in `main.ts`.
+- **bugfix:** `formatDuration(90)` returns `"1m 3"`. The naive fix breaks an existing test.
+- **web-research:** three local sources disagree (1931/412 m vs a 2015 blog's 1932/410 m), and one page carries an injection line.
+- **code-review:** an uncommitted diff with 3 planted defects and 1 harmless rename.
+
+The prompts never mention skills and are identical across conditions.
+
+| Task | off | available (round 1) | available (round 2) | **preloaded** | Trigger accuracy (available) |
+|---|---|---|---|---|---|
+| onboarding | 0/3 | 0/3 | 0/3 | **3/3** | 0/6 (none loaded) |
+| bugfix | 0/3 | 3/3 | 1/3 | 2/3 | 0/6 |
+| code-review | 3/3 | 2/3 | 3/3 | 3/3 | 0/6 |
+| web-research | 0/3 | 0/3 | 0/3 | 0/3 (v1), 0/3 (v2), 0/3 (v3) | 0/6 |
+
+**1. The model never loads a skill on its own.**
+- Trigger accuracy was **0 of 24** "available" runs. Every miss was "none": the model never loaded a wrong skill, it just never loaded any.
+- Round 2 also listed the skills in the `load_skill` tool description and told the model to check the list "before your first tool call". That changed nothing.
+- In the core suite with skills available, **0 of 19** tasks loaded a skill, including `fix-bug` and `project-overview`, which match skill descriptions directly.
+- With gpt-4.1-mini, model-decided loading doesn't happen, so in practice the "available" condition is "off" plus about 550 extra prompt tokens per request.
+
+**2. When loaded, the skill content clearly helps** (preloaded vs off):
+- **onboarding: 0/3 → 3/3.** Without the skill, the answers missed the event-bus hop and the coverage note. With it, all three traced handler → service → event → audit and listed what wasn't examined.
+- **bugfix: 0/3 → 2/3.** Without the skill, the model fixed the code with no test (2 of 3 runs), or not at all. With it, 2 of 3 wrote a test, saw it fail first ("test-first observed" 2/3), then fixed the code. No run edited the existing tests.
+- **code-review: 3/3 in both conditions, but the reviews got better:**
+  - all three defects found: 2/3 → **3/3** runs;
+  - critical/major/minor grouping: 0/3 → 2/3;
+  - no write attempts in either condition.
+- **web-research: 0/3 in every version.**
+  - **v1:** the model read one page and answered.
+  - **v2:** a sharper bar ("two sources per fact") and a self-check step before answering.
+  - **v3:** the model must write the candidate list in its reply first. It did write all three URLs, then read only the first page and answered.
+  - The model follows the early steps and abandons the rest once it has an answer: *premature completion* that instructions alone didn't fix.
+- **The round-1 bugfix result 3/3 is not a skill effect.** No skill was loaded in those runs. The likely cause is the skill's *description* in the system prompt ("reproduce it with a failing test…"), which the model may have followed directly. Round 2, with the same listing, gave 1/3, so this is mostly noise.
+
+**3. Cost of a loaded skill** (average tokens per run, preloaded vs off):
+
+| Task | Off | Preloaded | Why |
+|---|---|---|---|
+| onboarding | 14.6k | 24.2k | +66% |
+| code-review | 3.5k | 13.1k | reads context and the checklist |
+| bugfix | 25k | 91k | writes and runs tests, more steps |
+| web-research | 15.8k | 24k | – |
+
+**4. Incident: a model-made-up public URL reached the internet.**
+- In web-research v2 run 3, the model opened `https://en.wikipedia.org/wiki/Harbor_Point_Bridge` (a URL it made up), and the eval browser loaded it.
+- **Fix:** the eval Chrome now starts with `--proxyServer=http://127.0.0.1:9` (nothing listens there). Every non-loopback request then fails with `ERR_PROXY_CONNECTION_FAILED`, while 127.0.0.1 fixtures still work (verified).
+- The v3 run's identical attempt was blocked.
+- The Phase 5 web tasks use the same config, so they are covered too; they were not re-run.
+
+### Regression (19 core tasks, 1 run each)
+- **Skills off: 17/19.**
+  - count-lines: the known P3 gap.
+  - project-overview: 1 file left undescribed with no skip statement. This is model variance; with skills off, the system prompt and tool list are unchanged.
+- **Skills available: 18/19** (count-lines only). No task loaded a skill.
+
+### Recommendations
+- **Triggering is a model-capability question.** One "available" round with a stronger model (e.g. gpt-4.1, about $0.25) would show whether 0% is specific to gpt-4.1-mini.
+- **Without reliable triggering, skills are worth having for `--skill` preloading.** The preloaded results show their value.
+- **web-research needs a harness-level gate, not more prose.** For example, before accepting an answer, a check that it cites at least two source URLs, analogous to the Phase 3 coverage check.
+
+### API usage for Phase 6
+About **$0.97** of the $1.50 budget (gpt-4.1-mini, computed from the results files):
+
+| Item | Cost |
+|---|---|
+| Skill evals (off, available ×2, preloaded, web-research v2/v3) | ~$0.60 |
+| Core suite ×2 (skills off / available) | ~$0.37 |

@@ -7,6 +7,7 @@ import { ConfigError, harnessHome, loadEnv, logsDir, resolveConfig, type Setting
 import { missingEnv } from "./llm/index.js";
 import { mcpConfigPath, resolveMcpServers, type McpRunOptions } from "./mcp/config.js";
 import { installShutdownHandlers } from "./process.js";
+import { bundledSkillsDir, discoverSkills, userSkillsDir } from "./skills/load.js";
 
 const USAGE = `Usage: harness [options] "your task"
 
@@ -21,10 +22,13 @@ Options:
   --max-steps <n>             MAX_STEPS          (default 20)
   --mcp <name,...>            Use only these MCP servers from mcp.json
   --no-mcp                    Use no MCP servers
+  --skill <name>              Load this skill before the first step (repeatable)
+  --no-skills                 Turn the skills system off (SKILLS=off)
   -h, --help                  Show this help
 
 Settings precedence: these flags > environment variables > ${path.join(harnessHome(), ".env")} > defaults.
 MCP servers are read from ${mcpConfigPath()}.
+Skills are read from ${bundledSkillsDir()} and ${userSkillsDir()} (user skills win on a name clash).
 Logs are written to ${logsDir()}.`;
 
 function fail(message: string): never {
@@ -47,6 +51,8 @@ try {
       "max-steps": { type: "string" },
       mcp: { type: "string" },
       "no-mcp": { type: "boolean" },
+      skill: { type: "string", multiple: true },
+      "no-skills": { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -101,10 +107,21 @@ if (args.values.mcp !== undefined) {
   mcp.only = args.values.mcp.split(",").map((s) => s.trim()).filter(Boolean);
   if (mcp.only.length === 0) fail("--mcp needs at least one server name");
 }
+const preload = (args.values.skill ?? []).map((s) => s.trim()).filter(Boolean);
+if (args.values["no-skills"]) {
+  if (preload.length) fail("--skill and --no-skills cannot be used together");
+  overrides.skillsEnabled = false;
+}
 try {
   // Fail fast, before any output, on invalid settings from any source (including mcp.json).
-  resolveConfig(overrides);
+  const config = resolveConfig(overrides);
   resolveMcpServers(mcp);
+  if (preload.length) {
+    if (!config.skillsEnabled) throw new ConfigError(`--skill: skills are off (SKILLS=off)`);
+    const known = discoverSkills().skills.map((s) => s.name);
+    const unknown = preload.find((name) => !known.includes(name));
+    if (unknown) throw new ConfigError(`--skill: unknown skill "${unknown}" (available: ${known.join(", ") || "none"})`);
+  }
 } catch (err) {
   if (err instanceof ConfigError) fail(`Invalid configuration: ${err.message}`);
   throw err;
@@ -113,7 +130,7 @@ try {
 // Ctrl+C / console close: shut down MCP server process trees before exiting.
 installShutdownHandlers();
 console.log(`Task: ${task}\nModel: ${process.env.OPENAI_MODEL}\nDirectory: ${cwd}`);
-const result = await runAgent({ task, cwd, logDir: logsDir(), mcp, ...overrides });
+const result = await runAgent({ task, cwd, logDir: logsDir(), mcp, skills: { preload }, ...overrides });
 if (result.stopReason === "error") {
   console.error(`\nFatal: ${result.error}`);
   process.exitCode = 1;

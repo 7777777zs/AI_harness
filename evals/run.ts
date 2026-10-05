@@ -1,4 +1,4 @@
-// Eval runner: npm run eval -- [--task id] [--runs N] [--concurrency N] [--without-mcp] [--keep] [--verbose]
+// Eval runner: npm run eval -- [--task id] [--runs N] [--concurrency N] [--skills off|available|preloaded] [--without-mcp] [--without-skill-tasks] [--keep] [--verbose]
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -54,6 +54,11 @@ interface RunRecord {
   maxRequestTokens?: number;
   /** Task-specific observations from the check. */
   details?: Record<string, unknown>;
+  /** Skills condition of the run: "off" or "available" (listed, nothing preloaded). */
+  skillsCondition?: string;
+  skillsLoaded?: string[];
+  /** "available" runs of tasks with an expected skill: did the model load it? */
+  trigger?: "correct" | "none" | "wrong";
 }
 
 interface TaskSummary {
@@ -88,6 +93,10 @@ const { values: args } = parseArgs({
     "compact-model": { type: "string" },
     /** Skip tasks that need an MCP server (e.g. to check the core suite alone). */
     "without-mcp": { type: "boolean", default: false },
+    /** Skip the with/without-skills tasks (those with an expected skill). */
+    "without-skill-tasks": { type: "boolean", default: false },
+    /** "off" (default), "available" (listed, none preloaded) or "preloaded" (the task's skill loaded up front). */
+    skills: { type: "string", default: "off" },
   },
 });
 
@@ -109,7 +118,13 @@ if (missing) {
 
 const runs = positiveInt("runs", args.runs!);
 const concurrency = positiveInt("concurrency", args.concurrency!);
-const selected = (args.task ? tasks.filter((t) => t.id === args.task) : tasks).filter((t) => !(args["without-mcp"] && t.mcpServers));
+if (args.skills !== "off" && args.skills !== "available" && args.skills !== "preloaded") {
+  console.error(`Error: --skills must be off, available or preloaded, got "${args.skills}"`);
+  process.exit(1);
+}
+const skillsCondition = args.skills as "off" | "available" | "preloaded";
+const selected = (args.task ? tasks.filter((t) => t.id === args.task) : tasks).filter((t) => !(args["without-mcp"] && t.mcpServers))
+  .filter((t) => !(args["without-skill-tasks"] && t.expectedSkill));
 if (selected.length === 0) {
   console.error(`Error: unknown task "${args.task}". Available: ${tasks.map((t) => t.id).join(", ")}`);
   process.exit(1);
@@ -168,7 +183,7 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       quiet: !args.verbose,
       logDir: path.join(logsRoot, `${task.id}-${run}`),
       // Every setting explicit: ~/.harness/.env and env vars can't change eval behavior (A8).
-      ...evalSettings(task, { mainModel: process.env.OPENAI_MODEL, compactModel: args["compact-model"] }),
+      ...evalSettings(task, { mainModel: process.env.OPENAI_MODEL, compactModel: args["compact-model"], skills: skillsCondition }),
       // Nobody can answer: the untrusted-content guard is recorded (result.untrustedGuard) and denied.
       confirmUntrusted: async () => false,
     });
@@ -197,6 +212,12 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       mcpCalls: result.mcp.calls,
       guardFired: result.untrustedGuard.length,
       maxRequestTokens: maxRequestTokens(result.logFile),
+      skillsCondition,
+      skillsLoaded: result.skillsLoaded,
+      ...(skillsCondition === "available" &&
+        task.expectedSkill && {
+          trigger: result.skillsLoaded.length === 0 ? "none" : result.skillsLoaded.includes(task.expectedSkill) ? "correct" : "wrong",
+        }),
     });
 
     let check: CheckResult;
@@ -322,7 +343,7 @@ if (selected.some((t) => t.mcpServers)) {
 const jobs = selected.flatMap((task) => Array.from({ length: runs }, (_, i) => ({ task, run: i + 1 })));
 const records: RunRecord[] = [];
 console.log(
-  `Running ${jobs.length} job(s): ${selected.length} task(s) × ${runs} run(s), concurrency ${concurrency}, model ${process.env.OPENAI_MODEL}`,
+  `Running ${jobs.length} job(s): ${selected.length} task(s) × ${runs} run(s), concurrency ${concurrency}, skills ${skillsCondition}, model ${process.env.OPENAI_MODEL}`,
 );
 
 await Promise.all(
@@ -335,6 +356,7 @@ await Promise.all(
         `${mark} ${r.taskId} #${r.run}  ${r.steps} steps  ${(r.inputTokens + r.outputTokens).toLocaleString("en-US")} tokens  ` +
           `${(r.durationMs / 1000).toFixed(1)}s${r.compactions ? `  ${r.compactions} compaction(s)` : ""}` +
           `${r.repeatedCalls ? `  ${r.repeatedCalls} repeated call(s)` : ""}` +
+          (r.skillsLoaded?.length ? `  skills: ${r.skillsLoaded.join(", ")}` : "") +
           (r.reason ? `  — ${r.reason}` : ""),
       );
     }

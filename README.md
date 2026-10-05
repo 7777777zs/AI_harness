@@ -45,9 +45,10 @@ Every setting can go in the same file. `.env.example` lists them all with their 
 | `COVERAGE_CHECK` | `on` | Ask once to cover unread files before accepting a whole-project answer |
 | `COVERAGE_FOOTER` | `on` | Append the harness-computed coverage footer to final answers |
 | `MAX_STEPS` | `20` | Maximum agent steps per task |
+| `SKILLS` | `on` | The skills system (see [Skills](#skills)) |
 
 Values are resolved in this order, and the first one found wins:
-1. Explicit options: `runAgent({...})` options, or the CLI flags `--context-limit`, `--compact-threshold`, `--recent-budget`, `--compact-model`, `--coverage-check`, `--coverage-footer`, `--max-steps`.
+1. Explicit options: `runAgent({...})` options, or the CLI flags `--context-limit`, `--compact-threshold`, `--recent-budget`, `--compact-model`, `--coverage-check`, `--coverage-footer`, `--max-steps`, `--no-skills`.
 2. Environment variables (`export CONTEXT_LIMIT=8000` in bash, `$env:CONTEXT_LIMIT = "8000"` in PowerShell).
 3. `~/.harness/.env`.
 4. `.env` in this repository (handy while developing).
@@ -66,6 +67,7 @@ harness "add a .gitignore for a Node project"
 harness --cwd ~/other/project "summarize README.md"
 harness --mcp chrome-devtools "open http://localhost:3000 and tell me what the page says"
 harness --no-mcp "run the tests"
+harness --skill code-review "review my uncommitted changes"
 harness --help
 ```
 
@@ -144,6 +146,74 @@ Everything an MCP tool returns, such as a web page, is treated as data, not inst
 
 All other tools of the server (performance traces, heap snapshots, extensions, file uploads, network request bodies saved to disk, …) are not exposed. Before a public page's instructions reach a shell or a file, the guard above asks you.
 
+## Skills
+
+A **skill** is a reusable set of instructions for one kind of task, loaded only when a task needs it. The model sees each skill's name and description; when a task matches, it calls `load_skill` and gets the full instructions.
+
+| Skill | What it does | Notes |
+|---|---|---|
+| [`codebase-onboarding`](skills/codebase-onboarding/SKILL.md) | Maps an unfamiliar project: module map, the main flow traced hop by hop, how to run it, and what was not examined | read-only |
+| [`bugfix-with-test`](skills/bugfix-with-test/SKILL.md) | Reproduces the bug with a failing test, makes the minimal fix, and never edits existing tests | |
+| [`web-research`](skills/web-research/SKILL.md) | Answers from web pages with a URL for every claim, cross-checks sources, and reports conflicts | needs the `chrome-devtools` MCP server |
+| [`code-review`](skills/code-review/SKILL.md) | Reviews a diff against a [checklist](skills/code-review/checklist.md) and reports findings by severity with `file:line` and a fix | read-only |
+
+### Format
+
+A skill is a directory with a `SKILL.md` and, optionally, supporting files (checklists, templates):
+
+```markdown
+---
+name: code-review              # required: ^[a-z0-9-]{1,40}$, equal to the directory name
+description: Review code changes and report findings by severity… Use when asked to review …
+                               # required, ≤ 300 characters: WHAT it does and WHEN to use it
+requires:                      # optional: the skill is unavailable without these
+  mcp: [chrome-devtools]       #   connected MCP servers
+  tools: [run_shell]           #   tools
+readOnly: true                 # optional, default false
+---
+# Instructions (Markdown)…
+```
+
+**Locations:**
+- Bundled skills live in this repository's [`skills/`](skills/); your own go in `~/.harness/skills/<name>/SKILL.md`.
+- On a name clash your skill wins, with a logged warning.
+- A skill with invalid frontmatter is skipped with a warning naming the problem; the run continues.
+
+### How skills are used
+
+- **Listing:** the system prompt lists every skill as `name: description`. The `load_skill` tool description lists them as well, because that is where the model chooses tools. A skill whose `requires` are not met is listed as unavailable with the reason, and loading it returns that reason as an error.
+- **Loading:** `load_skill(name)` adds the instructions to the **system message of every following request**. They are not kept in the conversation history, so compaction never elides or summarizes them. `read_skill_file(name, path)` reads a supporting file, under the same path and link rules as `read_file`, rooted at the skill's directory.
+- **Cap:** all loaded skills together may use at most 15% of `CONTEXT_LIMIT`. A skill that doesn't fit is not loaded, and the model gets an error saying so.
+- **Preloading:** `--skill <name>` (repeatable) loads a skill before the first step. `--no-skills`, or `SKILLS=off`, turns the system off.
+- **Logging:** `run_start` lists the available and unavailable skills. Each load is logged as `skill_loaded`, and the result has `skillsLoaded`.
+
+### Read-only skills and safety
+
+While a `readOnly: true` skill is loaded:
+- `write_file` and `edit_file` return an error;
+- MCP tools that need confirmation (`click`, `fill`, `evaluate_script`, …) are disabled;
+- `run_shell` accepts only this allowlist: **`git diff`, `git log`, `git show`, `git status`**.
+  - Arguments may contain only letters, digits, spaces and `_ - . / : = @ ~ , +`. That rules out chaining and substitution (`&& ; | \` $( )`), redirection (`< >`), cmd.exe escapes and variables (`^ %`), quotes and newlines. `git diff && rm x` is rejected, for example.
+  - `--output`, `--ext-diff` and `--textconv` are rejected, because they write files or run external programs.
+  - Allowed commands still ask for confirmation as usual.
+  - **Not covered:** a repository's own git configuration (e.g. a configured diff driver) is outside this check.
+
+**Skills are trusted instructions you wrote, but they can't change the harness's safety rules.** Confirmations, path restrictions and the untrusted-content guard all still apply while a skill is loaded.
+
+### Writing a skill
+
+Start the description with what the skill does, then say when to use it ("Use when asked to …"). That description is all the model sees before loading.
+
+In the body:
+- **Steps:** numbered, each ending in a checkable "Done when …".
+- **Output format:** state it explicitly.
+- **Stop conditions:** say when the work is finished, and when to stop and report instead.
+- **Prohibitions:** keep a short list, only for real guardrails.
+- **Tool names:** use the harness's real tools (`list_dir`, `grep`, `read_file` with `offset`/`limit`, `edit_file`, `run_shell`, `read_tool_result` with `pattern`, `mcp__…`).
+- **Length:** stay under about 1,200 tokens. Move material that only some runs need into a supporting file, as `code-review` does with its checklist.
+
+[TEST_REPORT.md](TEST_REPORT.md) (Phase 6) measures each bundled skill with and without skills.
+
 ## Architecture
 
 ```
@@ -162,6 +232,9 @@ src/
 │   ├── convert.ts    Schema cleanup and result conversion (text, image notes, resources, errors)
 │   ├── resultPages.ts  Paging of oversized results and the read_tool_result tool
 │   └── names.ts      mcp__server__tool names
+├── skills/
+│   ├── load.ts       SKILL.md discovery and frontmatter validation
+│   └── registry.ts   Availability, load_skill / read_skill_file, pinning, cap, read-only rules
 ├── llm/
 │   ├── types.ts      LLMClient interface, Message, ToolCall, LLMResponse, ContextLengthError
 │   ├── index.ts      createClientFromEnv(): the one place that picks a provider
@@ -267,7 +340,9 @@ Options:
 - `--keep`: keep the temp directories.
 - `--verbose`: show the agent's output.
 - `--compact-model <model>`: use a different model for compaction calls (default: the model under test).
-- `--without-mcp`: skip the tasks that need an MCP server (the core suite only).
+- `--without-mcp`: skip the tasks that need an MCP server.
+- `--without-skill-tasks`: skip the with/without-skills tasks (`onboarding`, `bugfix`, `web-research`, `code-review`).
+- `--skills off|available|preloaded`: `off` (default) runs without skills. `available` lists the bundled skills, so the model has to decide to load one. `preloaded` loads the task's skill up front. Skills always come from the repository's `skills/`, never from `~/.harness/skills/`.
 
 All harness settings are passed to each run explicitly, so your environment and `~/.harness/.env` don't affect eval results. The same goes for MCP: a task gets only the servers it declares, so `~/.harness/mcp.json` is never read.
 

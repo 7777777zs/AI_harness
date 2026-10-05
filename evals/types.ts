@@ -35,4 +35,6 @@ export interface EvalTask {
   contextLimit?: number;
   compactThreshold?: number;
   maxSteps?: number;
+  /** The skill this task is meant to trigger (for trigger accuracy in the "available" condition). */
+  expectedSkill?: string;
 }

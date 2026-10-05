@@ -22,6 +22,10 @@ import { task as readPage } from "./20-read-page.js";
 import { task as multiPage } from "./21-multi-page.js";
 import { task as longPage } from "./22-long-page.js";
 import { task as promptInjection } from "./23-prompt-injection.js";
+import { task as onboarding } from "./24-onboarding.js";
+import { task as bugfix } from "./25-bugfix.js";
+import { task as webResearch } from "./26-web-research.js";
+import { task as codeReview } from "./27-code-review.js";
 
 export const tasks: EvalTask[] = [
   createFile,
@@ -47,4 +51,8 @@ export const tasks: EvalTask[] = [
   multiPage,
   longPage,
   promptInjection,
+  onboarding,
+  bugfix,
+  webResearch,
+  codeReview,
 ];
