@@ -1,11 +1,16 @@
 // Oversized results from untrusted (MCP) tools are paginated instead of head+tail truncated:
 // the model sees the first page, and the full text stays in memory (never on disk) so the
 // read_tool_result tool can return any later page. Every page stays within the result cap.
+// A result identical to one still stored is answered with a reference to it, and the store is
+// bounded: the oldest results are evicted first.
+import { createHash } from "node:crypto";
 import type { Tool } from "../types.js";
 import { READ_TOOL_RESULT } from "./names.js";
 
 /** Characters per page at most; the per-result token cap can make pages smaller. */
 export const PAGE_CHARS = 10_000;
+/** Total characters kept in memory for one run (~2 MB). */
+export const MAX_STORED_CHARS = 2_000_000;
 
 export interface PageLimits {
   maxChars: number;
@@ -14,16 +19,50 @@ export interface PageLimits {
 }
 
 export class ResultPages {
+  /** Insertion order is eviction order (oldest first). */
   private readonly results = new Map<string, string>();
+  /** Content hash -> id of the stored result with that content. */
+  private readonly byContent = new Map<string, string>();
+  private readonly evicted = new Set<string>();
+  private storedChars = 0;
   private next = 1;
+  private readonly maxStoredChars: number;
 
-  /** The content if it fits in one page; otherwise its first page plus a continuation note. */
+  constructor(opts: { maxStoredChars?: number } = {}) {
+    this.maxStoredChars = opts.maxStoredChars ?? MAX_STORED_CHARS;
+  }
+
+  /**
+   * The content if it fits in one page. Otherwise: a reference if the same content is still
+   * stored (e.g. the same page snapshotted again), else its first page plus a continuation note.
+   */
   paginate(content: string, limits: PageLimits): string {
     const first = pageEnd(content, 0, limits.maxChars, limits);
     if (first >= content.length) return content;
+    const hash = createHash("sha1").update(content).digest("hex");
+    const known = this.byContent.get(hash);
+    if (known && this.results.has(known)) {
+      return (
+        `[Same content as stored result ${known} (${n(content.length)} chars, unchanged). ` +
+        `Search it with ${READ_TOOL_RESULT} id="${known}" pattern="<text>", or read it with offset.]`
+      );
+    }
     const id = `mcp-${this.next++}`;
-    this.results.set(id, content);
+    this.store(id, hash, content);
     return render(id, content, 0, first);
+  }
+
+  private store(id: string, hash: string, content: string): void {
+    this.results.set(id, content);
+    this.byContent.set(hash, id);
+    this.storedChars += content.length;
+    // Evict the oldest results until within the bound; the newest one always stays.
+    for (const [oldId, old] of this.results) {
+      if (this.storedChars <= this.maxStoredChars || oldId === id) break;
+      this.results.delete(oldId);
+      this.evicted.add(oldId);
+      this.storedChars -= old.length;
+    }
   }
 
   /** The built-in read_tool_result tool over this run's stored results. */
@@ -49,6 +88,9 @@ export class ResultPages {
         const id = String(args.id ?? "");
         const content = this.results.get(id);
         if (content === undefined) {
+          if (this.evicted.has(id)) {
+            return `Error: Stored result ${id} was evicted to bound memory; call the tool again to get its content.`;
+          }
           const known = [...this.results.keys()];
           return `Error: No stored result with id "${id}"${known.length ? ` (stored: ${known.join(", ")})` : ""}`;
         }
@@ -110,14 +152,16 @@ function search(id: string, content: string, pattern: string): string {
   );
 }
 
+const n = (x: number) => x.toLocaleString("en-US");
+
 function render(id: string, content: string, offset: number, end: number): string {
-  const n = (x: number) => x.toLocaleString("en-US");
   const body = content.slice(offset, end).replace(/\n$/, "");
   if (end >= content.length) {
     return `${body}\n[End of stored result ${id}: chars ${n(offset + 1)}–${n(end)} of ${n(content.length)}.]`;
   }
+  // Searching comes first: paging through a long result page by page is the expensive way.
   return (
     `${body}\n[Showing chars ${n(offset + 1)}–${n(end)} of ${n(content.length)}. ` +
-    `Use ${READ_TOOL_RESULT} with id="${id}" and offset=${end} to read more, or with pattern to search it.]`
+    `Search this result with ${READ_TOOL_RESULT} id="${id}" pattern="<text>", or read on with offset=${end}.]`
   );
 }

@@ -16,6 +16,7 @@ import type { LLMClient, LLMResponse, Message, ToolDefinition } from "../src/llm
 import { loadMcpConfig, resolveMcpServers, validateServers, type McpServerInput } from "../src/mcp/config.js";
 import { cleanSchema, convertResult, imageSize } from "../src/mcp/convert.js";
 import { mcpToolName, TOOL_NAME_PATTERN } from "../src/mcp/names.js";
+import { ResultPages, type PageLimits } from "../src/mcp/resultPages.js";
 import { isAlive, liveChildren } from "../src/process.js";
 import { DENIED } from "../src/types.js";
 import { evalSettings } from "../evals/options.js";
@@ -403,7 +404,7 @@ test("oversized MCP results are paginated within the result cap; read_tool_resul
   const first = results().get("c0_0")!;
   assert.match(
     first,
-    /\n\[Showing chars 1–[\d,]+ of [\d,]+\. Use read_tool_result with id="mcp-1" and offset=\d+ to read more, or with pattern to search it\.\]$/,
+    /\n\[Showing chars 1–[\d,]+ of [\d,]+\. Search this result with read_tool_result id="mcp-1" pattern="<text>", or read on with offset=\d+\.\]$/,
   );
   assert.ok(first.length <= 10_300);
   assert.ok(!first.includes("MIDDLE-MARKER"));
@@ -534,4 +535,47 @@ test("evals are isolated from ~/.harness/mcp.json: evalSettings passes an explic
   } finally {
     fs.rmSync(file, { force: true });
   }
+});
+
+// ---- Stored results: dedupe and memory bound ----
+
+const LIMITS: PageLimits = { maxChars: 10_000, maxTokens: 100_000, tokensOf: (s) => Math.ceil(s.length / 4) };
+const page = (tag: string, chars = 30_000) => `${tag}\n` + "x".repeat(chars);
+const ctx = { cwd: ".", confirm: async () => true };
+
+test("an oversized result identical to a stored one returns a one-line reference, not the first page again", async () => {
+  const pages = new ResultPages();
+  const first = pages.paginate(page("SNAPSHOT"), LIMITS);
+  assert.match(first, /id="mcp-1"/);
+  const again = pages.paginate(page("SNAPSHOT"), LIMITS);
+  assert.equal(
+    again,
+    '[Same content as stored result mcp-1 (30,009 chars, unchanged). Search it with read_tool_result id="mcp-1" pattern="<text>", or read it with offset.]',
+  );
+  // The duplicate didn't take a new id, and the stored result is still readable.
+  assert.match(pages.paginate(page("OTHER"), LIMITS), /id="mcp-2"/);
+  assert.match(await pages.tool(() => LIMITS).execute({ id: "mcp-1", offset: 0 }, ctx), /^SNAPSHOT\n/);
+});
+
+test("stored results are bounded: the oldest are evicted, reading one is a clear error, and a repeat of evicted content is shown again", async () => {
+  const pages = new ResultPages({ maxStoredChars: 70_000 });
+  const read = pages.tool(() => LIMITS);
+  pages.paginate(page("A"), LIMITS); // mcp-1
+  pages.paginate(page("B"), LIMITS); // mcp-2
+  pages.paginate(page("C"), LIMITS); // mcp-3: 90k stored > 70k, so mcp-1 is evicted
+  assert.equal(
+    await read.execute({ id: "mcp-1", offset: 0 }, ctx),
+    "Error: Stored result mcp-1 was evicted to bound memory; call the tool again to get its content.",
+  );
+  assert.match(await read.execute({ id: "mcp-3", offset: 0 }, ctx), /^C\n/);
+  // The same content as the evicted mcp-1: shown normally under a new id, not as a reference.
+  const repeat = pages.paginate(page("A"), LIMITS);
+  assert.match(repeat, /^A\nx+\n\[Showing chars 1–/);
+  assert.match(repeat, /id="mcp-4"/);
+});
+
+test("a single result larger than the whole bound is still stored (it is the newest)", async () => {
+  const pages = new ResultPages({ maxStoredChars: 20_000 });
+  assert.match(pages.paginate(page("BIG", 50_000), LIMITS), /id="mcp-1"/);
+  assert.match(await pages.tool(() => LIMITS).execute({ id: "mcp-1", offset: 40_000 }, ctx), /^x+/);
 });

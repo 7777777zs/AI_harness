@@ -115,7 +115,9 @@ The harness can use tools from [MCP](https://modelcontextprotocol.io) servers (s
 - **Shutdown:** when the run ends (normally, with an error, or on Ctrl+C), each server's whole process tree is shut down. Its stdin is closed first so it can close its browser cleanly; whatever is still running after 3 s is killed.
 - **Results:**
   - Text is passed on as-is. Images become a note like `[image omitted: image/png, 1280x720, …]`, because tool messages can't carry images.
-  - Results longer than one page (10,000 characters, or less for small context limits) are split into pages kept in memory. The model sees the first page and can read the rest with the built-in `read_tool_result` tool, by offset or by searching with `pattern`.
+  - Results longer than one page (10,000 characters, or less for small context limits) are split into pages kept in memory. The model sees the first page and can read the rest with the built-in `read_tool_result` tool, by searching with `pattern` or by offset.
+  - A result identical to one still stored (e.g. the same page snapshotted again) comes back as a one-line reference to the stored copy, not as the first page again.
+  - Stored results are capped at about 2M characters per run, and the oldest are evicted first. Reading an evicted result returns an error asking to call the tool again.
   - Size caps, compaction and logging apply as for every other tool.
 
 ### Untrusted content
