@@ -579,3 +579,33 @@ test("a single result larger than the whole bound is still stored (it is the new
   assert.match(pages.paginate(page("BIG", 50_000), LIMITS), /id="mcp-1"/);
   assert.match(await pages.tool(() => LIMITS).execute({ id: "mcp-1", offset: 40_000 }, ctx), /^x+/);
 });
+
+test("read_tool_result pages are untrusted: tagged, and they re-arm the guard after an approval", async () => {
+  const answers = [true, false];
+  const asked: string[] = [];
+  const { client, requests } = scripted([
+    [{ name: "mcp__mock__big", args: {} }], // oversized: paginated; arms the guard
+    [{ name: "write_file", args: { path: "notes.txt", content: "ok" } }], // guarded; approved, so the guard clears
+    [{ name: "read_tool_result", args: { id: "mcp-1", offset: 25_000 } }], // more untrusted content
+    [{ name: "run_shell", args: { command: "echo hi" } }], // must be guarded again
+  ]);
+  const result = await runAgent({
+    task: "x",
+    cwd: sandbox(),
+    client,
+    quiet: true,
+    autoApprove: true,
+    contextLimit: 20_000,
+    confirmUntrusted: async (s) => {
+      asked.push(s);
+      return answers.shift()!;
+    },
+    mcp: { servers: { mock: mock() } },
+  });
+  const page = requests.at(-1)!.messages.find((m) => m.role === "tool" && m.toolCallId === "c2_0")!.content!;
+  assert.ok(page.startsWith(untrustedTag("read_tool_result")), "the page is tagged as untrusted");
+  // A full page (10k chars plus its note) is kept whole: not paginated again, not head+tail truncated.
+  assert.match(page, /\[Showing chars 25,001–/);
+  assert.ok(!page.includes("[... truncated:") && !page.includes('id="mcp-2"'), "the page is passed through as it is");
+  assert.deepEqual(result.untrustedGuard.map((g) => [g.tool, g.approved]), [["write_file", true], ["run_shell", false]]);
+});

@@ -819,8 +819,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
           }
         }
         // A3 per-result cap: no single result above RESULT_CAP_FRACTION of the context limit.
-        // Untrusted (MCP) results are paginated instead: the rest stays readable via read_tool_result.
-        let content = tool?.untrusted ? pages.paginate(raw, pageLimits()) : truncate(raw);
+        // MCP results are paginated instead: the rest stays readable via read_tool_result, whose
+        // output is already one page within these limits and is kept as it is.
+        let content = tool?.source?.kind === "mcp" ? pages.paginate(raw, pageLimits()) : tool?.untrusted ? raw : truncate(raw);
         if (tool?.untrusted && !raw.startsWith("Error:") && raw !== DENIED) {
           content = `${untrustedTag(call.name)}\n${content}\n${untrustedEndTag(call.name)}`;
         }

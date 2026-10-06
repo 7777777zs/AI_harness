@@ -69,6 +69,8 @@ export class ResultPages {
   tool(limits: () => PageLimits): Tool {
     return {
       name: READ_TOOL_RESULT,
+      // Its pages are MCP content: tagged as untrusted, and they re-arm the untrusted-content guard.
+      untrusted: true,
       description:
         "Read more of a long result from an MCP tool that was cut into pages. Use the id and offset " +
         "given in the note at the end of the page; returns up to one page of characters. With `pattern`, " +
