@@ -74,7 +74,8 @@ test("a short Retry-After doesn't shorten the exponential backoff: each wait is 
     onRetry: (i) => void reasons.push(i.reason),
   }).chat(messages, []);
   assert.equal(r.text, "ok");
-  assert.deepEqual(sleeps, [2_000, 2_000, 4_000, 8_000, 16_000]);
+  // The provider's 2 s gets jitter too (× 1.125 at random 0.5), so jobs given the same hint spread out.
+  assert.deepEqual(sleeps, [2_250, 2_250, 4_000, 8_000, 16_000]);
   assert.deepEqual(reasons, ["retry-after", "retry-after", "backoff", "backoff", "backoff"]);
 });
 
@@ -239,4 +240,13 @@ test("eval runs that ended on API errors are 'error', not 'fail'", () => {
   assert.equal(classifyOutcome(false, "other"), "fail");
   assert.equal(classifyOutcome(false, "context_length"), "fail");
   assert.equal(classifyOutcome(false, undefined), "fail");
+});
+
+test("jitter on a provider's Retry-After only ever lengthens the wait, never shortens it", async () => {
+  for (const [random, expected] of [[0, 3_000], [0.999999, 3_750]] as const) {
+    const sleeps: number[] = [];
+    const { client } = flaky([api(429, 3_000)]);
+    await withRetry(client, { sleep: async (ms) => void sleeps.push(ms), random: () => random }).chat(messages, []);
+    assert.deepEqual(sleeps, [expected], `random ${random}`);
+  }
 });

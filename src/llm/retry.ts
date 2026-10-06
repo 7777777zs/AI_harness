@@ -64,7 +64,10 @@ export function withRetry(client: LLMClient, opts: RetryOptions = {}): LLMClient
           }
           const backoff = backoffDelay(retry, opts.baseDelayMs, opts.random);
           const providerWins = err.retryAfterMs !== undefined && err.retryAfterMs >= backoff;
-          const wanted = providerWins ? err.retryAfterMs! : backoff;
+          // The provider's wait gets jitter too (only upward: never shorter than asked), so jobs given
+          // the same hint don't retry in lockstep.
+          const random = opts.random ?? Math.random;
+          const wanted = providerWins ? Math.round(err.retryAfterMs! * (1 + 0.25 * random())) : backoff;
           const delayMs = Math.min(wanted, MAX_WAIT_MS);
           opts.onRetry?.({
             retry,
