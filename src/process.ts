@@ -91,16 +91,30 @@ export function killAllSync(): void {
 
 /** Run on shutdown after the children are gone (e.g. the eval runner's sandboxes and results). */
 const cleanups: (() => Promise<void> | void)[] = [];
+/** Run first on shutdown, before anything waits (e.g. the eval runner stops taking results). */
+const interruptHooks: (() => void)[] = [];
 
 export function registerCleanup(cleanup: () => Promise<void> | void): void {
   cleanups.push(cleanup);
 }
 
+export function onInterrupt(hook: () => void): void {
+  interruptHooks.push(hook);
+}
+
 /**
- * Gracefully shut down every tracked child, killing whatever is left after `timeoutMs`, then
- * run the registered cleanups (children first: Windows can't delete a process's working directory).
+ * Run the interrupt hooks, gracefully shut down every tracked child (killing whatever is left
+ * after `timeoutMs`), then run the registered cleanups (children first: Windows can't delete a
+ * process's working directory).
  */
 export async function shutdownAll(timeoutMs = 5_000): Promise<void> {
+  for (const hook of interruptHooks.splice(0)) {
+    try {
+      hook();
+    } catch {
+      // keep going: shutting down matters more
+    }
+  }
   const pending = [...live.values()].map((shutdown) => shutdown().catch(() => {}));
   let timer: NodeJS.Timeout | undefined;
   await Promise.race([Promise.all(pending), new Promise<void>((r) => (timer = setTimeout(r, timeoutMs)))]);

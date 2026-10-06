@@ -7,10 +7,10 @@ import { parseArgs } from "node:util";
 import { ANSWER_MERGE_SEPARATOR, runAgent, totalNudges } from "../src/agent.js";
 import { loadEnv } from "../src/config.js";
 import { missingEnv } from "../src/llm/index.js";
-import { installShutdownHandlers, registerCleanup } from "../src/process.js";
+import { installShutdownHandlers, onInterrupt, registerCleanup } from "../src/process.js";
 import { tasks } from "./tasks/index.js";
 import { classifyOutcome, evalSettings } from "./options.js";
-import { maxRequestTokens } from "./helpers.js";
+import { maxRequestTokens, removeDirs } from "./helpers.js";
 import type { CheckResult, EvalTask, WebContext } from "./types.js";
 import { CHROME_DEVTOOLS_MCP, prewarmChromeDevtools, serveSite, type SiteServer } from "./web.js";
 
@@ -375,11 +375,17 @@ function writeResults(records: RunRecord[], extra: Record<string, unknown> = {})
 // Ctrl+C: shut down MCP server process trees (browsers), then save the completed runs and
 // remove the sandboxes of the interrupted ones.
 installShutdownHandlers();
-registerCleanup(() => {
+// Stop at once (before MCP shutdown, which can take seconds): no new jobs, and jobs that end
+// after this (e.g. because their server was shut down) are not counted as completed.
+onInterrupt(() => {
   interrupted = true;
+});
+registerCleanup(() => {
   const outFile = writeResults(records, { interrupted: true });
   console.log(`\nInterrupted: ${records.length} completed run(s) saved to ${path.relative(process.cwd(), outFile)}`);
-  if (!args.keep) for (const dir of activeSandboxes) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+  if (args.keep) return;
+  const failed = removeDirs(activeSandboxes);
+  if (failed.length) console.log(`Could not remove ${failed.length} sandbox(es): ${failed.join(", ")}`);
 });
 if (selected.some((t) => t.mcpServers)) {
   console.log(`Pre-warming ${CHROME_DEVTOOLS_MCP} in the npx cache…`);
@@ -396,6 +402,7 @@ await Promise.all(
   Array.from({ length: Math.min(concurrency, jobs.length) }, async () => {
     for (let job = jobs.shift(); job && !interrupted; job = jobs.shift()) {
       const r = await runJob(job.task, job.run);
+      if (interrupted) break; // ended by the interruption, not completed
       records.push(r);
       const mark = r.pass ? "\x1b[32m✓\x1b[0m" : r.outcome === "error" ? "\x1b[33m!\x1b[0m" : "\x1b[31m✗\x1b[0m";
       console.log(

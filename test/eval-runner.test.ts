@@ -7,7 +7,8 @@ import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { registerChild, registerCleanup, shutdownAll } from "../src/process.js";
+import { onInterrupt, registerChild, registerCleanup, shutdownAll } from "../src/process.js";
+import { removeDirs } from "../evals/helpers.js";
 
 const ROOT = path.join(import.meta.dirname, "..");
 const created: string[] = [];
@@ -123,4 +124,24 @@ test("test/agent.test.ts leaves no temp directories behind (P7)", async () => {
   assert.equal(await new Promise<number | null>((r) => child.on("exit", r)), 0, "agent tests pass");
   assert.match(out, /ℹ pass [1-9]\d*/, "the agent tests actually ran");
   assert.deepEqual([...leftovers()].filter((n) => !before.has(n)), []);
+});
+
+test("on shutdown, interrupt hooks run first, then the children are shut down, then the cleanups", async () => {
+  const order: string[] = [];
+  const unregister = registerChild(2_147_000_001, async () => void order.push("child"));
+  registerCleanup(() => void order.push("cleanup"));
+  onInterrupt(() => void order.push("interrupt"));
+  await shutdownAll(1_000);
+  unregister();
+  assert.deepEqual(order, ["interrupt", "child", "cleanup"]);
+});
+
+test("removeDirs tries every directory and returns the ones it could not remove", () => {
+  const removed: string[] = [];
+  const failed = removeDirs(["a", "busy", "c"], (dir) => {
+    if (dir === "busy") throw new Error("EBUSY");
+    removed.push(dir);
+  });
+  assert.deepEqual(removed, ["a", "c"]);
+  assert.deepEqual(failed, ["busy"]);
 });

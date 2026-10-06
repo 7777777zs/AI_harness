@@ -51,3 +51,19 @@ export function maxRequestTokens(logFile: string): number {
   }
   return max;
 }
+
+/** Remove every directory, even when some fail (e.g. EBUSY on Windows); returns the ones that failed. */
+export function removeDirs(
+  dirs: Iterable<string>,
+  rm: (dir: string) => void = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 }),
+): string[] {
+  const failed: string[] = [];
+  for (const dir of dirs) {
+    try {
+      rm(dir);
+    } catch {
+      failed.push(dir);
+    }
+  }
+  return failed;
+}
