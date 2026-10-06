@@ -192,8 +192,8 @@ test("PREFINISH_MAX is validated and set explicitly by the eval settings", () =>
 
 test("totalNudges counts every kind of nudge, including the pre-finish ones (plan, completion)", () => {
   // Distinct powers of two: a missing or doubled kind changes the sum.
-  const stats: NudgeStats = { notes: 1, missingFile: 2, repeat: 4, coverage: 8, plan: 16, completion: 32 };
-  assert.equal(totalNudges(stats), 63);
+  const stats: NudgeStats = { notes: 1, missingFile: 2, repeat: 4, coverage: 8, plan: 16, completion: 32, unopenedUrl: 64 };
+  assert.equal(totalNudges(stats), 127);
 });
 
 test("requiredSections match heading lines only (Markdown headings or bold-only lines), not body text", () => {

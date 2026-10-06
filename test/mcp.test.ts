@@ -8,7 +8,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runAgent, UNTRUSTED_CONTENT_NOTE, untrustedEndTag, untrustedTag } from "../src/agent.js";
+import { taskUrls, unopenedUrlStatus } from "../src/taskUrls.js";
 import { ConfigError } from "../src/config.js";
+import { STATUS_PREFIX } from "../src/context/coverage.js";
 import { elideToolResults } from "../src/context/compact.js";
 import { isListing } from "../src/context/listing.js";
 import { ContextStore } from "../src/context/store.js";
@@ -614,4 +616,49 @@ test("read_tool_result pages are untrusted: tagged, and they re-arm the guard af
   assert.match(page, /\[Showing chars 25,001–/);
   assert.ok(!page.includes("[... truncated:") && !page.includes('id="mcp-2"'), "the page is passed through as it is");
   assert.deepEqual(result.untrustedGuard.map((g) => [g.tool, g.approved]), [["write_file", true], ["run_shell", false]]);
+});
+
+// ---- Task URLs (N5) ----
+
+const TASK_URL = "http://127.0.0.1:4321/a.html";
+
+test("taskUrls: http(s) URLs from the task, without trailing punctuation", () => {
+  assert.deepEqual(
+    taskUrls(`Open ${TASK_URL}. Then compare with (https://example.org/b?x=1), please`).map(String),
+    [TASK_URL, "https://example.org/b?x=1"],
+  );
+  assert.deepEqual(taskUrls("no links here"), []);
+});
+
+test("until an MCP call is given the task URL, each request's status names it; tool results get nothing", async () => {
+  const { client, requests, results } = scripted([
+    [{ name: "mcp__mock__echo", args: { text: "about:blank" } }],
+    [{ name: "mcp__mock__echo", args: { text: TASK_URL } }],
+  ]);
+  const result = await runAgent({ task: `Summarize ${TASK_URL}`, cwd: sandbox(), client, quiet: true, autoApprove: true, mcp: { servers: { mock: mock() } } });
+  const status = (n: number) => requests[n]!.messages.at(-1)!;
+  const line = unopenedUrlStatus([TASK_URL]);
+  for (const n of [0, 1]) {
+    assert.equal(status(n).role, "user");
+    assert.equal(status(n).content, `${STATUS_PREFIX}\n${line}`, `request ${n}`);
+  }
+  assert.ok(!requests[2]!.messages.some((m) => m.content?.includes(line)), "gone once a call was given the URL");
+  assert.ok(![...results().values()].some((r) => r.includes("Not opened by any tool call")), "never stored in tool results");
+  assert.equal(result.nudges.unopenedUrl, 2);
+});
+
+test("no unopened-URL status without MCP tools, or when the step's MCP call was given the URL", async () => {
+  const noMcp = scripted([]);
+  await runAgent({ task: `Summarize ${TASK_URL}`, cwd: sandbox(), client: noMcp.client, quiet: true, autoApprove: true, mcp: { servers: {} } });
+  assert.ok(!noMcp.requests[0]!.messages.some((m) => m.content?.includes("Not opened by any tool call")));
+
+  const { client, requests } = scripted([
+    [
+      { name: "mcp__mock__echo", args: { text: "list" } },
+      { name: "mcp__mock__echo", args: { text: TASK_URL } },
+    ],
+  ]);
+  const result = await runAgent({ task: `Summarize ${TASK_URL}`, cwd: sandbox(), client, quiet: true, autoApprove: true, mcp: { servers: { mock: mock() } } });
+  assert.ok(!requests[1]!.messages.some((m) => m.content?.includes("Not opened by any tool call")));
+  assert.equal(result.nudges.unopenedUrl, 1, "only the first request");
 });

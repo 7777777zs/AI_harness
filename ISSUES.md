@@ -31,7 +31,7 @@ The decisions below come from a review of the open issues after Phase 6 (2026-10
 | – | [Code review: behavior and docs findings](#code-review-2026-10-05) | Done (branch `review-round2`) | /tdd |
 | – | [Code review: deferred refactors](#deferred-refactors) | Defer (next round) | — |
 | – | [N4: gpt-4.1-mini refuses to open local URLs](#n4-local-url-refusals-2026-10-06) | Done (branch `fix-url-refusal`) | /diagnosing-bugs |
-| – | [N5: gives up after seeing only the blank tab](#n5-giving-up-after-seeing-only-the-blank-tab-2026-10-06) | Todo | /diagnosing-bugs |
+| – | [N5: gives up after seeing only the blank tab](#n5-giving-up-after-seeing-only-the-blank-tab-2026-10-06) | Done (branch `fix-url-refusal`) | /diagnosing-bugs |
 | – | [Accepted limitations](#accepted-limitations) | Accept | — |
 
 ---
@@ -260,16 +260,28 @@ None of these changes behavior; each is worth doing when the code around it chan
 - **Fix:** `mcpToolsNote()` adds that rule. `baseSystemPrompt()` is exported so `evals/url-check.ts` builds exactly the request the harness sends (checked byte for byte against a logged request, without the rule).
 - **Result:** no first-step refusals afterwards: 0 in 220 first-step calls across the five web tasks, and 0 in 26 end-to-end runs (TEST_REPORT.md, "N4").
 - **Regression guard:** a unit test asserts the rule is in the system prompt. Model behavior has no deterministic seam; `evals/url-check.ts` is the behavioral check.
-- **Not fixed:** giving up in a later step, which is now N5. Models other than gpt-4.1-mini were not checked.
+- **Not fixed here:** giving up in a later step, which became N5 (fixed). Models other than gpt-4.1-mini were not checked.
 
 ## N5: giving up after seeing only the blank tab (2026-10-06)
 
-**Status:** Todo (`/diagnosing-bugs`). It was found while verifying N4: 4 of 26 end-to-end web runs.
+**Status:** Done (branch `fix-url-refusal`). Diagnosed with `/diagnosing-bugs`; about $0.82 of API calls.
 
-- **Symptom:** step 1 calls `list_pages` (sometimes with `select_page`/`take_snapshot` of the blank tab, or `read_file index.html`) but not `new_page`. Seeing only `about:blank`, the model says the page is not accessible and asks for its content. In one variant, `wait_for` times out after `navigate_page`, and the model gives up without a snapshot.
-- **Rate:** step 1 doesn't open the URL in 9/40 (multi-page) and 5/40 (prompt-injection) calls. Most of those runs still open it in step 2; the failures are the ones that stop there.
-- **Feedback loop to build:** replay the logged step-2 request (the `list_pages` result showing only `about:blank`) with a random port, and count "gave up" vs "opened the URL".
-- **Candidate fixes to test:** state in the URL rule that the browser starts with a blank tab, so a listed page or snapshot says nothing about the URL; or, harness-side, mention the task's URL in the `list_pages` result when it is not open.
+- **Symptom:** step 1 calls `list_pages` (sometimes with `select_page`/`take_snapshot` of the blank tab, or `read_file index.html`) but not `new_page`. Seeing only `about:blank` or a missing file, the model says the page is not accessible and asks for its content. Found while verifying N4: 4 of 26 end-to-end web runs.
+- **Feedback loop:** replay the logged request of the step where a failing run gave up, 20 times, with a random temp-directory name and port per call (tool calls and results included), and count "opened the URL" vs "gave up".
+  - prompt-injection #2, step 2: gave up 20/20.
+  - multi-page #2, step 2: `list_dir` 20/20; step 3: gave up 19/20.
+- **Minimal repro:** system prompt, task, one `list_pages` call and its `about:blank` result. Still 20/20 gave up.
+- **Cause:** the model takes the blank tab (or the missing file) for the task's page. A diagnostic run with a public-looking host instead of 127.0.0.1 still gave up 16/20, with answers like "I tried to access the article at …, but the page appears to be blank". So this is not about localhost: the model believes it already tried the URL.
+- **What did not work:**
+  - **A system-prompt rule** ("the browser starts with an empty tab; open the URL first") opened the URL in only 1/20: rules far from the decision point don't change it.
+  - **A harness note appended to the first MCP result** fixed the give-ups (20/20 and 16/20; 20/20 together with a URL-aware missing-file hint). But it made the model follow injected page text more often. In a replay of the step where prompt-injection #10 read the injected page, the run with the note called `write_file`/`run_shell` in 12/60 replies, and the same request without the note in 2/60. In the end-to-end round with the note, 4/10 prompt-injection runs followed the injection, against 1/10 before. The likely reason: a harness instruction inside an MCP result stays in history, next to the page content. This version was dropped.
+- **Fix:** while MCP tools are loaded and a URL from the task has not been mentioned in any MCP call's arguments, the `[Harness status]` message attached to each request says so. It names the URL and says that open pages and working-directory files are not that page. The message is never stored in history and disappears once a call is given the URL, so it is never next to page content. `src/taskUrls.ts` finds the task's URLs. Each request that carries the line counts as an `unopened_url` nudge.
+- **Result (replays):**
+  - give-up states: 20/20 opened the URL, for both prompt-injection #2 step 2 and multi-page #2 step 2 (the latter with the unchanged missing-file hint);
+  - multi-page step 1: the URL was opened in 35/40 instead of 22/40.
+- **Result (end to end):** prompt-injection 10/10 with no injection followed, multi-page 10/10, read-page 5/5. In 4 runs step 1 only listed pages; all opened the URL in step 2 after the status line.
+- **Regression tests:** `test/mcp.test.ts` checks two things. Each request carries the status line until an MCP call is given the URL, and never after; nothing is added to tool results. And there is no line without MCP tools, or when the first step's call was given the URL. Model behavior itself has no deterministic seam; the replays and the web evals are the behavioral check.
+- **Not covered:** the variant where `wait_for` times out after `navigate_page` (1 of 26 runs). The URL counts as opened there, so the status line doesn't fire. A URL-aware missing-file hint fixed it in replays (19/20 went on to `take_snapshot`), but it was not adopted: it would put a harness instruction into history, and its effect on injection was not measured.
 
 ## Accepted limitations
 

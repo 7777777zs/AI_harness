@@ -20,7 +20,7 @@ import {
 } from "./config.js";
 import { capResult, capTurn, RESULT_CAP_FRACTION, shrinkNewest, TURN_CAP_FRACTION } from "./context/budget.js";
 import { compact } from "./context/compact.js";
-import { Coverage, isWholeProjectTask } from "./context/coverage.js";
+import { Coverage, isWholeProjectTask, STATUS_PREFIX } from "./context/coverage.js";
 import { ContextStore } from "./context/store.js";
 import { ContextTracker, estimateTokens, estimateToolDefs } from "./context/tokens.js";
 import { makeDescriber, makeSummarizer } from "./context/summarize.js";
@@ -32,6 +32,7 @@ import { discoverSkills, type Discovery } from "./skills/load.js";
 import { readOnlyViolation, SkillRegistry, SKILLS_CAP_FRACTION } from "./skills/registry.js";
 import { routeSkill } from "./skills/router.js";
 import { completionGaps, completionMessage, isPlanOnly, PLAN_NUDGE } from "./prefinish.js";
+import { mentionsUrl, taskUrls, unopenedUrlStatus } from "./taskUrls.js";
 
 export const MAX_STEPS = DEFAULTS.maxSteps;
 
@@ -229,6 +230,8 @@ export interface NudgeStats {
   plan: number;
   /** Loaded skills' completion criteria not met by a final answer (at most once per run). */
   completion: number;
+  /** Requests whose status message named a task URL no MCP call had been given yet (one per step). */
+  unopenedUrl: number;
 }
 
 /** All nudges of a run, of every kind (new kinds are counted without changes here). */
@@ -366,7 +369,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     describeFailures: 0,
     descriptionRejected: 0,
   };
-  const nudges: NudgeStats = { notes: 0, missingFile: 0, repeat: 0, coverage: 0, plan: 0, completion: 0 };
+  const nudges: NudgeStats = { notes: 0, missingFile: 0, repeat: 0, coverage: 0, plan: 0, completion: 0, unopenedUrl: 0 };
+  // N5: task URLs no MCP call has been given yet (named in the status message until one is).
+  const urls = taskUrls(opts.task);
+  const unopenedUrls = new Set(urls.map(String));
   const compactionUsage = { inputTokens: 0, outputTokens: 0, calls: 0 };
   const routerUsage: Usage = { inputTokens: 0, outputTokens: 0 };
   let skillRouting: AgentResult["skillRouting"] = null;
@@ -656,8 +662,17 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     // The known-files status is attached to each request instead of stored in history,
     // so it is never elided or summarized and is always current.
     // Loaded skills are appended to the system message the same way: pinned, never compacted.
+    // N5: task URLs no MCP call has been given yet. Said here, not in a tool result: a harness note
+    // inside an MCP result stays in history and made gpt-4.1-mini follow injected page text more often.
+    const unopenedNow = () => ([...toolMap.values()].some((t) => t.source?.kind === "mcp") ? [...unopenedUrls] : []);
+    const statusText = () => {
+      const files = coverage.statusBlock(opts.task);
+      const unopened = unopenedNow();
+      if (unopened.length === 0) return files;
+      return `${files ?? STATUS_PREFIX}\n${unopenedUrlStatus(unopened)}`;
+    };
     const withStatus = () => {
-      const status = coverage.statusBlock(opts.task);
+      const status = statusText();
       const pinned = skills?.pinnedText() ?? "";
       const base = pinned ? [{ ...messages[0]!, content: messages[0]!.content + pinned }, ...messages.slice(1)] : messages;
       return status ? [...base, { role: "user" as const, content: status }] : base;
@@ -665,7 +680,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
 
     // A3 preflight: never send a request estimated above the context limit.
     const preflight = () => {
-      const status = coverage.statusBlock(opts.task);
+      const status = statusText();
       const estimate = tracker.estimate(messages, toolDefs) + (status ? tracker.tokensOf(status) : 0) + pinnedDelta();
       if (estimate <= contextLimit) return;
       const shrunk = shrinkNewest(messages, estimate - contextLimit, tokensOf);
@@ -691,6 +706,11 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       preflight();
 
       let request = withStatus();
+      const unopened = unopenedNow();
+      if (unopened.length) {
+        nudges.unopenedUrl++;
+        log({ type: "nudge", kind: "unopened_url", step, urls: unopened });
+      }
       let response: LLMResponse;
       let sentCount = messages.length;
       try {
@@ -790,6 +810,11 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
 
       // Execute every call of this turn, then apply the size caps, then append harness hints.
       const turn: { call: ToolCall; content: string; hints: string }[] = [];
+      // A task URL counts as opened once any MCP call of this turn or an earlier one mentions it.
+      for (const call of response.toolCalls) {
+        if (toolMap.get(call.name)?.source?.kind !== "mcp") continue;
+        for (const url of urls) if (mentionsUrl(call.args, url)) unopenedUrls.delete(String(url));
+      }
       for (const call of response.toolCalls) {
         const shownArgs = call.args ? JSON.stringify(call.args) : "(invalid JSON)";
         out(c.yellow(`→ ${call.name}`) + " " + c.dim(oneLine(shownArgs, 200)));
