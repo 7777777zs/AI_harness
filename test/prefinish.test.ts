@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runAgent } from "../src/agent.js";
+import { runAgent, totalNudges, type NudgeStats } from "../src/agent.js";
 import { resolveConfig } from "../src/config.js";
 import type { LLMClient, Message } from "../src/llm/types.js";
 import { isPlanOnly } from "../src/prefinish.js";
@@ -187,4 +187,10 @@ test("PREFINISH_MAX is validated and set explicitly by the eval settings", () =>
   assert.equal(resolveConfig({}, {}).prefinishMax, 2);
   const task: EvalTask = { id: "t", description: "", prompt: "x", check: () => ({ pass: true }) };
   assert.equal(evalSettings(task, { mainModel: "m" }).prefinishMax, 2);
+});
+
+test("totalNudges counts every kind of nudge, including the pre-finish ones (plan, completion)", () => {
+  // Distinct powers of two: a missing or doubled kind changes the sum.
+  const stats: NudgeStats = { notes: 1, missingFile: 2, repeat: 4, coverage: 8, plan: 16, completion: 32 };
+  assert.equal(totalNudges(stats), 63);
 });

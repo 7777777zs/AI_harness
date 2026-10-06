@@ -204,6 +204,11 @@ export interface NudgeStats {
   completion: number;
 }
 
+/** All nudges of a run, of every kind (new kinds are counted without changes here). */
+export function totalNudges(nudges: NudgeStats): number {
+  return Object.values(nudges).reduce((sum, n) => sum + n, 0);
+}
+
 export const coverageCheckMessage = (unread: string) =>
   `You have not read these files: ${unread}. Either read the relevant ones, or state in your final answer ` +
   "which files/directories you did not cover. Your next reply replaces your previous answer, so it must be " +

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { ANSWER_MERGE_SEPARATOR, runAgent } from "../src/agent.js";
+import { ANSWER_MERGE_SEPARATOR, runAgent, totalNudges } from "../src/agent.js";
 import { loadEnv } from "../src/config.js";
 import { missingEnv } from "../src/llm/index.js";
 import { installShutdownHandlers, registerCleanup } from "../src/process.js";
@@ -32,7 +32,7 @@ interface RunRecord {
   repeatedCalls: number;
   missingFileReads: number;
   descriptionRejected: number;
-  /** Total harness nudges (note-taking + missing-file + repeat + coverage). */
+  /** Total harness nudges, every kind (see NudgeStats). */
   nudges: number;
   /** Input tokens spent on compaction calls (Level 1 descriptions + Level 2 summaries). */
   compactionInputTokens?: number;
@@ -225,7 +225,7 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       repeatedCalls: result.repeatedCalls,
       missingFileReads: result.missingFileReads,
       descriptionRejected: result.compactionStats.descriptionRejected,
-      nudges: result.nudges.notes + result.nudges.missingFile + result.nudges.repeat + result.nudges.coverage,
+      nudges: totalNudges(result.nudges),
       compactionInputTokens: result.compactionUsage.inputTokens,
       compactionOutputTokens: result.compactionUsage.outputTokens,
       mainInputTokens: result.mainUsage.inputTokens,
