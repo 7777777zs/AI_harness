@@ -41,6 +41,11 @@ export interface CompletionGap {
 
 const URL_PATTERN = /https?:\/\/[^\s<>"'`)\]]+/g;
 
+/** Lines that start a section: Markdown headings ("## Conflicts") and bold-only lines ("**Conflicts**"). */
+function headingLines(answer: string): string[] {
+  return answer.split(/\r?\n/).filter((l) => /^\s{0,3}#{1,6}\s/.test(l) || /^\s*\*\*[^*]+\*\*:?\s*$/.test(l));
+}
+
 /** Distinct URLs in a text (trailing punctuation stripped). */
 export function distinctUrls(text: string): string[] {
   return [...new Set((text.match(URL_PATTERN) ?? []).map((u) => u.replace(/[.,;:!?]+$/, "")))];
@@ -56,8 +61,10 @@ export function completionGaps(answer: string, skills: Skill[]): CompletionGap[]
     const c = skill.completion;
     if (!c) continue;
     const failed: string[] = [];
+    const headings = headingLines(answer);
     for (const pattern of c.requiredSections) {
-      if (!new RegExp(pattern, "im").test(answer)) failed.push(`a section matching /${pattern}/ is missing`);
+      const re = new RegExp(pattern, "i");
+      if (!headings.some((h) => re.test(h))) failed.push(`a section matching /${pattern}/ is missing`);
     }
     if (c.minDistinctUrls !== undefined) {
       const found = distinctUrls(answer).length;

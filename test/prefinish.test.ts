@@ -8,7 +8,8 @@ import path from "node:path";
 import { runAgent, totalNudges, type NudgeStats } from "../src/agent.js";
 import { resolveConfig } from "../src/config.js";
 import type { LLMClient, Message } from "../src/llm/types.js";
-import { isPlanOnly } from "../src/prefinish.js";
+import { completionGaps, isPlanOnly } from "../src/prefinish.js";
+import type { Skill } from "../src/skills/load.js";
 import { evalSettings } from "../evals/options.js";
 import type { EvalTask } from "../evals/types.js";
 
@@ -193,4 +194,26 @@ test("totalNudges counts every kind of nudge, including the pre-finish ones (pla
   // Distinct powers of two: a missing or doubled kind changes the sum.
   const stats: NudgeStats = { notes: 1, missingFile: 2, repeat: 4, coverage: 8, plan: 16, completion: 32 };
   assert.equal(totalNudges(stats), 63);
+});
+
+test("requiredSections match heading lines only (Markdown headings or bold-only lines), not body text", () => {
+  const skill = (requiredSections: string[]): Skill => ({
+    name: "s",
+    description: "d",
+    requires: { mcp: [], tools: [] },
+    readOnly: false,
+    body: "b",
+    dir: ".",
+    files: [],
+    completion: { requiredSections, text: [] },
+  });
+  const gaps = (pattern: string, answer: string) => completionGaps(answer, [skill([pattern])]).length;
+  // A body mention is not a section.
+  assert.equal(gaps("Conflicts", "## Answer\nThere are no conflicts between the sources."), 1);
+  // Headings are.
+  assert.equal(gaps("Conflicts", "## Answer\nx\n\n## Conflicts\nNone found."), 0);
+  assert.equal(gaps("Conflicts", "**Answer**\nx\n\n**Conflicts**\nNone found."), 0);
+  // web-research's own pattern still works.
+  assert.equal(gaps("^#+\\s*Conflicts", "## Answer\nx\n\n## Conflicts\nNone found."), 0);
+  assert.equal(gaps("^#+\\s*Conflicts", "## Answer\nThe conflicts are listed below."), 1);
 });
