@@ -72,7 +72,7 @@ test("Ctrl+C during an eval run: sandboxes are removed and completed runs are sa
       ["--import", "tsx", "test/fixtures/eval-then-sigint.mjs", "--task", "create-file", "--runs", "2", "--concurrency", "2", "--results-dir", resultsDir],
       {
         cwd: ROOT,
-        env: { ...process.env, OPENAI_API_KEY: "sk-test", OPENAI_MODEL: "fake", OPENAI_BASE_URL: api.url, SIGINT_AFTER_MS: "4000" },
+        env: { ...process.env, OPENAI_API_KEY: "sk-test", OPENAI_MODEL: "fake", OPENAI_BASE_URL: api.url, SIGINT_AFTER_TEXT: "create-file #", SIGINT_AFTER_MS: "30000" },
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
