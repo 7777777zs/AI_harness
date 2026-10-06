@@ -56,7 +56,7 @@ Values are resolved in this order, and the first one found wins:
 4. `.env` in this repository (handy while developing).
 5. Built-in defaults.
 
-Invalid values stop the harness with a clear message instead of falling back silently. Examples are a non-numeric `CONTEXT_LIMIT`, a `CONTEXT_LIMIT` below 2000, and a `COMPACT_THRESHOLD` outside 0.1–0.95. At startup, the terminal and the `run_start` log entry show each setting's effective value and its source (`option`, `env`, `.env` or `default`).
+Invalid values stop the harness with a clear message instead of falling back silently, whether they come from a flag, the environment or a `.env` file; on/off settings accept `on/true/1/yes` and `off/false/0/no` everywhere. Examples are a non-numeric `CONTEXT_LIMIT`, a `CONTEXT_LIMIT` below 2000, and a `COMPACT_THRESHOLD` outside 0.1–0.95. At startup, the terminal and the `run_start` log entry show each setting's effective value and its source (`option`, `env`, `.env` or `default`).
 
 A `.env` in the directory you run `harness` from is **never** read, so a project's own secrets don't leak into the agent. Set `HARNESS_HOME` to use a directory other than `~/.harness`. The eval runner passes every setting explicitly, so your `.env` can't change eval behaviour.
 
@@ -111,7 +111,7 @@ The harness can use tools from [MCP](https://modelcontextprotocol.io) servers (s
 | `startupTimeoutMs` | 30000 | Start + handshake + tool listing. |
 
 - **Flags:** `--mcp a,b` uses only those servers; `--no-mcp` uses none. Invalid configuration (bad JSON, unknown keys, out-of-range timeouts, unknown `--mcp` names) stops the harness at startup with a clear message.
-- **Tool names:** tools appear to the model as `mcp__<server>__<tool>`. Names are limited to `[a-zA-Z0-9_-]`, 64 characters; longer names are shortened with a hash. Two tools mapping to the same name is an error.
+- **Tool names:** tools appear to the model as `mcp__<server>__<tool>`. Names are limited to `[a-zA-Z0-9_-]`, 64 characters; longer names are shortened with a hash. If a server's tool maps to a name another server already uses, that server is disabled with a warning (`mcp_server_failed` in the log) and the run continues without it.
 - **Startup:** servers start in parallel when the run starts. A server that fails to start is reported and skipped; the run continues without it. The `run_start` log entry lists each server, its tools and which are auto-approved.
 - **Shutdown:** when the run ends (normally, with an error, or on Ctrl+C), each server's whole process tree is shut down. Its stdin is closed first so it can close its browser cleanly; whatever is still running after 3 s is killed.
 - **Results:**
@@ -265,9 +265,10 @@ The skills mostly change the **process**: coverage notes, reproducing tests, sev
 ```
 bin/harness.js        Global `harness` entry: registers tsx, runs src/index.ts
 src/
-├── index.ts          CLI entry: --cwd/--help parsing, env checks, then calls runAgent
-├── config.ts         ~/.harness paths and .env loading
+├── index.ts          CLI entry: flag parsing, env checks, then calls runAgent
+├── config.ts         ~/.harness paths, .env loading, settings resolution and validation
 ├── agent.ts          runAgent(): main loop, provider-agnostic (no `openai` import)
+├── prefinish.ts      Pre-finish checks: plan-only replies, skill completion criteria
 ├── confirm.ts        Terminal y/N prompt
 ├── process.ts        Process-tree kill, registry of long-lived children, Ctrl+C shutdown
 ├── types.ts          Tool / ToolContext types
@@ -284,18 +285,31 @@ src/
 │   └── router.ts     Skill router: one call that picks a skill before the first step
 ├── llm/
 │   ├── types.ts      LLMClient interface, Message, ToolCall, LLMResponse, ContextLengthError
-│   ├── index.ts      createClientFromEnv(): the one place that picks a provider
+│   ├── index.ts      createClientFromEnv() / modelFromEnv(): the one place that picks a provider
+│   ├── retry.ts      Retries of transient API errors (backoff, Retry-After, jitter)
 │   └── openai.ts     OpenAI Chat Completions adapter
 ├── context/
-│   ├── tokens.ts     Token estimate (API ground truth + chars/4 for new messages)
+│   ├── tokens.ts     Token estimate (API ground truth + heuristic for new messages)
 │   ├── turns.ts      Turn-group splitting and tool-call pairing validation
 │   ├── compact.ts    Level 1 (elide old tool results) and Level 2 (summarize)
-│   └── summarize.ts  LLM-backed summarizer
+│   ├── summarize.ts  LLM-backed summarizer
+│   ├── budget.ts     Size caps per result, per turn and per request
+│   ├── coverage.ts   Known and read files, the [Harness status] block
+│   ├── listing.ts    Detection and compression of file listings
+│   ├── store.ts      State kept across compactions (original results, descriptions)
+│   └── symbols.ts    Definitions extracted for elided read_file placeholders
 └── tools/
     ├── index.ts      Tool registry
     ├── util.ts       Path restriction, arg validation, truncation
+    ├── walk.ts       Directory walker shared by list_dir, glob and grep
+    ├── globMatch.ts  Glob-to-RegExp conversion
+    ├── textFormat.ts Line endings and BOM, kept on write
     ├── readFile.ts
     ├── writeFile.ts
+    ├── editFile.ts
+    ├── listDir.ts
+    ├── glob.ts
+    ├── grep.ts
     └── runShell.ts
 test/                 Unit tests (node:test)
 evals/                Eval suite: tasks/, run.ts, results/ (gitignored)
@@ -354,19 +368,20 @@ Before each model call, the harness estimates the context size. The starting poi
 - **Context-length errors:** if the API still returns one, the harness forces compaction and retries once. If that fails too, it stops with `stopReason: "error"`.
 - **Transient API errors** (429, 5xx, connection failures) are retried up to 5 times, for both the main and the compaction model.
   - Each wait is the longer of the provider's `Retry-After` and an exponential backoff (1, 2, 4, 8, 16 s, ±25% jitter), so short hints under a shared tokens-per-minute limit can't use up every retry within one minute.
+  - A `Retry-After` wait gets up to 25% added (never less than asked), so parallel jobs given the same hint don't all retry at the same moment.
   - Each wait is capped at 60 s.
   - Every retry is logged as `api_retry`.
 
 Everything is printed (`⟳ Compaction L1: ~6,744 → ~3,973 tokens …`) and logged to the JSONL file: `compaction`, `level2_rejected`, `level2_skipped`, `describe_failed`, `repeated_call`.
 
-See **Configuration** above for all settings (`CONTEXT_LIMIT`, `COMPACT_THRESHOLD`, `RECENT_BUDGET`, `COMPACT_MODEL`, `COVERAGE_CHECK`, `COVERAGE_FOOTER`, `MAX_STEPS`, `PREFINISH_MAX`).
+See **Configuration** above for all settings (`CONTEXT_LIMIT`, `COMPACT_THRESHOLD`, `RECENT_BUDGET`, `COMPACT_MODEL`, `COVERAGE_CHECK`, `COVERAGE_FOOTER`, `MAX_STEPS`, `SKILLS`, `SKILL_ROUTER`, `PREFINISH_MAX`).
 
 **Size caps:**
 - No single tool result may exceed 25% of the context limit. `read_file` results are cut at a line boundary with `[Truncated at line N of M. Use read_file with offset=N+1 …]`.
 - The results of one turn together may not exceed 50%; the largest are shrunk first.
 - Before every request, if the estimate still exceeds the limit, the newest results are shrunk (`preflight_truncated`).
 
-**Token estimates:** Chinese, Japanese and Korean characters count as about 1 token each, and other text as about 3.5 characters per token. The estimates are calibrated against the API's real token counts during each run.
+**Token estimates:** Chinese, Japanese and Korean characters count as about 0.7 tokens each, and other text as about 4 characters per token. The estimates are calibrated against the API's real token counts during each run.
 
 **Answers:**
 - If the reply after a coverage check is much shorter than the previous answer, both are kept.
@@ -395,6 +410,7 @@ Options:
 - `--runs N`: repeat each task N times.
 - `--concurrency N`: run N jobs in parallel.
 - `--keep`: keep the temp directories.
+- `--results-dir <dir>`: write results and logs there instead of `evals/results/`.
 - `--verbose`: show the agent's output.
 - `--compact-model <model>`: use a different model for compaction calls (default: the model under test).
 - `--without-mcp`: skip the tasks that need an MCP server.
@@ -411,6 +427,10 @@ All harness settings are passed to each run explicitly, so your environment and 
 - **Process cleanup:** `npx tsx evals/cleanup-check.ts` checks, without API calls, that no server or Chrome processes are left behind after normal end, error, timeout, SIGINT and a hard kill. With large tasks, keep `--concurrency` low: parallel jobs can hit your organization's tokens-per-minute limit (HTTP 429).
 
 The runner prints a summary table and saves full results to `evals/results/<timestamp>.json`. It also lists any tasks whose pass rate changed since the previous results file. Per-run agent logs go to `evals/results/logs/`.
+
+Runs that end on an API or infrastructure error (after retries) are counted as `error`, not `fail`, and are excluded from pass rates; the summary says how many there were.
+
+Ctrl+C stops the run at once: only runs completed before it are saved (as a partial results file), the MCP servers and browsers are shut down, and the temp directories are removed. Any directory that can't be removed is listed.
 
 The `long-context` task sets a context limit of 14,000 tokens, so compaction is triggered. It fails if no compaction happens.
 
