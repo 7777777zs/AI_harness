@@ -142,10 +142,21 @@ if (!["off", "available", "preloaded", "routed"].includes(args.skills!)) {
   process.exit(1);
 }
 const skillsCondition = args.skills as "off" | "available" | "preloaded" | "routed";
-const selected = (args.task ? tasks.filter((t) => t.id === args.task) : tasks).filter((t) => !(args["without-mcp"] && t.mcpServers))
+const requested = args.task ? tasks.filter((t) => t.id === args.task) : tasks;
+if (requested.length === 0) {
+  console.error(`Error: unknown task "${args.task}". Available: ${tasks.map((t) => t.id).join(", ")}`);
+  process.exit(1);
+}
+const selected = requested
+  .filter((t) => !(args["without-mcp"] && t.mcpServers))
   .filter((t) => !(args["without-skill-tasks"] && t.expectedSkill));
 if (selected.length === 0) {
-  console.error(`Error: unknown task "${args.task}". Available: ${tasks.map((t) => t.id).join(", ")}`);
+  // Only reachable with --task: the requested task exists but a --without-* option removed it.
+  const t = requested[0]!;
+  const why = args["without-mcp"] && t.mcpServers
+    ? "needs an MCP server, and --without-mcp skips it"
+    : "is a with/without-skills task, and --without-skill-tasks skips it";
+  console.error(`Error: task "${t.id}" ${why}`);
   process.exit(1);
 }
 

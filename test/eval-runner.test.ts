@@ -145,3 +145,21 @@ test("removeDirs tries every directory and returns the ones it could not remove"
   assert.deepEqual(removed, ["a", "c"]);
   assert.deepEqual(failed, ["busy"]);
 });
+
+test("a --task removed by --without-mcp / --without-skill-tasks says why, instead of 'unknown task'", async () => {
+  for (const [argv, why] of [
+    [["--task", "read-page", "--without-mcp"], /task "read-page" needs an MCP server, and --without-mcp skips it/],
+    [["--task", "code-review", "--without-skill-tasks"], /task "code-review" is a with\/without-skills task, and --without-skill-tasks skips it/],
+  ] as const) {
+    const child = spawn(process.execPath, ["--import", "tsx", "evals/run.ts", ...argv], {
+      cwd: ROOT,
+      env: { ...process.env, OPENAI_API_KEY: "sk-test", OPENAI_MODEL: "fake" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stderr = "";
+    child.stderr.on("data", (d) => (stderr += d));
+    assert.equal(await new Promise<number | null>((r) => child.on("exit", r)), 1);
+    assert.match(stderr, why);
+    assert.ok(!stderr.includes("unknown task"), stderr);
+  }
+});
