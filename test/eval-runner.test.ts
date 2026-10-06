@@ -4,11 +4,11 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { onInterrupt, registerChild, registerCleanup, shutdownAll } from "../src/process.js";
 import { removeDirs } from "../evals/helpers.js";
+import { fakeApi } from "./fake-api.js";
 
 const ROOT = path.join(import.meta.dirname, "..");
 const created: string[] = [];
@@ -27,39 +27,6 @@ test("shutdown cleanups run after the tracked children are shut down", async () 
   unregister();
   assert.deepEqual(order, ["child", "cleanup"]);
 });
-
-/** Chat completions: the first request gets a final answer, every later one hangs. */
-function fakeApi(): Promise<{ url: string; close: () => void }> {
-  let calls = 0;
-  const server = http.createServer((req, res) => {
-    req.resume();
-    req.on("end", () => {
-      if (calls++ > 0) return; // hang
-      res.writeHead(200, { "content-type": "application/json" }).end(
-        JSON.stringify({
-          id: "x",
-          object: "chat.completion",
-          created: 0,
-          model: "fake",
-          choices: [{ index: 0, message: { role: "assistant", content: "done" }, finish_reason: "stop" }],
-          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-        }),
-      );
-    });
-  });
-  return new Promise((resolve) =>
-    server.listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      resolve({
-        url: `http://127.0.0.1:${port}/v1`,
-        close: () => {
-          server.closeAllConnections();
-          server.close();
-        },
-      });
-    }),
-  );
-}
 
 const evalSandboxes = () => new Set(fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith("ai-harness-eval-")));
 

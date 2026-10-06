@@ -3,7 +3,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { runAgent } from "./agent.js";
-import { ConfigError, harnessHome, loadEnv, logsDir, resolveConfig, type SettingOverrides } from "./config.js";
+import {
+  ConfigError,
+  harnessHome,
+  loadEnv,
+  logsDir,
+  PACKAGE_ROOT,
+  parseNumber,
+  parseOnOff,
+  resolveConfig,
+  type SettingOverrides,
+} from "./config.js";
 import { missingEnv, modelFromEnv } from "./llm/index.js";
 import { mcpConfigPath, resolveMcpServers, type McpRunOptions } from "./mcp/config.js";
 import { installShutdownHandlers } from "./process.js";
@@ -26,7 +36,7 @@ Options:
   --no-skills                 Turn the skills system off (SKILLS=off)
   -h, --help                  Show this help
 
-Settings precedence: these flags > environment variables > ${path.join(harnessHome(), ".env")} > defaults.
+Settings precedence: these flags > environment variables > ${path.join(harnessHome(), ".env")} > ${path.join(PACKAGE_ROOT, ".env")} (this repository) > defaults.
 MCP servers are read from ${mcpConfigPath()}.
 Skills are read from ${bundledSkillsDir()} and ${userSkillsDir()} (user skills win on a name clash).
 Logs are written to ${logsDir()}.`;
@@ -75,32 +85,34 @@ loadEnv();
 const missing = missingEnv();
 if (missing) fail(`${missing} Set it in the environment or in ${path.join(harnessHome(), ".env")}.`);
 
-// Flags are validated by the same rules as env/.env values (resolveConfig throws ConfigError).
-const flag = (name: string) => args.values[name as keyof typeof args.values] as string | undefined;
-const num = (name: string) => {
-  const v = flag(name);
-  if (v === undefined) return undefined;
-  const n = Number(v);
-  if (!Number.isFinite(n)) fail(`--${name}="${v}" is not a number`);
-  return n;
-};
-const onOff = (name: string) => {
-  const v = flag(name)?.toLowerCase();
-  if (v === undefined) return undefined;
-  if (v === "on" || v === "off") return v === "on";
-  fail(`--${name} must be on or off`);
-};
+// Settings flags: converted with the same parsers as env/.env values; resolveConfig then applies
+// the same range checks, naming the flag in its errors.
+const SETTING_FLAGS: [flag: string, key: keyof SettingOverrides, kind: "integer" | "number" | "onOff" | "string"][] = [
+  ["context-limit", "contextLimit", "integer"],
+  ["compact-threshold", "compactThreshold", "number"],
+  ["recent-budget", "recentBudget", "integer"],
+  ["compact-model", "compactModel", "string"],
+  ["coverage-check", "coverageCheck", "onOff"],
+  ["coverage-footer", "coverageFooter", "onOff"],
+  ["max-steps", "maxSteps", "integer"],
+];
 const overrides: SettingOverrides = {};
-const set = <K extends keyof SettingOverrides>(key: K, value: SettingOverrides[K] | undefined) => {
-  if (value !== undefined) overrides[key] = value;
-};
-set("contextLimit", num("context-limit"));
-set("compactThreshold", num("compact-threshold"));
-set("recentBudget", num("recent-budget"));
-set("compactModel", flag("compact-model"));
-set("coverageCheck", onOff("coverage-check"));
-set("coverageFooter", onOff("coverage-footer"));
-set("maxSteps", num("max-steps"));
+const flagLabels: Partial<Record<keyof SettingOverrides, string>> = {};
+const flagErrors: string[] = [];
+for (const [name, key, kind] of SETTING_FLAGS) {
+  const raw = args.values[name as keyof typeof args.values] as string | undefined;
+  if (raw === undefined) continue;
+  const label = `--${name}`;
+  flagLabels[key] = label;
+  try {
+    const value =
+      kind === "onOff" ? parseOnOff(raw, label) : kind === "string" ? raw : parseNumber(-Infinity, Infinity, kind === "integer")(raw, label);
+    Object.assign(overrides, { [key]: value });
+  } catch (err) {
+    if (!(err instanceof ConfigError)) throw err;
+    flagErrors.push(err.message);
+  }
+}
 const mcp: McpRunOptions = {};
 if (args.values["no-mcp"]) mcp.disabled = true;
 if (args.values.mcp !== undefined) {
@@ -114,7 +126,8 @@ if (args.values["no-skills"]) {
 }
 try {
   // Fail fast, before any output, on invalid settings from any source (including mcp.json).
-  const config = resolveConfig(overrides);
+  if (flagErrors.length) throw new ConfigError(flagErrors[0]!);
+  const config = resolveConfig(overrides, process.env, flagLabels);
   resolveMcpServers(mcp);
   if (preload.length) {
     if (!config.skillsEnabled) throw new ConfigError(`--skill: skills are off (SKILLS=off)`);

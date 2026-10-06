@@ -117,8 +117,36 @@ export const DEFAULTS = {
   prefinishMax: 2,
 } as const;
 
-/** Resolve settings: options > process env > .env files > defaults. Throws ConfigError on bad values. */
-export function resolveConfig(overrides: SettingOverrides = {}, env: NodeJS.ProcessEnv = process.env): HarnessConfig {
+/**
+ * A number setting: finite, an integer if required, within [min, max]. `label` names where the
+ * value came from in the error (e.g. "CONTEXT_LIMIT in ~/.harness/.env" or "--context-limit").
+ */
+export const parseNumber = (min: number, max: number, integer: boolean) => (raw: string, label: string) => {
+  const n = Number(raw);
+  if (raw.trim() === "" || !Number.isFinite(n) || (integer && !Number.isInteger(n))) {
+    throw new ConfigError(`${label}="${raw}" is not ${integer ? "an integer" : "a number"}`);
+  }
+  if (n < min || n > max) throw new ConfigError(`${label}=${raw} is out of range (${min}–${max})`);
+  return n;
+};
+
+/** An on/off setting: on/true/1/yes or off/false/0/no, any case. */
+export function parseOnOff(raw: string, label: string): boolean {
+  const v = raw.toLowerCase();
+  if (["on", "true", "1", "yes"].includes(v)) return true;
+  if (["off", "false", "0", "no"].includes(v)) return false;
+  throw new ConfigError(`${label}="${raw}" must be on or off`);
+}
+
+/**
+ * Resolve settings: options > process env > .env files > defaults. Throws ConfigError on bad values.
+ * `optionLabels` names options in errors (the CLI passes its flag names); default "option <key>".
+ */
+export function resolveConfig(
+  overrides: SettingOverrides = {},
+  env: NodeJS.ProcessEnv = process.env,
+  optionLabels: Partial<Record<keyof SettingOverrides, string>> = {},
+): HarnessConfig {
   const sources = {} as HarnessConfig["sources"];
   const where = (key: keyof SettingOverrides) => {
     const name = ENV_NAMES[key];
@@ -128,7 +156,7 @@ export function resolveConfig(overrides: SettingOverrides = {}, env: NodeJS.Proc
     const option = overrides[key];
     if (option !== undefined) {
       sources[key] = "option";
-      return parse(String(option), `option ${key}`);
+      return parse(String(option), optionLabels[key] ?? `option ${key}`);
     }
     const raw = env[ENV_NAMES[key]];
     if (raw !== undefined && raw.trim() !== "") {
@@ -138,20 +166,8 @@ export function resolveConfig(overrides: SettingOverrides = {}, env: NodeJS.Proc
     sources[key] = "default";
     return fallback;
   };
-  const number = (min: number, max: number, integer: boolean) => (raw: string, label: string) => {
-    const n = Number(raw);
-    if (!Number.isFinite(n) || (integer && !Number.isInteger(n))) {
-      throw new ConfigError(`${label}="${raw}" is not ${integer ? "an integer" : "a number"}`);
-    }
-    if (n < min || n > max) throw new ConfigError(`${label}=${raw} is out of range (${min}–${max})`);
-    return n;
-  };
-  const onOff = (raw: string, label: string) => {
-    const v = raw.toLowerCase();
-    if (["on", "true", "1", "yes"].includes(v)) return true;
-    if (["off", "false", "0", "no"].includes(v)) return false;
-    throw new ConfigError(`${label}="${raw}" must be on or off`);
-  };
+  const number = parseNumber;
+  const onOff = parseOnOff;
 
   const contextLimit = pick("contextLimit", number(2_000, 10_000_000, true), DEFAULTS.contextLimit);
   const compactThreshold = pick("compactThreshold", number(0.1, 0.95, false), DEFAULTS.compactThreshold);
