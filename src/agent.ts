@@ -827,8 +827,13 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         // MCP results are paginated instead: the rest stays readable via read_tool_result, whose
         // output is already one page within these limits and is kept as it is.
         let content = tool?.source?.kind === "mcp" ? pages.paginate(raw, pageLimits()) : tool?.untrusted ? raw : truncate(raw);
-        if (tool?.untrusted && !raw.startsWith("Error:") && raw !== DENIED) {
-          content = `${untrustedTag(call.name)}\n${content}\n${untrustedEndTag(call.name)}`;
+        // Untrusted results are wrapped in tags, errors too (an MCP error's text can come from the
+        // page); "Error:" stays first because failed calls are recognized by it.
+        // Not for answers the harness gave without running the tool (denied, bad args, read-only block).
+        if (tool?.untrusted && raw !== DENIED && !call.argsError && !blocked) {
+          const failed = content.startsWith("Error:");
+          const body = failed ? content.slice("Error:".length).trimStart() : content;
+          content = `${failed ? "Error: " : ""}${untrustedTag(call.name)}\n${body}\n${untrustedEndTag(call.name)}`;
         }
         if (tokensOf(content) > resultCap) {
           const before = tokensOf(content);

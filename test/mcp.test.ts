@@ -56,9 +56,11 @@ function scripted(steps: Call[][], final = "done") {
   /** Tool results by call id across all requests. */
   const results = () => {
     const out = new Map<string, string>();
-    // Without the untrusted-content tag (checked separately).
+    // Without the untrusted-content tags (checked separately); on errors they follow "Error: ".
+    const untag = (s: string) =>
+      s.replace(/^(Error: )?\[Untrusted content from [^\]]*\]\n/, "$1").replace(/\n\[End of untrusted content from [^\]]*\]$/, "");
     for (const r of requests) {
-      for (const m of r.messages) if (m.role === "tool") out.set(m.toolCallId, m.content.replace(/^\[Untrusted content from [^\]]*\]\n/, "").replace(/\n\[End of untrusted content from [^\]]*\]$/, ""));
+      for (const m of r.messages) if (m.role === "tool") out.set(m.toolCallId, untag(m.content));
     }
     return out;
   };
@@ -192,10 +194,11 @@ test("result conversion: text joined, image replaced by a note with its size, re
     ],
   ]);
   await runAgent({ task: "x", cwd: sandbox(), client, quiet: true, autoApprove: true, mcp: { servers: { mock: mock() } } });
-  // Successful MCP results start with the untrusted-content tag; errors don't.
+  // MCP results are wrapped in the untrusted-content tags; errors too (their text can come from
+  // the page), after the "Error:" prefix that marks a failed call.
   const raw = new Map(requests[1]!.messages.flatMap((m) => (m.role === "tool" ? [[m.toolCallId, m.content] as const] : [])));
   assert.equal(raw.get("c0_0"), `${untrustedTag("mcp__mock__echo")}\necho: hi\n${untrustedEndTag("mcp__mock__echo")}`);
-  assert.equal(raw.get("c0_2"), "Error: something broke");
+  assert.equal(raw.get("c0_2"), `Error: ${untrustedTag("mcp__mock__fail")}\nsomething broke\n${untrustedEndTag("mcp__mock__fail")}`);
   const r = results();
   assert.equal(r.get("c0_0"), "echo: hi");
   assert.equal(r.get("c0_1"), "screenshot taken\n[image omitted: image/png, 1280x720, from mcp__mock__snap]");
