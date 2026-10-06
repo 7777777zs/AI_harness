@@ -4,7 +4,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { runAgent } from "./agent.js";
 import { ConfigError, harnessHome, loadEnv, logsDir, resolveConfig, type SettingOverrides } from "./config.js";
-import { missingEnv } from "./llm/index.js";
+import { missingEnv, modelFromEnv } from "./llm/index.js";
 import { mcpConfigPath, resolveMcpServers, type McpRunOptions } from "./mcp/config.js";
 import { installShutdownHandlers } from "./process.js";
 import { bundledSkillsDir, discoverSkills, userSkillsDir } from "./skills/load.js";
@@ -129,7 +129,7 @@ try {
 
 // Ctrl+C / console close: shut down MCP server process trees before exiting.
 installShutdownHandlers();
-console.log(`Task: ${task}\nModel: ${process.env.OPENAI_MODEL}\nDirectory: ${cwd}`);
+console.log(`Task: ${task}\nModel: ${modelFromEnv().model}\nDirectory: ${cwd}`);
 const result = await runAgent({ task, cwd, logDir: logsDir(), mcp, skills: { preload }, ...overrides });
 if (result.stopReason === "error") {
   console.error(`\nFatal: ${result.error}`);

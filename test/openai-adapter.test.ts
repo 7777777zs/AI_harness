@@ -1,6 +1,10 @@
 // OpenAI adapter tests with a stubbed global fetch. No real API calls.
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { envFileSources } from "../src/config.js";
+import { modelFromEnv } from "../src/llm/index.js";
 import { OpenAIClient } from "../src/llm/openai.js";
 import { ContextLengthError, type Message } from "../src/llm/types.js";
 
@@ -87,4 +91,26 @@ test("adapter: empty tools array is omitted from the request; tool messages keep
     { id: "call_9", type: "function", function: { name: "read_file", arguments: '{"path":"x"}' } },
   ]);
   assert.deepEqual(body.messages[3], { role: "tool", tool_call_id: "call_9", content: "data" });
+});
+
+// ---- Provider boundary ----
+
+test("agent.ts stays provider-agnostic: nothing OpenAI-specific outside src/llm/", () => {
+  const source = fs.readFileSync(path.join(import.meta.dirname, "..", "src", "agent.ts"), "utf8");
+  assert.doesNotMatch(source, /OPENAI|from "openai"/);
+});
+
+test("modelFromEnv: the model under test and where it was set (environment or a .env file)", () => {
+  const saved = process.env.OPENAI_MODEL;
+  try {
+    process.env.OPENAI_MODEL = "model-x";
+    envFileSources.delete("OPENAI_MODEL");
+    assert.deepEqual(modelFromEnv(), { model: "model-x", source: "env" });
+    envFileSources.set("OPENAI_MODEL", "/home/u/.harness/.env");
+    assert.deepEqual(modelFromEnv(), { model: "model-x", source: ".env" });
+  } finally {
+    envFileSources.delete("OPENAI_MODEL");
+    if (saved === undefined) delete process.env.OPENAI_MODEL;
+    else process.env.OPENAI_MODEL = saved;
+  }
 });

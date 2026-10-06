@@ -4,7 +4,7 @@ import path from "node:path";
 import { ContextLengthError, LLMApiError } from "./llm/types.js";
 import { withRetry, type RetryOptions } from "./llm/retry.js";
 import type { LLMClient, LLMResponse, Message, ToolCall, Usage } from "./llm/types.js";
-import { createClientFromEnv } from "./llm/index.js";
+import { createClientFromEnv, modelFromEnv } from "./llm/index.js";
 import { DENIED, type Tool, type ToolContext } from "./types.js";
 import { tools as defaultTools } from "./tools/index.js";
 import { truncate } from "./tools/util.js";
@@ -13,7 +13,6 @@ import {
   ConfigError,
   DEFAULTS,
   describeConfig,
-  envFileSources,
   harnessVersion,
   logsDir,
   resolveConfig,
@@ -478,9 +477,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       });
     const rawClient = opts.client ?? createClientFromEnv();
     const client = retrying("main", rawClient);
-    const mainModel = opts.client ? "(custom client)" : process.env.OPENAI_MODEL;
-    const modelSource = opts.client ? "option" : envFileSources.has("OPENAI_MODEL") ? ".env" : "env";
-    const separateCompactModel = config.compactModel !== undefined && config.compactModel !== process.env.OPENAI_MODEL;
+    const envModel = modelFromEnv();
+    const mainModel = opts.client ? "(custom client)" : envModel.model;
+    const modelSource = opts.client ? "option" : envModel.source;
+    const separateCompactModel = config.compactModel !== undefined && config.compactModel !== envModel.model;
     const compactClient = retrying(
       "compaction",
       opts.compactClient ?? (separateCompactModel && !opts.client ? createClientFromEnv(config.compactModel) : rawClient),

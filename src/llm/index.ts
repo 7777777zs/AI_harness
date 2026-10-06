@@ -1,5 +1,6 @@
 // The single place that chooses an LLM provider. Adding a provider means a new
 // adapter file plus a branch here; agent.ts stays unchanged.
+import { envFileSources } from "../config.js";
 import { OpenAIClient } from "./openai.js";
 import type { LLMClient } from "./types.js";
 
@@ -15,6 +16,11 @@ export function missingEnv(): string | null {
     if (!process.env[name]) return message;
   }
   return null;
+}
+
+/** The model under test (OPENAI_MODEL) and where it was set: the environment or a .env file. */
+export function modelFromEnv(): { model: string | undefined; source: "env" | ".env" } {
+  return { model: process.env.OPENAI_MODEL, source: envFileSources.has("OPENAI_MODEL") ? ".env" : "env" };
 }
 
 /** A client for `model`, or for OPENAI_MODEL when no model is given (e.g. COMPACT_MODEL unset). */
