@@ -1,5 +1,6 @@
 // First-step check for web tasks: does the model open the task's URL with an MCP tool, or refuse
-// ("I cannot access local URLs") or look for it as a file? Sends only the first request of each
+// ("I cannot access local URLs"), look for it as a file, or call only MCP tools that don't load it
+// (list_pages, a snapshot of the blank tab)? Sends only the first request of each
 // web task, built from the current system prompt and the chrome-devtools tool definitions in
 // evals/fixtures/ (no browser, no MCP server). Each call gets a random working directory and port:
 // gpt-4.1-mini's choice is close to deterministic for one exact prompt but flips with such details,
@@ -45,7 +46,9 @@ let inputTokens = 0;
 let outputTokens = 0;
 let totalMisses = 0;
 for (const task of webTasks) {
-  const counts = { mcp: 0, local: 0, text: 0 };
+  // opened: an MCP call with the task's URL in its arguments (e.g. new_page, navigate_page).
+  // otherMcp: MCP calls that don't load it (e.g. only list_pages, or a snapshot of the blank tab).
+  const counts = { opened: 0, otherMcp: 0, local: 0, text: 0 };
   const examples: string[] = [];
   await Promise.all(
     Array.from({ length: runs }, async () => {
@@ -63,9 +66,11 @@ for (const task of webTasks) {
       inputTokens += r.usage.inputTokens;
       outputTokens += r.usage.outputTokens;
       const names = r.toolCalls.map((c) => c.name);
-      if (names.some((n) => n.startsWith("mcp__"))) counts.mcp++;
+      const host = new URL(baseUrl).host;
+      if (r.toolCalls.some((c) => c.name.startsWith("mcp__") && JSON.stringify(c.args ?? {}).includes(host))) counts.opened++;
       else if (names.length) {
-        counts.local++;
+        if (names.some((n) => n.startsWith("mcp__"))) counts.otherMcp++;
+        else counts.local++;
         examples.push(`tools: ${names.join(", ")}`);
       } else {
         counts.text++;
@@ -73,9 +78,11 @@ for (const task of webTasks) {
       }
     }),
   );
-  const misses = counts.local + counts.text;
-  totalMisses += misses;
-  console.log(`${task.id.padEnd(18)} MCP first ${counts.mcp}/${runs}  refused ${counts.text}  local tools ${counts.local}`);
+  totalMisses += runs - counts.opened;
+  console.log(
+    `${task.id.padEnd(18)} opened the URL ${counts.opened}/${runs}  other MCP only ${counts.otherMcp}  ` +
+      `local tools only ${counts.local}  refused ${counts.text}`,
+  );
   for (const e of examples.slice(0, 3)) console.log(`  ${e}`);
 }
 // gpt-4.1-mini list prices per million tokens; only an estimate for other models.

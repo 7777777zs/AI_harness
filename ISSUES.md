@@ -31,6 +31,7 @@ The decisions below come from a review of the open issues after Phase 6 (2026-10
 | – | [Code review: behavior and docs findings](#code-review-2026-10-05) | Done (branch `review-round2`) | /tdd |
 | – | [Code review: deferred refactors](#deferred-refactors) | Defer (next round) | — |
 | – | [N4: gpt-4.1-mini refuses to open local URLs](#n4-local-url-refusals-2026-10-06) | Done (branch `fix-url-refusal`) | /diagnosing-bugs |
+| – | [N5: gives up after seeing only the blank tab](#n5-giving-up-after-seeing-only-the-blank-tab-2026-10-06) | Todo | /diagnosing-bugs |
 | – | [Accepted limitations](#accepted-limitations) | Accept | — |
 
 ---
@@ -257,9 +258,18 @@ None of these changes behavior; each is worth doing when the code around it chan
 - **Measure:** with a random directory and port per call, the current prompt missed 6/60 first steps on prompt-injection (10%), 1/40 on read-page, 0/40 on multi-page.
 - **Hypotheses tested (60 calls each, prompt-injection):** moving the MCP tool list right after the first sentence: 0/60; removing the untrusted-content paragraph: 0/60; rewording only its "visit other sites" clause: 4/60 and 2/60 (so not that clause); adding one rule that a URL is not a file and is opened with the MCP tool that loads URLs: 0/60. The prompt sits at a tipping point, and several changes push it to tool use. The URL rule was chosen: it addresses both failure modes and leaves the safety paragraph unchanged.
 - **Fix:** `mcpToolsNote()` adds that rule. `baseSystemPrompt()` is exported so `evals/url-check.ts` builds exactly the request the harness sends (checked byte for byte against a logged request, without the rule).
-- **Result:** `evals/url-check.ts`: prompt-injection 60/60, read-page, multi-page, long-page and web-research 20/20 each.
+- **Result:** no first-step refusals afterwards: 0 in 220 first-step calls across the five web tasks, and 0 in 26 end-to-end runs (TEST_REPORT.md, "N4").
 - **Regression guard:** a unit test asserts the rule is in the system prompt. Model behavior has no deterministic seam; `evals/url-check.ts` is the behavioral check.
-- **Not covered:** later steps (e.g. giving up after a snapshot), and models other than gpt-4.1-mini.
+- **Not fixed:** giving up in a later step, which is now N5. Models other than gpt-4.1-mini were not checked.
+
+## N5: giving up after seeing only the blank tab (2026-10-06)
+
+**Status:** Todo (`/diagnosing-bugs`). It was found while verifying N4: 4 of 26 end-to-end web runs.
+
+- **Symptom:** step 1 calls `list_pages` (sometimes with `select_page`/`take_snapshot` of the blank tab, or `read_file index.html`) but not `new_page`. Seeing only `about:blank`, the model says the page is not accessible and asks for its content. In one variant, `wait_for` times out after `navigate_page`, and the model gives up without a snapshot.
+- **Rate:** step 1 doesn't open the URL in 9/40 (multi-page) and 5/40 (prompt-injection) calls. Most of those runs still open it in step 2; the failures are the ones that stop there.
+- **Feedback loop to build:** replay the logged step-2 request (the `list_pages` result showing only `about:blank`) with a random port, and count "gave up" vs "opened the URL".
+- **Candidate fixes to test:** state in the URL rule that the browser starts with a blank tab, so a listed page or snapshot says nothing about the URL; or, harness-side, mention the task's URL in the `list_pages` result when it is not open.
 
 ## Accepted limitations
 
