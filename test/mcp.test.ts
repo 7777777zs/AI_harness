@@ -101,6 +101,9 @@ test("discovery: every tool is exposed with a valid name; read_tool_result and t
   // The system prompt lists what each MCP tool does.
   assert.ok(system.includes("\n- mcp__mock__echo: Echo the text back\n"), system);
   assert.ok(system.endsWith(UNTRUSTED_CONTENT_NOTE));
+  // A URL in the task is a web address to open with an MCP tool, not a file (gpt-4.1-mini refused
+  // local URLs in ~10% of first steps without this; see evals/url-check.ts).
+  assert.match(system, /A URL in the task \(including localhost and 127\.0\.0\.1\) is not a file in the working directory/);
   // run_start lists the servers, tool counts and auto-approved tools.
   const start = logOf(result.logFile).find((l) => l.type === "run_start");
   assert.equal(start.mcp[0].name, "mock");

@@ -1,0 +1,165 @@
+[
+  {
+    "name": "mcp__chrome-devtools__list_pages",
+    "description": "Get a list of pages open in the browser. (MCP server \"chrome-devtools\")",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": {}
+    }
+  },
+  {
+    "name": "mcp__chrome-devtools__navigate_page",
+    "description": "Go to a URL, or back, forward, or reload. Use project URL if not specified otherwise. (MCP server \"chrome-devtools\")",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "type": "number",
+          "description": "Targets a specific page by ID."
+        },
+        "type": {
+          "description": "Navigate the page by URL, back or forward in history, or reload.",
+          "type": "string",
+          "enum": [
+            "url",
+            "back",
+            "forward",
+            "reload"
+          ]
+        },
+        "url": {
+          "description": "Target URL (only type=url)",
+          "type": "string"
+        },
+        "ignoreCache": {
+          "description": "Whether to ignore cache on reload.",
+          "type": "boolean"
+        },
+        "handleBeforeUnload": {
+          "description": "Whether to auto accept or beforeunload dialogs triggered by this navigation. Default is accept.",
+          "type": "string",
+          "enum": [
+            "accept",
+            "dismiss"
+          ]
+        },
+        "timeout": {
+          "description": "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "additionalProperties": {}
+    }
+  },
+  {
+    "name": "mcp__chrome-devtools__new_page",
+    "description": "Open a new tab and load a URL. Use project URL if not specified otherwise. (MCP server \"chrome-devtools\")",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "URL to load in a new page."
+        },
+        "background": {
+          "description": "Whether to open the page in the background without bringing it to the front. Default is false (foreground).",
+          "type": "boolean"
+        },
+        "isolatedContext": {
+          "description": "If specified, the page is created in an isolated browser context with the given name. Pages in the same browser context share cookies and storage. Pages in different browser contexts are fully isolated (useful for clean-slate testing of cookies and authentication).",
+          "type": "string"
+        },
+        "timeout": {
+          "description": "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": {}
+    }
+  },
+  {
+    "name": "mcp__chrome-devtools__select_page",
+    "description": "Select a page as a context for future tool calls. (MCP server \"chrome-devtools\")",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "type": "number",
+          "description": "The ID of the page to select. Call list_pages to get available pages."
+        },
+        "bringToFront": {
+          "description": "Whether to focus the page and bring it to the top.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "additionalProperties": {}
+    }
+  },
+  {
+    "name": "mcp__chrome-devtools__take_snapshot",
+    "description": "Take a text snapshot of the target page based on the a11y tree. The snapshot lists page elements along with a unique\nidentifier (uid). Always use the latest snapshot. Prefer taking a snapshot over taking a screenshot. The snapshot indicates the element selected\nin the DevTools Elements panel (if any). (MCP server \"chrome-devtools\")",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "type": "number",
+          "description": "Targets a specific page by ID."
+        },
+        "verbose": {
+          "description": "Whether to include all possible information available in the full a11y tree. Default is false.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "additionalProperties": {}
+    }
+  },
+  {
+    "name": "mcp__chrome-devtools__wait_for",
+    "description": "Wait for the specified text to appear on the selected page. (MCP server \"chrome-devtools\")",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "type": "number",
+          "description": "Targets a specific page by ID."
+        },
+        "text": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Non-empty list of texts. Resolves when any value appears on the page."
+        },
+        "timeout": {
+          "description": "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "pageId",
+        "text"
+      ],
+      "additionalProperties": {}
+    }
+  }
+]

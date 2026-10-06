@@ -35,6 +35,30 @@ import { completionGaps, completionMessage, isPlanOnly, PLAN_NUDGE } from "./pre
 
 export const MAX_STEPS = DEFAULTS.maxSteps;
 
+/** The system prompt before the MCP and skills sections are added. */
+export function baseSystemPrompt(cwd: string, platform: string = process.platform): string {
+  return (
+    `You are a helpful coding agent working in the directory ${cwd} on ${platform}. ` +
+    "Use the provided tools to inspect and change files or run commands. " +
+    "All file paths must be relative to the working directory; paths outside it are rejected. " +
+    "If a tool returns an error or the user denies an action, adapt your approach. " +
+    "Use the dedicated tools instead of run_shell to explore and edit code: list_dir for the project structure " +
+    "(it skips .gitignore'd paths, .git, node_modules, virtualenvs, dist and build), glob to find files by name " +
+    "(e.g. **/*.py), grep to find definitions and usages (results are path:line: text), and read_file with offset " +
+    "and limit for the relevant part of a large file. Change existing files with edit_file: old_str must match " +
+    "exactly and be unique, so include a few surrounding lines. Use write_file only for new files or complete " +
+    "rewrites, and run_shell for running programs, tests and builds, not for listing or searching files. " +
+    "Tool output paths are relative to the working directory and use forward slashes. " +
+    "When reading multiple files, briefly write down the key findings for each file in your reply text before moving on, " +
+    "since old tool results may be removed from context. " +
+    'A "[Harness status]" message lists the project files known from your listings and which ones you have not read yet; ' +
+    "use it instead of listing the files again. " +
+    "If you could not cover everything the task asked for (e.g. files or directories you did not read), " +
+    "say so explicitly in your final answer and list what was skipped. " +
+    "When the task is complete, reply with a concise final answer and no tool calls."
+  );
+}
+
 /** Added to the system prompt when MCP tools are available. */
 export function mcpToolsNote(tools: Pick<Tool, "name" | "description">[]): string {
   // What each tool does, from the first sentence of its own description (without the server suffix).
@@ -45,7 +69,11 @@ export function mcpToolsNote(tools: Pick<Tool, "name" | "description">[]): strin
   return (
     "\n\nYou also have these tools from MCP servers. They are available and working: whenever the task needs what " +
     "they do, use them directly instead of saying you can't or asking first (this includes local addresses such as " +
-    `localhost or 127.0.0.1 if a tool can open them):\n${lines.join("\n")}\n`
+    `localhost or 127.0.0.1 if a tool can open them):\n${lines.join("\n")}\n` +
+    // Without this, gpt-4.1-mini answered "I cannot access local URLs" on ~10% of first steps, or
+    // looked for the URL as a file (evals/url-check.ts measures it).
+    "A URL in the task (including localhost and 127.0.0.1) is not a file in the working directory: " +
+    "open it with the MCP tool that loads URLs, if there is one, then read the page with its tools.\n"
   );
 }
 /** First line of every successful MCP result, so the model can't mistake it for instructions. */
@@ -359,28 +387,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
   let step = 0;
 
   let messages: Message[] = [
-    {
-      role: "system",
-      content:
-        `You are a helpful coding agent working in the directory ${cwd} on ${process.platform}. ` +
-        "Use the provided tools to inspect and change files or run commands. " +
-        "All file paths must be relative to the working directory; paths outside it are rejected. " +
-        "If a tool returns an error or the user denies an action, adapt your approach. " +
-        "Use the dedicated tools instead of run_shell to explore and edit code: list_dir for the project structure " +
-        "(it skips .gitignore'd paths, .git, node_modules, virtualenvs, dist and build), glob to find files by name " +
-        "(e.g. **/*.py), grep to find definitions and usages (results are path:line: text), and read_file with offset " +
-        "and limit for the relevant part of a large file. Change existing files with edit_file: old_str must match " +
-        "exactly and be unique, so include a few surrounding lines. Use write_file only for new files or complete " +
-        "rewrites, and run_shell for running programs, tests and builds, not for listing or searching files. " +
-        "Tool output paths are relative to the working directory and use forward slashes. " +
-        "When reading multiple files, briefly write down the key findings for each file in your reply text before moving on, " +
-        "since old tool results may be removed from context. " +
-        'A "[Harness status]" message lists the project files known from your listings and which ones you have not read yet; ' +
-        "use it instead of listing the files again. " +
-        "If you could not cover everything the task asked for (e.g. files or directories you did not read), " +
-        "say so explicitly in your final answer and list what was skipped. " +
-        "When the task is complete, reply with a concise final answer and no tool calls.",
-    },
+    { role: "system", content: baseSystemPrompt(cwd) },
     { role: "user", content: opts.task },
   ];
 

@@ -424,6 +424,7 @@ All harness settings are passed to each run explicitly, so your environment and 
 - **Pages:** each run serves its fixture pages from a local HTTP server on `127.0.0.1`; evals never use the public internet.
 - **Browser:** each run starts its own headless browser with an isolated profile.
 - **Skill evals without API calls:** `npx tsx evals/rescore-skills.ts` re-scores past skill runs from their logs (outcome vs process). `npx tsx evals/route-check.ts [--runs N]` runs only the skill router over the tasks and reports precision and recall (one cheap call per task).
+- **First-step URL check:** `npx tsx evals/url-check.ts [--runs N] [--task id]` sends only the first request of each web task (current system prompt, chrome-devtools tool definitions from `evals/fixtures/`, no browser) with a random working directory and port per call, and counts how often the model opens the URL with an MCP tool instead of refusing or looking for a file. About $0.02 per 20 calls.
 - **Process cleanup:** `npx tsx evals/cleanup-check.ts` checks, without API calls, that no server or Chrome processes are left behind after normal end, error, timeout, SIGINT and a hard kill. With large tasks, keep `--concurrency` low: parallel jobs can hit your organization's tokens-per-minute limit (HTTP 429).
 
 The runner prints a summary table and saves full results to `evals/results/<timestamp>.json`. It also lists any tasks whose pass rate changed since the previous results file. Per-run agent logs go to `evals/results/logs/`.

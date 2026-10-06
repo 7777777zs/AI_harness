@@ -30,6 +30,7 @@ The decisions below come from a review of the open issues after Phase 6 (2026-10
 | – | [T5: clean up leftovers](#t5-clean-up-leftovers) | Todo (needs confirmation) | — |
 | – | [Code review: behavior and docs findings](#code-review-2026-10-05) | Done (branch `review-round2`) | /tdd |
 | – | [Code review: deferred refactors](#deferred-refactors) | Defer (next round) | — |
+| – | [N4: gpt-4.1-mini refuses to open local URLs](#n4-local-url-refusals-2026-10-06) | Done (branch `fix-url-refusal`) | /diagnosing-bugs |
 | – | [Accepted limitations](#accepted-limitations) | Accept | — |
 
 ---
@@ -247,6 +248,19 @@ None of these changes behavior; each is worth doing when the code around it chan
 
 - **The Chinese example in a `src/prefinish.ts` comment** (`我将/接下来/下一步…`). Repository text is in English, but this comment quotes the regex it documents, so translating it would make it wrong.
 
+## N4: local URL refusals (2026-10-06)
+
+**Status:** Done (branch `fix-url-refusal`). Diagnosed with `/diagnosing-bugs`; about $0.85 of API calls.
+
+- **Symptom:** gpt-4.1-mini answered "I cannot access local URLs such as http://127.0.0.1:…" in the first step, or looked for the URL as a file (`read_file index.html`), so the run made no MCP call.
+- **Feedback loop:** replay the logged first request of a web run against the API, many times. Two prompt-injection runs whose first requests differed **only** in the random temp-directory name and port gave 0/20 and 20/20 tool calls. The choice is close to deterministic for one exact prompt and flips with unrelated details, which is why rounds of 3 runs swung between 0/3 and 3/3.
+- **Measure:** with a random directory and port per call, the current prompt missed 6/60 first steps on prompt-injection (10%), 1/40 on read-page, 0/40 on multi-page.
+- **Hypotheses tested (60 calls each, prompt-injection):** moving the MCP tool list right after the first sentence: 0/60; removing the untrusted-content paragraph: 0/60; rewording only its "visit other sites" clause: 4/60 and 2/60 (so not that clause); adding one rule that a URL is not a file and is opened with the MCP tool that loads URLs: 0/60. The prompt sits at a tipping point, and several changes push it to tool use. The URL rule was chosen: it addresses both failure modes and leaves the safety paragraph unchanged.
+- **Fix:** `mcpToolsNote()` adds that rule. `baseSystemPrompt()` is exported so `evals/url-check.ts` builds exactly the request the harness sends (checked byte for byte against a logged request, without the rule).
+- **Result:** `evals/url-check.ts`: prompt-injection 60/60, read-page, multi-page, long-page and web-research 20/20 each.
+- **Regression guard:** a unit test asserts the rule is in the system prompt. Model behavior has no deterministic seam; `evals/url-check.ts` is the behavioral check.
+- **Not covered:** later steps (e.g. giving up after a snapshot), and models other than gpt-4.1-mini.
+
 ## Accepted limitations
 
 These are documented in the README or TEST_REPORT.md; there is no change planned.
@@ -258,7 +272,7 @@ These are documented in the README or TEST_REPORT.md; there is no change planned
 - **No internet block outside evals:** evals block the public internet with a dead proxy. User configurations don't, so the agent can browse public sites unless the user restricts it.
 - **Model limits (gpt-4.1-mini):**
   - `count-lines` (P3): it estimates instead of counting;
-  - it refuses to open local URLs (21 of 54 Phase 5 web runs made no MCP call);
+  - ~~it refuses to open local URLs (21 of 54 Phase 5 web runs made no MCP call)~~: fixed, see [N4](#n4-local-url-refusals-2026-10-06);
   - small samples (3 runs per cell) make single-task differences noisy.
 - **Not verified:**
   - process-group cleanup (A7) and the MCP transport on Linux/macOS;
