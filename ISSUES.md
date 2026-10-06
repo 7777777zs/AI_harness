@@ -28,6 +28,8 @@ The decisions below come from a review of the open issues after Phase 6 (2026-10
 | – | [N3: no Chinese final answers to evaluate plan detection on](#new-findings-from-d5) | Defer | — |
 | – | [D3b: re-run only errored eval jobs](#d3-rate-limits) | Defer | — |
 | – | [T5: clean up leftovers](#t5-clean-up-leftovers) | Todo (needs confirmation) | — |
+| – | [Code review: behavior and docs findings](#code-review-2026-10-05) | Done (branch `review-round2`) | /tdd |
+| – | [Code review: deferred refactors](#deferred-refactors) | Defer (next round) | — |
 | – | [Accepted limitations](#accepted-limitations) | Accept | — |
 
 ---
@@ -208,6 +210,42 @@ Details are in TEST_REPORT.md ("Issues round 1").
 - **N1: codebase-onboarding matches per-file summaries** (Todo, `/tdd`). The router chose it for all three "either" tasks (9/9). The outcomes didn't change (9/9 in both conditions), but tokens went up by 93% and 23% on two of the three tasks. Fix: narrow the skill's description to architecture overviews ("how the codebase works"), excluding per-file listings. Re-check with `evals/route-check.ts` (about $0.01).
 - **N2: completion rules check format, not substance** (Accept). In round A, the follow-up made the model add a Conflicts section to an answer that had no facts. The machine rules are a backstop for answers built on real reading, not a replacement for it. This is documented in TEST_REPORT.md.
 - **N3: plan detection is unverified on Chinese text** (Defer). The logs contain no Chinese final answers. Re-run `evals/plan-detect-eval.ts` once Chinese runs exist.
+
+## Code review (2026-10-05)
+
+A whole-codebase review on two axes: **Standards** (repo conventions plus a code-smell baseline) and **Spec** (the phase specs and this file). Behavior findings were fixed test-first, one commit each; documentation drift was fixed in one commit. Refactors (code smells) are deferred to a later round.
+
+### Fixed
+
+| Finding | Fix | Commit |
+|---|---|---|
+| Spec #1: `read_tool_result` pages bypassed the post-untrusted guard | `read_tool_result` is untrusted; only MCP results are paginated | `e7a6437` |
+| Eval records counted only some nudge kinds | `totalNudges()` sums every kind | `9ad48d1` |
+| Spec #2: MCP error results were not wrapped in the untrusted-content tags (error text can come from the page) | Wrapped as `Error: <tag> … <end tag>`; denials, bad arguments and read-only blocks stay unwrapped | `77da98a` |
+| Spec #3: eval Ctrl+C was noticed only after MCP shutdown, so runs failing in that window were saved as completed; one failing sandbox removal stopped the rest | `onInterrupt()` hooks run first in `shutdownAll`; `removeDirs()` tries every directory and reports failures | `1857fc5` |
+| Spec #5: `requiredSections` rules matched body text ("no conflicts") | Matched against heading lines only (`#` headings, bold-only lines) | `87067ac` |
+| Spec #7: a `Retry-After` wait had no jitter, so parallel jobs retried in lockstep | Up to 25% added, never shorter than asked, still capped at 60 s | `00395c6` |
+| Spec #8: `--task` removed by `--without-mcp`/`--without-skill-tasks` was reported as unknown | The message names the option that removed it | `c6f7e61` |
+| Standards #1: `agent.ts` read `OPENAI_MODEL` directly | `modelFromEnv()` in `src/llm/`; an architecture test keeps `OPENAI` out of `agent.ts` | `ea49b56` |
+| Standards #2: CLI flags had their own parsers (`on`/`off` only, different errors); `--help` omitted the repository `.env` | Shared `parseNumber`/`parseOnOff`; the same `Invalid configuration` messages naming the flag | `c8d077b` |
+| Spec #4, #6 and docs drift: token estimate ratios, missing settings and eval options, MCP collision outcome, architecture tree | README corrected; for the MCP collision the docs were changed, not the code (the colliding server is disabled with a warning) | `e6845e5` |
+
+Two timing tests (eval Ctrl+C, B3 list_dir/grep guards) failed under full-suite parallel load and were made robust in `0736b87`.
+
+### Deferred refactors
+
+None of these changes behavior; each is worth doing when the code around it changes next.
+
+1. **Split `runAgent`** (`src/agent.ts`). It holds the loop, tool execution, the guard, pre-finish checks and logging in one long function. Reason to defer: it works and is well covered by tests; splitting it touches every agent test's assumptions at once.
+2. **A shared `test/helpers.ts`** for the duplicated `scripted`, `tmp`, `logOf` and `fakeClient` helpers (`fakeApi` already moved to `test/fake-api.ts`). Reason to defer: mechanical churn across many test files.
+3. **A tool kind property** instead of `if` cascades on tool names (`read_file`, `list_dir`, `glob`, …) in `agent.ts`, compaction and listing detection. Reason to defer: the cascades are few and tested; a property is the right fix once another tool joins them.
+4. **A structured tool result** (`{ ok, text }`) instead of the `"Error:"` string prefix that `agent.ts` and `context/budget.ts` test for. Reason to defer: it changes the `Tool` interface and every tool.
+5. **`evals/run.ts` as a testable `main()`**, instead of a top-level script that tests can only run as a child process. Reason to defer: the child-process tests cover it today.
+6. **One place to define a setting.** A new setting now needs edits in `config.ts` (`SettingOverrides`, `HarnessConfig`, `ENV_NAMES`, `DEFAULTS`, `resolveConfig`, `describeConfig`), `index.ts` (flag and USAGE), `.env.example` and the README. A single settings table would remove that, and would also give `SKILL_ROUTER` and `PREFINISH_MAX` CLI flags, which they lack today.
+
+### Accepted
+
+- **The Chinese example in a `src/prefinish.ts` comment** (`我将/接下来/下一步…`). Repository text is in English, but this comment quotes the regex it documents, so translating it would make it wrong.
 
 ## Accepted limitations
 
