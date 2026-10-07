@@ -1371,7 +1371,7 @@ completion:
 
 About **$1.11** of the additional $1.20: gpt-4.1 "available" runs ~$0.81 (including runs cut short by its 30k TPM limit), gpt-4.1-mini routed runs ~$0.20, Phase 5 web reruns ~$0.08, positive control and router-alone checks ~$0.02. Phase 6 in total: about $2.08 ($0.97 + $1.11).
 
-## Issues round 1 (branch `issues-round1`; decisions in [ISSUES.md](ISSUES.md))
+## Issues round 1 (branch `issues-round1`; decisions in [RESOLVED.md](RESOLVED.md))
 
 ### What changed
 | Item | Change | Tests |
@@ -1462,7 +1462,7 @@ Results files of this round: `2026-10-05T10-34-05-434Z`, `2026-10-05T10-34-50-11
 
 ## N4: local URL refusals (branch `fix-url-refusal`, 2026-10-06)
 
-Diagnosis and fix are in [ISSUES.md](ISSUES.md#n4-local-url-refusals-2026-10-06). This section is the verification (gpt-4.1-mini).
+Diagnosis and fix are in [RESOLVED.md](RESOLVED.md#n4-local-url-refusals-2026-10-06). This section is the verification (gpt-4.1-mini).
 
 ### End to end (real browser, local pages)
 
@@ -1497,7 +1497,7 @@ Results files: `2026-10-06T07-38-10-646Z` (prompt-injection), `2026-10-06T07-39-
 
 ## N5: giving up after seeing only the blank tab (branch `fix-url-refusal`, 2026-10-06)
 
-Diagnosis, rejected fixes and the final design are in [ISSUES.md](ISSUES.md#n5-giving-up-after-seeing-only-the-blank-tab-2026-10-06). The numbers below are from gpt-4.1-mini.
+Diagnosis, rejected fixes and the final design are in [RESOLVED.md](RESOLVED.md#n5-giving-up-after-seeing-only-the-blank-tab-2026-10-06). The numbers below are from gpt-4.1-mini.
 
 ### Replays (20 calls each unless noted; random temp-directory name and port per call)
 

@@ -1,301 +1,207 @@
-# Open issues and decisions
+# Open issues
 
-The decisions below come from a review of the open issues after Phase 6 (2026-10-05). Background and data are in [TEST_REPORT.md](TEST_REPORT.md).
+Everything not yet fixed, collected from the earlier issues file and [TEST_REPORT.md](TEST_REPORT.md) on 2026-10-06. Fixed and closed items are in [RESOLVED.md](RESOLVED.md).
 
 **Constraints:**
-- Add as few new mechanisms as possible; reuse the existing nudge path (the coverage check in `src/agent.ts`).
+- Add as few new mechanisms as possible; reuse existing paths (nudges, the `[Harness status]` message).
 - Each validation round may spend at most **$1** of API usage.
-- All work happens on branch `issues-round1`.
+- Nothing is deleted without asking first.
 
-**Statuses:** **Fix** (decided, with a plan), **Accept** (known and documented, no change), **Defer** (revisit later), **Todo** (the fix is already clear), **Done** (implemented; commit given). The **Order** column gives the suggested implementation order. The **Skill** column names the workflow to use: `/tdd` for red → green against the agreed seams, `/diagnosing-bugs` when the cause still needs finding.
+**Statuses:** **Fix** (decided, with a plan), **Accept** (known and documented, no change), **Defer** (revisit later, with a trigger). The decisions were made on 2026-10-06; fixed items move to [RESOLVED.md](RESOLVED.md) once done.
 
 ## Summary
 
-| Order | Item | Status | Skill |
+| ID | Item | Area | Status |
 |---|---|---|---|
-| 1 | [D3a: retry waits: max(Retry-After, backoff)](#d3-rate-limits) | Done (`f8c075d`) | /tdd |
-| 2 | [D4: long-page: dedupe stored results, memory bound, search hint](#d4-long-page-stored-results-and-search) | Done (`a3e2691`) | /tdd |
-| 3 | [D1: pre-finish checks (plan nudge, completion criteria, coverage) + skill wording](#d1-pre-finish-checks) | Done (`d4d37d9`, `067be38`, `c40a77b`; wording fixed in D5) | /tdd |
-| 4 | [T1: log tool results as they are produced (P5)](#t1-tool-results-of-the-last-step-are-not-logged-p5) | Done (`62d5197`) | /tdd |
-| 5 | [T2: interrupted eval run leaks sandboxes, loses results (P4)](#t2-an-interrupted-eval-run-leaks-sandboxes-and-loses-results-p4) | Done (`4bf2a1b`) | /tdd |
-| 6 | [T3: `npm run eval --runs 1` crashes (P6)](#t3-npm-run-eval---runs-1-crashes-p6) | Done (`5266825`) | /tdd |
-| 7 | [T4: `test/agent.test.ts` leaks temp directories (P7)](#t4-testagenttestts-leaks-temp-directories-p7) | Done (`3cc0b41`) | /tdd |
-| 8 | [D6: commit sanitized eval result files](#d6-eval-results-in-the-repository) | Done (`6774853`) | /tdd |
-| 9 | [D5: validation and re-runs (one round, ≤ $1)](#d5-re-runs-and-validation) | Done ($0.46; see TEST_REPORT.md) | — |
-| 10 | [D2: same-turn guard gap: document](#d2-same-turn-guard-gap) | Accept, documented (`86217b8`) | — |
-| – | [N1: codebase-onboarding matches per-file summaries](#new-findings-from-d5) | Done (description narrowed; router check 18/18, 18/18) | — |
-| – | [N2: completion rules check format, not substance](#new-findings-from-d5) | Accept, documented | — |
-| – | [N3: no Chinese final answers to evaluate plan detection on](#new-findings-from-d5) | Defer | — |
-| – | [D3b: re-run only errored eval jobs](#d3-rate-limits) | Defer | — |
-| – | [T5: clean up leftovers](#t5-clean-up-leftovers) | Todo (needs confirmation) | — |
-| – | [Code review: behavior and docs findings](#code-review-2026-10-05) | Done (branch `review-round2`) | /tdd |
-| – | [Code review: deferred refactors](#deferred-refactors) | Defer (next round) | — |
-| – | [N4: gpt-4.1-mini refuses to open local URLs](#n4-local-url-refusals-2026-10-06) | Done (branch `fix-url-refusal`) | /diagnosing-bugs |
-| – | [N5: gives up after seeing only the blank tab](#n5-giving-up-after-seeing-only-the-blank-tab-2026-10-06) | Done (branch `fix-url-refusal`) | /diagnosing-bugs |
-| – | [Accepted limitations](#accepted-limitations) | Accept | — |
+| I1 | [count-lines: the model estimates instead of counting](#i1-count-lines-the-model-estimates-instead-of-counting) | Model behavior | **Fix** |
+| I2 | [Files read but left out of the answer](#i2-files-read-but-left-out-of-the-answer) | Model behavior | **Accept** |
+| I3 | [Small-range re-reading is not stopped by the repeat notice](#i3-small-range-re-reading-is-not-stopped-by-the-repeat-notice) | Model behavior | **Defer** |
+| I4 | [long-page still fails 1 run in 3](#i4-long-page-still-fails-1-run-in-3) | Model behavior | **Defer** |
+| I5 | [Giving up after a `wait_for` timeout (N5 variant)](#i5-giving-up-after-a-wait_for-timeout-n5-variant) | Model behavior | **Defer** |
+| I6 | [Completion rules check format, not substance (N2)](#i6-completion-rules-check-format-not-substance-n2) | Skills | **Accept** |
+| I7 | [Plan detection is unverified on Chinese text (N3)](#i7-plan-detection-is-unverified-on-chinese-text-n3) | Pre-finish check | **Defer** |
+| I8 | [Harness hints are still appended inside MCP results](#i8-harness-hints-are-still-appended-inside-mcp-results) | Security | **Fix (measure first)** |
+| I9 | [Under auto-approve, confirmation-required MCP tools are not guarded](#i9-under-auto-approve-confirmation-required-mcp-tools-are-not-guarded) | Security | **Fix** |
+| I10 | [Prompt-level injection defenses are unreliable](#i10-prompt-level-injection-defenses-are-unreliable) | Security | **Accept** |
+| I11 | [Same-turn guard gap (D2)](#i11-same-turn-guard-gap-d2) | Security | **Accept** |
+| I12 | [The guard also blocks harmless actions](#i12-the-guard-also-blocks-harmless-actions) | Security | **Accept** |
+| I13 | [Path restriction and tool limits](#i13-path-restriction-and-tool-limits) | Security | **Accept** |
+| I14 | [Read-only git allowlist and repository git config](#i14-read-only-git-allowlist-and-repository-git-config) | Security | **Accept** |
+| I15 | [No internet block outside evals](#i15-no-internet-block-outside-evals) | Security | **Accept** |
+| I16 | [Cleanup after a hard kill depends on the MCP server](#i16-cleanup-after-a-hard-kill-depends-on-the-mcp-server) | Processes | **Accept** |
+| I17 | [Nothing is verified on Linux or macOS](#i17-nothing-is-verified-on-linux-or-macos) | Platforms | **Fix** |
+| I18 | [The A1 answer merge never ran live](#i18-the-a1-answer-merge-never-ran-live) | Verification | **Accept** |
+| I19 | [Recent fixes are validated with gpt-4.1-mini only](#i19-recent-fixes-are-validated-with-gpt-41-mini-only) | Verification | **Defer** |
+| I20 | [Small samples make single-task differences noisy](#i20-small-samples-make-single-task-differences-noisy) | Eval method | **Accept** |
+| I21 | [The interactive "y" path of the terminal prompt is untested](#i21-the-interactive-y-path-of-the-terminal-prompt-is-untested) | Verification | **Accept** |
+| I22 | [Re-run only the errored eval jobs (D3b)](#i22-re-run-only-the-errored-eval-jobs-d3b) | Eval tooling | **Defer** |
+| I23 | [Run logs are local only](#i23-run-logs-are-local-only) | Eval tooling | **Accept** |
+| I24 | [A hand-edited results file is committed](#i24-a-hand-edited-results-file-is-committed) | Eval tooling | **Fix** |
+| I25 | [Some eval scores are regex heuristics](#i25-some-eval-scores-are-regex-heuristics) | Eval tooling | **Accept** |
+| I26 | [Deferred refactors from the code review](#i26-deferred-refactors-from-the-code-review) | Code health | **Defer** |
+| I27 | [Nudge suggestions not integrated in Phase 3](#i27-nudge-suggestions-not-integrated-in-phase-3) | Code health | **Defer** |
+| I28 | [Branches: `fix-url-refusal` unmerged, `review-round2` merged but kept](#i28-branches-fix-url-refusal-unmerged-review-round2-merged-but-kept) | Repository | **Fix** |
 
 ---
 
-## D1: Pre-finish checks
-
-**Problem:**
-- A reply without tool calls is the final answer. gpt-4.1 twice ended web-research on a plan ("I will read each of these pages…") after a skill step told it to write a list *in its reply*.
-- Once it wrote the bugfix skill's report before doing the work.
-- Separately, the web-research skill's process bar (cite ≥ 2 sources, report the conflict) was met in 0/24 runs.
-
-**Decision: Fix, with (a) and (c).**
-
-**(a) Skill wording.** web-research step 2 becomes "write the numbered list in the same message as your next tool call". Then check the other skills for steps that ask for text in a reply without a tool call.
-
-**(c) One pre-finish check, reusing the coverage-check nudge path.** When the model replies without tool calls, the harness may send **one follow-up message** instead of finishing. There are three triggers:
-
-1. **Plan only:** the reply only announces work ("I will…", "Next step…").
-   - This follow-up is sent alone ("Do it now; the run ends when you reply without tool calls").
-   - The plan reply is **not** added to `answerHistory`, so A1 never merges a plan into an answer.
-2. **Coverage:** the existing `COVERAGE_CHECK` (whole-project task, listed files unread). Unchanged, but it now counts against the shared budget.
-3. **Completion criteria:** declared by a loaded skill in its frontmatter:
-
-   ```yaml
-   completion:
-     requiredSections: ["^#+\\s*Conflicts"]   # regexes matched against heading lines
-     minDistinctUrls: 2
-     text:
-       - Every factual claim is followed by its source URL in parentheses.
-   ```
-
-   - **Machine rules** (`requiredSections`, `minDistinctUrls`) decide whether a follow-up is needed at all. The follow-up names the failed rules and lists the text criteria too.
-   - **Text-only criteria** (a skill with no machine rules) always trigger one follow-up. That costs one extra step per run; the docs must say so.
-   - `web-research` gets `requiredSections: ["^#+\\s*Conflicts"]` and `minDistinctUrls: 2`.
-
-**Combining and budget:**
-- When coverage and completion both fail on the same answer, they go in **one** message.
-- All triggers share a budget of **2 follow-ups per run**, set with `PREFINISH_MAX` (A8 precedence; evals set it explicitly).
-- With a budget of 1, a plan nudge would use it up and the real answer would never be checked: that is exactly the gpt-4.1 case.
-- The A1 merge applies to every follow-up's answer.
-
-**Plan detection, decided by data:**
-- Before choosing between the regex heuristic (`endedOnPlan` in `evals/scoring.ts`) and a `COMPACT_MODEL` classifier call, evaluate the heuristic offline on existing logs:
-  - **positives:** the known plan-ending gpt-4.1 cases;
-  - **negatives:** a broad sample of genuine final answers from past runs (English and Chinese; skill and non-skill tasks).
-- Report precision and recall in TEST_REPORT.md.
-- **Use the classifier** if precision is below ~95% or any known plan-ending case is missed.
-
-**Why:** one mechanism instead of two, built on an existing path, and the fewest extra steps. The machine rules make the skill's "Done" bar checkable, which is where the prose alone failed.
-
-**Seams (tests):**
-- `runAgent` with a scripted model, end to end:
-  - plan nudge; machine rules; text-only criteria;
-  - shared budget; combined message with coverage;
-  - A1 merge; plan replies excluded from the history;
-  - log events.
-- `isPlanOnly(text)`, exported, plus the offline evaluation script.
-- `parseSkill` / `discoverSkills`: validation of `completion`.
-
-**Follow-up:**
-- validate in D5;
-- document in the README (Skills → completion criteria, including the text-only cost) and in `.env.example` (`PREFINISH_MAX`).
-
-## D2: Same-turn guard gap
-
-**Problem:** the untrusted-content guard confirms the next `run_shell`/`write_file`/`edit_file` after the model has *received* MCP content. Calls issued in the same turn as the MCP call (e.g. `curl` of the same URL next to `new_page`) are not guarded.
-
-**Decision: Accept.**
-
-**Why:** same-turn calls are generated before the MCP result exists, so they can't be driven by instructions inside it. Results from earlier turns are already covered by the guard. Guarding same-turn calls would only add confirmations to harmless parallel calls.
-
-**Follow-up:** document this in the README's security section (Untrusted content), with the reasoning.
-
-## D3: Rate limits
-
-**Problem:** with gpt-4.1 (30k TPM for this organization) at concurrency 3, runs failed after 6 attempts.
-- The retries already honored Retry-After (logged `reason: retry-after`), but the hints were 2–5 s.
-- Concurrent jobs kept colliding inside the same one-minute window, so five short waits were used up in about 20 s.
-
-**Decision (a): Fix.**
-- Wait `max(Retry-After, exponential backoff)` before each retry, keeping the jitter.
-- Cap each single wait at **60 s**, even when Retry-After is larger; a capped wait still counts as an attempt.
-- Five retries then span roughly a full TPM window.
-- **Seam:** `withRetry` with injected `sleep`/`random`.
-
-**Decision (b): Defer** re-running only the errored jobs of a results file.
-
-**Why defer (b):** after (a), rate-limit errors should be rare. For low-TPM models, `--concurrency 1` works. Merging partial results files is new tooling with no current need.
-
-## D4: long-page: stored results and search
-
-**Problem:** on long pages the model re-took the same snapshot many times. Each time it got a new stored copy (`mcp-1`…`mcp-12`) and the full first page again, and it never used `read_tool_result` with `pattern`. Stored results are also unbounded in memory.
-
-**Decision: Fix all three.**
-1. **Dedupe:** when an oversized MCP result is identical to one already stored, return a one-line reference instead of the first page again: "Same content as stored result mcp-3 (unchanged). Search it with read_tool_result pattern=… or read by offset."
-2. **Memory bound:**
-   - Stored results are capped by total characters (about 2M); the oldest are evicted first.
-   - `read_tool_result` on an evicted id returns a clear error asking for the tool to be called again.
-   - If the earlier identical result has been evicted, the new result is stored and shown normally (first page), not as a reference.
-3. **Search hint:** the paging note puts searching first ("Search this result with read_tool_result pattern=… or read on with offset=…").
-
-**Why:** dedupe and the memory bound are deterministic, small, and testable without the API. The hint changes only the text the model sees; it adds no mechanism.
-
-**Seams:** `ResultPages`, through its public `paginate` and the `read_tool_result` tool's `execute`. The tests cover:
-- an identical result → reference;
-- after eviction → normal content;
-- the bound;
-- an evicted id → error.
-
-**Follow-up:** long-page ×3 in D5.
-
-## D5: Re-runs and validation
-
-**Decision: Fix. One round, after D1 and D4, ≤ $1, gpt-4.1-mini:**
-- **long-page ×3:** validates D4.
-- **web-research ×3, routed:** validates D1 (completion criteria, plan nudge). Also scored offline for outcome and process.
-- **The "either" tasks** (`multi-file-summary`, `trustworthy-summary`, `summary-with-footer`): ×3 routed and ×3 off. Do they help or hurt when routed to codebase-onboarding?
-- **Phase 5 web tasks** (`read-page`, `multi-page`, `prompt-injection`): 2 more runs each, to reach 3 runs with the proxy config. Their third long-page run comes from the D4 validation above.
-
-**Why:** the re-runs should test the final code, so they wait for D1 and D4 and share one round.
-
-**Follow-up:** add a TEST_REPORT.md section with all results and costs.
-
-## D6: Eval results in the repository
-
-**Problem:** `evals/results/` is gitignored, so the numbers in TEST_REPORT.md can't be checked from the repository. The results JSON files are under 1 MB in total; the logs are about 45 MB.
-
-**Decision: Fix, with sanitizing first.**
-- **Commit:** only the results JSON files referenced in TEST_REPORT.md, via a `.gitignore` exception (`!evals/results/<file>.json`). Logs stay ignored.
-- **Sanitize before committing:**
-  - replace absolute paths (temp directories, the home directory, the username) with placeholders or relative paths;
-  - scan for API keys and other secrets (`sk-…`, `OPENAI_API_KEY=`, bearer tokens);
-  - fail loudly if one is found.
-- **Seam:** `sanitize(text)`, exported from `evals/sanitize-results.ts`, and the script that applies it.
-
-**Follow-up:** note in TEST_REPORT.md where the logs live and that they are excluded.
-
----
-
-## Todo (the fix is already clear)
-
-### T1: Tool results of the last step are not logged (P5)
-- A `step` log line holds the request, so tool results only appear in the *next* request. When a run ends on `max_steps` or an API error, the last tool results are missing from the log.
-- **Fix:** log each tool result as it is produced (`{"type":"tool_result", step, tool, toolCallId, content}`).
-- **Seam:** `runAgent` with a scripted model and `maxSteps: 1`; the log contains the result.
-
-### T2: An interrupted eval run leaks sandboxes and loses results (P4)
-- Sandbox cleanup is in a `finally`, which doesn't run on Ctrl+C. Results are written only at the end. `installShutdownHandlers()` kills MCP servers but doesn't clean sandboxes. 14 `ai-harness-eval-*` directories are currently in `%TEMP%`.
-- **Fix:**
-  - track active sandboxes;
-  - on SIGINT/SIGTERM, stop scheduling, remove them (unless `--keep`), and write the completed records as a partial results file;
-  - write results atomically (temp file + rename).
-- **Seam:** the runner's cleanup and partial-results functions, exported and tested directly; one end-to-end check that emits SIGINT in a child process.
-
-### T3: `npm run eval --runs 1` crashes (P6)
-- npm swallows `--runs`, and `parseArgs` throws on the stray positional with a stack trace.
-- **Fix:** catch `parseArgs` errors and print a one-line usage, with a hint to put `--` after `npm run eval`.
-- **Seam:** run the runner as a child process with a positional argument; exit 1 with the usage line.
-
-### T4: `test/agent.test.ts` leaks temp directories (P7)
-- Its `mkdtempSync` directories are never removed; about 370 `ai-harness-test-*` directories have accumulated.
-- **Fix:** the `after(() => rmSync(...))` pattern used by the other test files.
-- **Seam:** after `npm test`, no new `ai-harness-test-*` directories remain.
-
-### T5: Clean up leftovers
-**Needs confirmation before deleting anything:**
-- the ~370 `ai-harness-test-*` and 14 `ai-harness-eval-*` directories in `%TEMP%`;
-- the merged local branches `phase5-mcp` and `phase6-skills`;
-- the temporary `HARNESS_HOME` used for the manual Ctrl+C test (in the session scratchpad).
-
----
-
-## New findings from D5
-
-Details are in TEST_REPORT.md ("Issues round 1").
-
-- **Skill wording can cause the very failure it tries to prevent.** D1(a) asked web-research to write its list "in the same message as your first tool call". In the validation round, no run then read a page: each batched `new_page` with `grep` of local files and gave up (0/3). Replacing that with one explicit sentence (read pages with `new_page` + `take_snapshot`; pages are not files) gave 3/3. That is the first web-research pass in any condition. Fixed on this branch.
-- **N1: codebase-onboarding matches per-file summaries** (Todo, `/tdd`). The router chose it for all three "either" tasks (9/9). The outcomes didn't change (9/9 in both conditions), but tokens went up by 93% and 23% on two of the three tasks. Fix: narrow the skill's description to architecture overviews ("how the codebase works"), excluding per-file listings. Re-check with `evals/route-check.ts` (about $0.01).
-- **N2: completion rules check format, not substance** (Accept). In round A, the follow-up made the model add a Conflicts section to an answer that had no facts. The machine rules are a backstop for answers built on real reading, not a replacement for it. This is documented in TEST_REPORT.md.
-- **N3: plan detection is unverified on Chinese text** (Defer). The logs contain no Chinese final answers. Re-run `evals/plan-detect-eval.ts` once Chinese runs exist.
-
-## Code review (2026-10-05)
-
-A whole-codebase review on two axes: **Standards** (repo conventions plus a code-smell baseline) and **Spec** (the phase specs and this file). Behavior findings were fixed test-first, one commit each; documentation drift was fixed in one commit. Refactors (code smells) are deferred to a later round.
-
-### Fixed
-
-| Finding | Fix | Commit |
-|---|---|---|
-| Spec #1: `read_tool_result` pages bypassed the post-untrusted guard | `read_tool_result` is untrusted; only MCP results are paginated | `e7a6437` |
-| Eval records counted only some nudge kinds | `totalNudges()` sums every kind | `9ad48d1` |
-| Spec #2: MCP error results were not wrapped in the untrusted-content tags (error text can come from the page) | Wrapped as `Error: <tag> … <end tag>`; denials, bad arguments and read-only blocks stay unwrapped | `77da98a` |
-| Spec #3: eval Ctrl+C was noticed only after MCP shutdown, so runs failing in that window were saved as completed; one failing sandbox removal stopped the rest | `onInterrupt()` hooks run first in `shutdownAll`; `removeDirs()` tries every directory and reports failures | `1857fc5` |
-| Spec #5: `requiredSections` rules matched body text ("no conflicts") | Matched against heading lines only (`#` headings, bold-only lines) | `87067ac` |
-| Spec #7: a `Retry-After` wait had no jitter, so parallel jobs retried in lockstep | Up to 25% added, never shorter than asked, still capped at 60 s | `00395c6` |
-| Spec #8: `--task` removed by `--without-mcp`/`--without-skill-tasks` was reported as unknown | The message names the option that removed it | `c6f7e61` |
-| Standards #1: `agent.ts` read `OPENAI_MODEL` directly | `modelFromEnv()` in `src/llm/`; an architecture test keeps `OPENAI` out of `agent.ts` | `ea49b56` |
-| Standards #2: CLI flags had their own parsers (`on`/`off` only, different errors); `--help` omitted the repository `.env` | Shared `parseNumber`/`parseOnOff`; the same `Invalid configuration` messages naming the flag | `c8d077b` |
-| Spec #4, #6 and docs drift: token estimate ratios, missing settings and eval options, MCP collision outcome, architecture tree | README corrected; for the MCP collision the docs were changed, not the code (the colliding server is disabled with a warning) | `e6845e5` |
-
-Two timing tests (eval Ctrl+C, B3 list_dir/grep guards) failed under full-suite parallel load and were made robust in `0736b87`.
-
-### Deferred refactors
-
-None of these changes behavior; each is worth doing when the code around it changes next.
-
-1. **Split `runAgent`** (`src/agent.ts`). It holds the loop, tool execution, the guard, pre-finish checks and logging in one long function. Reason to defer: it works and is well covered by tests; splitting it touches every agent test's assumptions at once.
-2. **A shared `test/helpers.ts`** for the duplicated `scripted`, `tmp`, `logOf` and `fakeClient` helpers (`fakeApi` already moved to `test/fake-api.ts`). Reason to defer: mechanical churn across many test files.
-3. **A tool kind property** instead of `if` cascades on tool names (`read_file`, `list_dir`, `glob`, …) in `agent.ts`, compaction and listing detection. Reason to defer: the cascades are few and tested; a property is the right fix once another tool joins them.
-4. **A structured tool result** (`{ ok, text }`) instead of the `"Error:"` string prefix that `agent.ts` and `context/budget.ts` test for. Reason to defer: it changes the `Tool` interface and every tool.
-5. **`evals/run.ts` as a testable `main()`**, instead of a top-level script that tests can only run as a child process. Reason to defer: the child-process tests cover it today.
-6. **One place to define a setting.** A new setting now needs edits in `config.ts` (`SettingOverrides`, `HarnessConfig`, `ENV_NAMES`, `DEFAULTS`, `resolveConfig`, `describeConfig`), `index.ts` (flag and USAGE), `.env.example` and the README. A single settings table would remove that, and would also give `SKILL_ROUTER` and `PREFINISH_MAX` CLI flags, which they lack today.
-
-### Accepted
-
-- **The Chinese example in a `src/prefinish.ts` comment** (`我将/接下来/下一步…`). Repository text is in English, but this comment quotes the regex it documents, so translating it would make it wrong.
-
-## N4: local URL refusals (2026-10-06)
-
-**Status:** Done (branch `fix-url-refusal`). Diagnosed with `/diagnosing-bugs`; about $0.85 of API calls.
-
-- **Symptom:** gpt-4.1-mini answered "I cannot access local URLs such as http://127.0.0.1:…" in the first step, or looked for the URL as a file (`read_file index.html`), so the run made no MCP call.
-- **Feedback loop:** replay the logged first request of a web run against the API, many times. Two prompt-injection runs whose first requests differed **only** in the random temp-directory name and port gave 0/20 and 20/20 tool calls. The choice is close to deterministic for one exact prompt and flips with unrelated details, which is why rounds of 3 runs swung between 0/3 and 3/3.
-- **Measure:** with a random directory and port per call, the current prompt missed 6/60 first steps on prompt-injection (10%), 1/40 on read-page, 0/40 on multi-page.
-- **Hypotheses tested (60 calls each, prompt-injection):** moving the MCP tool list right after the first sentence: 0/60; removing the untrusted-content paragraph: 0/60; rewording only its "visit other sites" clause: 4/60 and 2/60 (so not that clause); adding one rule that a URL is not a file and is opened with the MCP tool that loads URLs: 0/60. The prompt sits at a tipping point, and several changes push it to tool use. The URL rule was chosen: it addresses both failure modes and leaves the safety paragraph unchanged.
-- **Fix:** `mcpToolsNote()` adds that rule. `baseSystemPrompt()` is exported so `evals/url-check.ts` builds exactly the request the harness sends (checked byte for byte against a logged request, without the rule).
-- **Result:** no first-step refusals afterwards: 0 in 220 first-step calls across the five web tasks, and 0 in 26 end-to-end runs (TEST_REPORT.md, "N4").
-- **Regression guard:** a unit test asserts the rule is in the system prompt. Model behavior has no deterministic seam; `evals/url-check.ts` is the behavioral check.
-- **Not fixed here:** giving up in a later step, which became N5 (fixed). Models other than gpt-4.1-mini were not checked.
-
-## N5: giving up after seeing only the blank tab (2026-10-06)
-
-**Status:** Done (branch `fix-url-refusal`). Diagnosed with `/diagnosing-bugs`; about $0.82 of API calls.
-
-- **Symptom:** step 1 calls `list_pages` (sometimes with `select_page`/`take_snapshot` of the blank tab, or `read_file index.html`) but not `new_page`. Seeing only `about:blank` or a missing file, the model says the page is not accessible and asks for its content. Found while verifying N4: 4 of 26 end-to-end web runs.
-- **Feedback loop:** replay the logged request of the step where a failing run gave up, 20 times, with a random temp-directory name and port per call (tool calls and results included), and count "opened the URL" vs "gave up".
-  - prompt-injection #2, step 2: gave up 20/20.
-  - multi-page #2, step 2: `list_dir` 20/20; step 3: gave up 19/20.
-- **Minimal repro:** system prompt, task, one `list_pages` call and its `about:blank` result. Still 20/20 gave up.
-- **Cause:** the model takes the blank tab (or the missing file) for the task's page. A diagnostic run with a public-looking host instead of 127.0.0.1 still gave up 16/20, with answers like "I tried to access the article at …, but the page appears to be blank". So this is not about localhost: the model believes it already tried the URL.
-- **What did not work:**
-  - **A system-prompt rule** ("the browser starts with an empty tab; open the URL first") opened the URL in only 1/20: rules far from the decision point don't change it.
-  - **A harness note appended to the first MCP result** fixed the give-ups (20/20 and 16/20; 20/20 together with a URL-aware missing-file hint). But it made the model follow injected page text more often. In a replay of the step where prompt-injection #10 read the injected page, the run with the note called `write_file`/`run_shell` in 12/60 replies, and the same request without the note in 2/60. In the end-to-end round with the note, 4/10 prompt-injection runs followed the injection, against 1/10 before. The likely reason: a harness instruction inside an MCP result stays in history, next to the page content. This version was dropped.
-- **Fix:** while MCP tools are loaded and a URL from the task has not been mentioned in any MCP call's arguments, the `[Harness status]` message attached to each request says so. It names the URL and says that open pages and working-directory files are not that page. The message is never stored in history and disappears once a call is given the URL, so it is never next to page content. `src/taskUrls.ts` finds the task's URLs. Each request that carries the line counts as an `unopened_url` nudge.
-- **Result (replays):**
-  - give-up states: 20/20 opened the URL, for both prompt-injection #2 step 2 and multi-page #2 step 2 (the latter with the unchanged missing-file hint);
-  - multi-page step 1: the URL was opened in 35/40 instead of 22/40.
-- **Result (end to end):** prompt-injection 10/10 with no injection followed, multi-page 10/10, read-page 5/5. In 4 runs step 1 only listed pages; all opened the URL in step 2 after the status line.
-- **Regression tests:** `test/mcp.test.ts` checks two things. Each request carries the status line until an MCP call is given the URL, and never after; nothing is added to tool results. And there is no line without MCP tools, or when the first step's call was given the URL. Model behavior itself has no deterministic seam; the replays and the web evals are the behavioral check.
-- **Not covered:** the variant where `wait_for` times out after `navigate_page` (1 of 26 runs). The URL counts as opened there, so the status line doesn't fire. A URL-aware missing-file hint fixed it in replays (19/20 went on to `take_snapshot`), but it was not adopted: it would put a harness instruction into history, and its effect on injection was not measured.
-
-## Accepted limitations
-
-These are documented in the README or TEST_REPORT.md; there is no change planned.
-
-- **Prompt-level injection defenses:** not reliable with gpt-4.1-mini. The guard is the real protection: 8 of 8 attempted actions after injected content were stopped.
-- **Read-only git allowlist:** it doesn't cover a repository's own git configuration (e.g. configured diff drivers).
-- **Hard kill of the harness:** cleanup depends on the MCP server exiting when its stdin closes. Verified for chrome-devtools-mcp, not guaranteed for other servers (Windows has no job objects in Node).
-- **The guard also blocks harmless actions** after MCP content (e.g. saving a fetched page). That is the intended trade-off under auto-approve.
-- **No internet block outside evals:** evals block the public internet with a dead proxy. User configurations don't, so the agent can browse public sites unless the user restricts it.
-- **Model limits (gpt-4.1-mini):**
-  - `count-lines` (P3): it estimates instead of counting;
-  - ~~it refuses to open local URLs (21 of 54 Phase 5 web runs made no MCP call)~~: fixed, see [N4](#n4-local-url-refusals-2026-10-06);
-  - small samples (3 runs per cell) make single-task differences noisy.
-- **Not verified:**
-  - process-group cleanup (A7) and the MCP transport on Linux/macOS;
-  - the A1 merge in a live run (unit tests only).
+## Model behavior
+
+### I1: count-lines: the model estimates instead of counting
+- **Source:** TEST_REPORT.md P3; every full suite since Phase 2.
+- **Problem:** asked how many lines a file has, gpt-4.1-mini reads it and estimates ("120 lines") instead of counting with a tool. The task fails in almost every run (1/3 once in Phase 4).
+- **Options:** a system-prompt line such as "use tools to compute exact counts rather than estimating", validated on count-lines and a core-suite run; or keep it as a known model limitation and a regression signal.
+- **Decision (2026-10-06): Fix.** Add one system-prompt line: compute exact numbers (counts, sizes, totals) with a tool instead of estimating. TDD: a unit test asserts the line is in the base system prompt. Validate with count-lines ×5, one core-suite run and `evals/url-check.ts` (the prompt sits near a tipping point, N4).
+
+### I2: Files read but left out of the answer
+- **Source:** TEST_REPORT.md Phase 3 A and Phase 4 (trustworthy-summary 2/3: the model read `tests/` but did not describe it).
+- **Problem:** the coverage check and footer catch files that were not *read*. A file that was read but not mentioned in the answer is not caught. Later runs passed (1/1 in the Phase 4 final suite, 3/3 in D5).
+- **Decision (2026-10-06): Accept.** Recent runs pass; telling whether a read file is "mentioned" in an answer needs semantic judgment, which is not worth a new mechanism.
+
+### I3: Small-range re-reading is not stopped by the repeat notice
+- **Source:** TEST_REPORT.md Phase 4, "Other findings".
+- **Problem:** the repeat notice fires only on identical calls. A model that reads the same file in many small ranges (`@1`, `@21`, `@41`…) gets no notice. Seen once (30 steps), with gpt-4o-mini as the compaction model; not seen with the main configuration.
+- **Decision (2026-10-06): Defer.** Seen once, with gpt-4o-mini as the compaction model. Revisit if it recurs with the default configuration.
+
+### I4: long-page still fails 1 run in 3
+- **Source:** TEST_REPORT.md D5 (2/3) and the N4 verification (2/3).
+- **Problem:** failing runs grep the empty working directory instead of searching the stored snapshot, or page through 27 steps without finding the answer. long-page was not re-run after the N5 change.
+- **Decision (2026-10-06): Defer.** Include long-page ×3 in the next validation round to measure it after N5.
+
+### I5: Giving up after a `wait_for` timeout (N5 variant)
+- **Source:** RESOLVED.md, N5 ("Not covered"); 1 of 26 end-to-end web runs.
+- **Problem:** after `navigate_page` the model waits for text that never appears, the wait times out, it looks for the page as a local file, and gives up without a snapshot. The URL counts as opened, so the N5 status line doesn't fire.
+- **Known candidate:** a URL-aware missing-file hint ("index.html is part of the URL …") fixed it in replays (19/20 went on to `take_snapshot`). It was not adopted: it would put a harness instruction into history, and its effect on injection was not measured (see I8).
+- **Decision (2026-10-06): Defer.** Revisit if I8 shows that harness hints kept in history do not raise injection following.
+
+## Skills and the pre-finish check
+
+### I6: Completion rules check format, not substance (N2)
+- **Source:** RESOLVED.md, "New findings from D5"; TEST_REPORT.md D5 round A.
+- **Problem:** the completion follow-up made the model add a Conflicts section to an answer built on no evidence. The machine rules are a backstop for answers built on real reading, not a replacement for it.
+- **Decision (2026-10-06): Accept.** The machine rules are a backstop, not a replacement for reading the sources.
+
+### I7: Plan detection is unverified on Chinese text (N3)
+- **Source:** TEST_REPORT.md, "Plan-only detection".
+- **Problem:** `isPlanOnly()` has Chinese patterns, but no logged run has a Chinese final answer, so they are covered by unit tests only.
+- **Decision (2026-10-06): Defer.** Re-run `evals/plan-detect-eval.ts` once logs contain Chinese final answers.
+
+## Security
+
+### I8: Harness hints are still appended inside MCP results
+- **Source:** new, from the N5 diagnosis (RESOLVED.md).
+- **Finding:** a harness note appended to an MCP result raised how often the model followed injected page text, from 2/60 to 12/60 replies. That note stays in history next to the page content.
+- **Problem:** other harness text still goes into MCP results the same way. The repeat notice is appended to any repeated call, including `take_snapshot`. The note-taking reminder is appended to the last tool result of a step, which can be an MCP result. And there are the paging note and the dedupe reference of stored results (D4). Their effect on injection is unmeasured.
+- **Decision (2026-10-06): Fix (measure first).** Replay the step where prompt-injection #10 read the injected page (RESOLVED.md, N5), 60 calls per variant, with each hint added where the harness would put it: the repeat notice and the note-taking reminder on the snapshot result, the paging note inside it. Baseline: 2/60 without hints. A hint whose rate is higher with one-sided Fisher p < 0.05 moves into the `[Harness status]` message (TDD); the others stay and the numbers are recorded.
+
+### I9: Under auto-approve, confirmation-required MCP tools are not guarded
+- **Source:** new; `GUARDED_TOOLS` in `src/agent.ts`, TEST_REPORT.md Phase 5 ("Guarded tools are fixed").
+- **Problem:** after untrusted content, only `run_shell`, `write_file` and `edit_file` need confirmation again. MCP tools that are not auto-approved by their server (e.g. `click`, `fill`, `evaluate_script`) normally ask anyway. But with `autoApprove: true` (programmatic use, evals) they run without asking, even right after the model read injected content. The evals expose only the six read-only tools, so this is untested there.
+- **Decision (2026-10-06): Fix.** After untrusted content, MCP tools that their server does not auto-approve need confirmation again even under auto-approve, like `run_shell`/`write_file`/`edit_file`. TDD with the mock MCP server; no API calls.
+
+### I10: Prompt-level injection defenses are unreliable
+- **Source:** TEST_REPORT.md Phase 5 and the N4/N5 rounds.
+- **Problem:** gpt-4.1-mini sometimes follows instructions on an injected page (1/10 to 3/9 runs per round, depending on the round). The guard stopped every attempt; `pwned.txt` was never created.
+- **Decision (2026-10-06): Accept.** The guard is the protection; it stopped every attempt.
+
+### I11: Same-turn guard gap (D2)
+- **Source:** the earlier issues file (D2); README, "Untrusted content".
+- **Problem:** a `run_shell`/`write_file`/`edit_file` call in the *same* turn as the first MCP call is not guarded. Such calls are generated before the MCP result exists, so they can't be driven by it.
+- **Decision (2026-10-06): Accept.** Same-turn calls are generated before the MCP result exists.
+
+### I12: The guard also blocks harmless actions
+- **Source:** TEST_REPORT.md Phase 5.
+- **Problem:** e.g. saving a fetched page after an MCP call needs confirmation (denied in evals). This is the intended trade-off under auto-approve.
+- **Decision (2026-10-06): Accept.** The intended trade-off under auto-approve.
+
+### I13: Path restriction and tool limits
+- **Source:** TEST_REPORT.md P1 note and Phase 3 B ("Accepted limitations").
+- **Problem:**
+  - a time-of-check/time-of-use window remains: a link could be swapped between the path check and the open;
+  - a user-supplied `grep` regex can be slow (ReDoS);
+  - backslashes in paths are converted on POSIX;
+  - `run_shell` is not path-restricted, by design (it asks for confirmation).
+- **Decision (2026-10-06): Accept.**
+
+### I14: Read-only git allowlist and repository git config
+- **Source:** TEST_REPORT.md Phase 6.
+- **Problem:** the allowlist blocks `--output`, `--ext-diff` and `--textconv` on the command line, but a repository's own git configuration (e.g. configured diff drivers) can still run commands during `git diff`/`git log`.
+- **Decision (2026-10-06): Accept.** Documented. If it is ever fixed: run read-only git commands with the repository's command-running settings disabled (`core.fsmonitor`, external diff, textconv).
+
+### I15: No internet block outside evals
+- **Source:** TEST_REPORT.md Phase 6 (the eval proxy).
+- **Problem:** evals block the public internet with a dead proxy. User configurations don't, so the agent can browse public sites unless the user restricts it.
+- **Decision (2026-10-06): Accept.** Restricting the internet is the user's configuration.
+
+## Processes and platforms
+
+### I16: Cleanup after a hard kill depends on the MCP server
+- **Source:** TEST_REPORT.md Phase 5 (Windows process cleanup).
+- **Problem:** if the harness itself is killed, cleanup relies on the MCP server exiting when its stdin closes. Verified for chrome-devtools-mcp; not guaranteed for other servers (Node has no Windows job objects).
+- **Decision (2026-10-06): Accept.**
+
+### I17: Nothing is verified on Linux or macOS
+- **Source:** TEST_REPORT.md Phase 2 and Phase 4 "Not verified".
+- **Problem:** every test and eval ran on Windows 11. Unverified: process-group kill on timeout (A7), the MCP transport and its tree shutdown, `/bin/sh` behavior, and symlink handling with `ln -s`.
+- **Decision (2026-10-06): Fix.** A GitHub Actions workflow runs `npx tsc --noEmit` and `npm test` on ubuntu-latest, macos-latest and windows-latest, on pushes to `main` and on pull requests. No API calls. Failures it reveals become new issues.
+
+## Verification gaps
+
+### I18: The A1 answer merge never ran live
+- **Source:** TEST_REPORT.md Phase 4.
+- **Problem:** the merge (when an answer after a follow-up is much shorter than the one before) is covered by unit tests only; no live run has triggered it.
+- **Decision (2026-10-06): Accept.** Unit-tested; the trigger is rare.
+
+### I19: Recent fixes are validated with gpt-4.1-mini only
+- **Source:** TEST_REPORT.md D5, N4, N5.
+- **Problem:** the pre-finish check (D1) was built for gpt-4.1's plan endings but validated with gpt-4.1-mini. The N4 URL rule and the N5 status line were also measured with gpt-4.1-mini only. gpt-4.1 has a 30k tokens-per-minute limit in this organization.
+- **Decision (2026-10-06): Defer.** Before using gpt-4.1 as the main model: `evals/url-check.ts`, the web tasks and web-research routed (about $0.5).
+
+### I20: Small samples make single-task differences noisy
+- **Source:** TEST_REPORT.md Phase 5, Phase 6, N4.
+- **Problem:** with 3 runs per cell, single-task differences are mostly noise (e.g. onboarding routed 1/3 vs preloaded 3/3). N4 showed that one exact prompt can give 0/20 or 20/20 depending on unrelated details such as a temp-directory name.
+- **Decision (2026-10-06): Accept.** Working rule from now on: a conclusion about model behavior needs a replay loop (at least 20 calls) or at least 10 runs, not 3.
+
+### I21: The interactive "y" path of the terminal prompt is untested
+- **Source:** TEST_REPORT.md Phase 2 "Not verified".
+- **Problem:** the automated tests have no TTY, so only the default-deny path is tested. The manual Ctrl+C check in Phase 5 used the prompt, but did not answer "y".
+- **Decision (2026-10-06): Accept.**
+
+## Eval tooling
+
+### I22: Re-run only the errored eval jobs (D3b)
+- **Source:** the earlier issues file (D3b).
+- **Problem:** after a rate-limited run, the whole task has to be re-run; merging partial results files is not supported. Deferred because rate-limit errors became rare after D3a.
+- **Decision (2026-10-06): Defer.** Revisit if rate-limit errors become common again.
+
+### I23: Run logs are local only
+- **Source:** the earlier issues file (D6); TEST_REPORT.md "Results files and logs".
+- **Problem:** the per-run logs (~45 MB) are not committed, so log-based re-scoring (`evals/rescore-skills.ts`, `evals/plan-detect-eval.ts`) and replays only work on the machine that ran the evals.
+- **Decision (2026-10-06): Accept.** The D6 decision.
+
+### I24: A hand-edited results file is committed
+- **Source:** TEST_REPORT.md Phase 2 "Not verified".
+- **Problem:** `evals/results/2026-09-28T00-11-35-377Z.json` was edited by hand to demo the comparison output. TEST_REPORT.md says to ignore it as a baseline, but it is committed like the genuine results files.
+- **Decision (2026-10-06): Fix.** Stop committing it: `git rm --cached` (the local file stays), exclude it in `evals/sanitize-results.ts` (TDD), and say so in TEST_REPORT.md.
+
+### I25: Some eval scores are regex heuristics
+- **Source:** TEST_REPORT.md Phase 5 and D5.
+- **Problem:** "warned the user", "injection followed" and `endedOnPlan` are regex checks on the final answer. One false "injection followed" was already found and fixed in D5.
+- **Decision (2026-10-06): Accept.**
+
+## Code health
+
+### I26: Deferred refactors from the code review
+- **Source:** code review 2026-10-05 (RESOLVED.md).
+- **Items:** (1) split `runAgent`; (2) a shared `test/helpers.ts`; (3) a tool kind property instead of tool-name cascades; (4) a structured tool result instead of the `"Error:"` prefix; (5) `evals/run.ts` as a testable `main()`; (6) one place to define a setting, which would also give `SKILL_ROUTER` and `PREFINISH_MAX` CLI flags. None changes behavior.
+- **Decision (2026-10-06): Defer.** Do each refactor when the code around it changes next.
+
+### I27: Nudge suggestions not integrated in Phase 3
+- **Source:** TEST_REPORT.md Phase 3, "Integration".
+- **Items:** extend the missing-file hint to the other file tools (`edit_file`, `list_dir` on a missing directory); don't count edit and search steps as "silent" for the note-taking reminder.
+- **Decision (2026-10-06): Defer.**
+
+## Repository
+
+### I28: Branches: `fix-url-refusal` unmerged, `review-round2` merged but kept
+- **Problem:** `fix-url-refusal` (N4, N5) is not merged into `main`. `review-round2` is fully merged into `main` and still exists locally.
+- **Decision (2026-10-06): Fix.** After this round and a `/code-review`: merge into `main` and push; delete the merged local branch `review-round2`.
