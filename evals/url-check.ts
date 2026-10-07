@@ -1,7 +1,7 @@
 // First-step check for web tasks: does the model open the task's URL with an MCP tool, or refuse
 // ("I cannot access local URLs"), look for it as a file, or call only MCP tools that don't load it
 // (list_pages, a snapshot of the blank tab)? Sends only the first request of each
-// web task, built from the current system prompt and the chrome-devtools tool definitions in
+// web task, built from the current system prompt, the [Harness status] line and the chrome-devtools tool definitions in
 // evals/fixtures/ (no browser, no MCP server). Each call gets a random working directory and port:
 // gpt-4.1-mini's choice is close to deterministic for one exact prompt but flips with such details,
 // so a rate is only meaningful across many variants.
@@ -13,11 +13,13 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { baseSystemPrompt, mcpToolsNote, UNTRUSTED_CONTENT_NOTE } from "../src/agent.js";
 import { loadEnv } from "../src/config.js";
+import { STATUS_PREFIX } from "../src/context/coverage.js";
 import { estimateText } from "../src/context/tokens.js";
 import { createClientFromEnv, missingEnv } from "../src/llm/index.js";
 import { withRetry } from "../src/llm/retry.js";
 import type { ToolDefinition } from "../src/llm/types.js";
 import { ResultPages } from "../src/mcp/resultPages.js";
+import { taskUrls, unopenedUrlStatus } from "../src/taskUrls.js";
 import { tools as builtinTools } from "../src/tools/index.js";
 import { tasks } from "./tasks/index.js";
 
@@ -56,10 +58,14 @@ for (const task of webTasks) {
       const baseUrl = `http://127.0.0.1:${49152 + Math.floor(Math.random() * 16000)}`;
       const system = baseSystemPrompt(cwd, "win32") + mcpToolsNote(mcpTools) + UNTRUSTED_CONTENT_NOTE;
       const user = (task.prompt as (web: { baseUrl: string }) => string)({ baseUrl });
+      // The harness's first request ends with the [Harness status] line naming the unopened task URL (N5).
+      const urls = taskUrls(user).map(String);
+      const status = urls.length ? [{ role: "user" as const, content: `${STATUS_PREFIX}\n${unopenedUrlStatus(urls)}` }] : [];
       const r = await client.chat(
         [
           { role: "system", content: system },
           { role: "user", content: user },
+          ...status,
         ],
         toolDefs,
       );
