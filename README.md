@@ -126,7 +126,7 @@ The harness can use tools from [MCP](https://modelcontextprotocol.io) servers (s
 Everything an MCP tool returns, such as a web page, is treated as data, not instructions:
 - The system prompt says so.
 - Every MCP result is wrapped in an `[Untrusted content from …]` / `[End of untrusted content …]` pair.
-- **Guard:** after the model has received MCP content, its next `run_shell`, `write_file` or `edit_file` asks for confirmation **even with auto-approve**. Each such call is logged as `post_untrusted_action`, and the eval runner always denies them.
+- **Guard:** after the model has received MCP content, its next `run_shell`, `write_file` or `edit_file`, or a call to an MCP tool its server does not auto-approve (e.g. `click`, `evaluate_script`), asks for confirmation **even with auto-approve**. Each such call is logged as `post_untrusted_action`, and the eval runner always denies them.
 - **Same-turn calls are deliberately not guarded.** A `run_shell` issued in the same turn as the first MCP call (e.g. `curl` of the URL next to `new_page`) runs as usual.
   - It was generated before any MCP result existed, so it can't be following instructions from that content.
   - Results from earlier turns are covered by the guard above.

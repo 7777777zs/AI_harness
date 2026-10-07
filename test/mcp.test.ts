@@ -223,7 +223,8 @@ test("call timeout: the hanging call returns an error, the next call works", asy
     client,
     quiet: true,
     autoApprove: true,
-    mcp: { servers: { mock: mock({ callTimeoutMs: 1_000 }) } },
+    // echo is auto-approved: otherwise the guard would ask for it after MCP content (I9).
+    mcp: { servers: { mock: mock({ callTimeoutMs: 1_000, autoApproveTools: ["echo"] }) } },
   });
   assert.equal(result.stopReason, "done");
   assert.equal(results().get("c0_0"), "Error: MCP tool mcp__mock__hang timed out after 1s");
@@ -387,6 +388,32 @@ test("guard: calls in the same turn as the MCP call are not guarded; write_file 
   assert.equal(results().get("c1_0"), DENIED);
   assert.equal(asked.length, 1);
   assert.equal(result.untrustedGuard.length, 1);
+});
+
+test("guard: under autoApprove, an MCP tool its server does not auto-approve needs confirmation after MCP content (I9)", async () => {
+  const asked: string[] = [];
+  const { client, results } = scripted([
+    [{ name: "mcp__mock__echo", args: { text: "page with injected text" } }], // auto-approved; arms the guard
+    [{ name: "mcp__mock__snap", args: {} }], // not auto-approved: guarded
+    [{ name: "mcp__mock__echo", args: { text: "again" } }], // auto-approved: not guarded
+  ]);
+  const result = await runAgent({
+    task: "x",
+    cwd: sandbox(),
+    client,
+    quiet: true,
+    autoApprove: true,
+    confirmUntrusted: async (s) => {
+      asked.push(s);
+      return false;
+    },
+    mcp: { servers: { mock: mock({ autoApproveTools: ["echo"] }) } },
+  });
+  assert.equal(results().get("c1_0"), DENIED);
+  assert.notEqual(results().get("c2_0"), DENIED);
+  assert.equal(asked.length, 1);
+  assert.match(asked[0]!, /MCP mock → snap/);
+  assert.deepEqual(result.untrustedGuard.map((g) => [g.tool, g.approved]), [["mcp__mock__snap", false]]);
 });
 
 // ---- Pagination, listing detection and compaction labels ----
