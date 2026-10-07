@@ -366,7 +366,7 @@ One fix inside my own new tests during development: E1 first assumed Level 1 pla
 | A true console Ctrl+C on Windows | Node on Windows can't deliver SIGINT to another process; `kill("SIGINT")` terminates it. Because the runner installs no handler, a real Ctrl+C takes the same default-exit path, so the result should match |
 | Tokens used by the in-flight jobs of the interrupted run | They were never recorded |
 | POSIX behaviour (`/bin/sh`, `ln -s`) | Everything ran on Windows 11 |
-| Results files from earlier sessions | `evals/results/2026-09-28T00-11-35-377Z.json` was edited by hand in the previous session to demo the comparison output; ignore it as a baseline |
+| Results files from earlier sessions | `evals/results/2026-09-28T00-11-35-377Z.json` was edited by hand in the previous session to demo the comparison output; ignore it as a baseline. It is not committed (`evals/sanitize-results.ts` excludes it; ISSUES.md I24) |
 
 
 ---

@@ -37,3 +37,10 @@ test("only the results files TEST_REPORT.md refers to are selected (full timesta
   const available = ["2026-09-29T02-51-29-962Z.json", "2026-10-05T00-05-06-173Z.json", "2026-10-05T00-09-49-068Z.json", "2026-09-28T00-05-06-111Z.json"];
   assert.deepEqual(referencedResults(report, available), ["2026-09-29T02-51-29-962Z.json", "2026-10-05T00-05-06-173Z.json"]);
 });
+
+test("the hand-edited results file is never selected, even when TEST_REPORT.md names it (I24)", async () => {
+  const { referencedResults } = await import("../evals/sanitize-results.js");
+  const report = "ignore evals/results/2026-09-28T00-11-35-377Z.json as a baseline; see 2026-09-29T02-51-29-962Z";
+  const available = ["2026-09-28T00-11-35-377Z.json", "2026-09-29T02-51-29-962Z.json"];
+  assert.deepEqual(referencedResults(report, available), ["2026-09-29T02-51-29-962Z.json"]);
+});

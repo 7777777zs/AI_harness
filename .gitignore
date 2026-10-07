@@ -3,7 +3,6 @@ logs/
 .env
 evals/results/*
 # BEGIN committed eval results (managed by evals/sanitize-results.ts)
-!evals/results/2026-09-28T00-11-35-377Z.json
 !evals/results/2026-09-28T01-40-39-246Z.json
 !evals/results/2026-09-28T08-30-28-062Z.json
 !evals/results/2026-09-29T00-52-17-626Z.json

@@ -53,11 +53,17 @@ const RESULTS = path.join(REPO, "evals", "results");
 const BEGIN = "# BEGIN committed eval results (managed by evals/sanitize-results.ts)";
 const END = "# END committed eval results";
 
+/** Never committed: edited by hand in Phase 2 to demo the comparison output, so it is not a real result (I24). */
+export const HAND_EDITED_RESULTS = new Set(["2026-09-28T00-11-35-377Z.json"]);
+
 /** Results files named in TEST_REPORT.md: full timestamps, or "00-05-06"-style ones from 2026-10-05 tables. */
 export function referencedResults(report: string, available: string[]): string[] {
   const full = new Set(report.match(/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z/g) ?? []);
   const short = new Set([...report.matchAll(/^\| (\d{2}-\d{2}-\d{2}) \|/gm)].map((m) => m[1]!));
-  return available.filter((f) => full.has(f.replace(/\.json$/, "")) || [...short].some((t) => f.startsWith(`2026-10-05T${t}-`))).sort();
+  return available
+    .filter((f) => !HAND_EDITED_RESULTS.has(f))
+    .filter((f) => full.has(f.replace(/\.json$/, "")) || [...short].some((t) => f.startsWith(`2026-10-05T${t}-`)))
+    .sort();
 }
 
 function main(): void {
