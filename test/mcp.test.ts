@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runAgent, UNTRUSTED_CONTENT_NOTE, untrustedEndTag, untrustedTag } from "../src/agent.js";
+import { NOTE_NUDGE, runAgent, UNTRUSTED_CONTENT_NOTE, untrustedEndTag, untrustedTag } from "../src/agent.js";
 import { taskUrls, unopenedUrlStatus } from "../src/taskUrls.js";
 import { ConfigError } from "../src/config.js";
 import { STATUS_PREFIX } from "../src/context/coverage.js";
@@ -58,11 +58,13 @@ function scripted(steps: Call[][], final = "done") {
   /** Tool results by call id across all requests. */
   const results = () => {
     const out = new Map<string, string>();
-    // Without the untrusted-content tags (checked separately); on errors they follow "Error: ".
+    // Without the untrusted-content tags and the request-only reminder after the latest untrusted
+    // result (both checked separately); on errors the tags follow "Error: ".
     const untag = (s: string) =>
       s.replace(/^(Error: )?\[Untrusted content from [^\]]*\]\n/, "$1").replace(/\n\[End of untrusted content from [^\]]*\]$/, "");
+    const unremind = (s: string) => (s.endsWith(NOTE_NUDGE) ? s.slice(0, -NOTE_NUDGE.length) : s);
     for (const r of requests) {
-      for (const m of r.messages) if (m.role === "tool") out.set(m.toolCallId, untag(m.content));
+      for (const m of r.messages) if (m.role === "tool") out.set(m.toolCallId, untag(unremind(m.content)));
     }
     return out;
   };
@@ -688,4 +690,33 @@ test("no unopened-URL status without MCP tools, or when the step's MCP call was 
   const result = await runAgent({ task: `Summarize ${TASK_URL}`, cwd: sandbox(), client, quiet: true, autoApprove: true, mcp: { servers: { mock: mock() } } });
   assert.ok(!requests[1]!.messages.some((m) => m.content?.includes("Not opened by any tool call")));
   assert.equal(result.nudges.unopenedUrl, 1, "only the first request");
+});
+
+// ---- Reminder after untrusted content (I8) ----
+
+test("each request carries the note-taking reminder after the latest untrusted result only; history keeps none (I8)", async () => {
+  const echo = (text: string) => ({ name: "mcp__mock__echo", args: { text } });
+  const { client, requests } = scripted([[echo("a")], [echo("b")], [{ name: "read_file", args: { path: "x.txt" } }]]);
+  const dir = sandbox();
+  fs.writeFileSync(path.join(dir, "x.txt"), "local");
+  const result = await runAgent({ task: "x", cwd: dir, client, quiet: true, autoApprove: true, mcp: { servers: { mock: mock({ autoApproveTools: ["echo"] }) } } });
+  const tool = (n: number, id: string) => requests[n]!.messages.find((m) => m.role === "tool" && m.toolCallId === id)!.content!;
+  assert.ok(tool(1, "c0_0").endsWith(NOTE_NUDGE), "latest untrusted result");
+  assert.ok(tool(2, "c1_0").endsWith(NOTE_NUDGE), "latest untrusted result");
+  assert.ok(!tool(2, "c0_0").includes("Reminder:"), "an older one has none");
+  for (const id of ["c0_0", "c1_0"]) {
+    assert.ok(!tool(3, id).includes("Reminder:"), `${id}: none when the latest turn has no untrusted result`);
+  }
+  const logged = logOf(result.logFile).filter((l) => l.type === "tool_result");
+  assert.ok(logged.every((l) => !String(l.content).includes("Reminder:")), "not stored or logged");
+});
+
+test("repeated untrusted calls get no repeat notice (it made injected instructions more likely to be followed); repeats are still counted (I8)", async () => {
+  const echo = { name: "mcp__mock__echo", args: { text: "same page" } };
+  const { client, requests } = scripted([[echo], [echo]]);
+  const result = await runAgent({ task: "x", cwd: sandbox(), client, quiet: true, autoApprove: true, mcp: { servers: { mock: mock({ autoApproveTools: ["echo"] }) } } });
+  const second = requests[2]!.messages.find((m) => m.role === "tool" && m.toolCallId === "c1_0")!.content!;
+  assert.ok(!second.includes("Note: you have called"));
+  assert.equal(result.repeatedCalls, 1);
+  assert.equal(result.nudges.repeat, 0);
 });

@@ -305,6 +305,24 @@ export function callKey(call: ToolCall): string {
   return `${call.name}:${JSON.stringify(normalized)}`;
 }
 
+/**
+ * The request's copy of `messages` with NOTE_NUDGE after the latest untrusted result of the last
+ * turn, if any. Never stored: in replays the reminder there cut how often injected instructions were
+ * followed from 40/60 to 2/60, but repeated after every untrusted result it stopped working (I8).
+ */
+export function withUntrustedReminder(messages: Message[], isUntrusted: (tool: string) => boolean): Message[] {
+  for (let i = messages.length - 1; i >= 0 && messages[i]!.role === "tool"; i--) {
+    const m = messages[i]!;
+    // Only results that carry untrusted content (wrapped), not answers the harness gave (e.g. denied).
+    if (m.role !== "tool" || !isUntrusted(m.name) || !m.content.includes(untrustedEndTag(m.name))) continue;
+    if (m.content.endsWith(NOTE_NUDGE)) return messages;
+    const out = [...messages];
+    out[i] = { ...m, content: m.content + NOTE_NUDGE };
+    return out;
+  }
+  return messages;
+}
+
 /** Appended to a tool result from the 2nd identical call on. */
 export function repeatNotice(call: ToolCall, count: number): string {
   const target =
@@ -679,7 +697,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     const withStatus = () => {
       const status = statusText();
       const pinned = skills?.pinnedText() ?? "";
-      const base = pinned ? [{ ...messages[0]!, content: messages[0]!.content + pinned }, ...messages.slice(1)] : messages;
+      const base = withUntrustedReminder(
+        pinned ? [{ ...messages[0]!, content: messages[0]!.content + pinned }, ...messages.slice(1)] : messages,
+        (name) => toolMap.get(name)?.untrusted === true,
+      );
       return status ? [...base, { role: "user" as const, content: status }] : base;
     };
 
@@ -887,10 +908,14 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         }
         if (count >= 2) {
           repeatedCalls++;
-          nudges.repeat++;
-          hints += repeatNotice(call, count);
           log({ type: "repeated_call", step, tool: call.name, args: call.args, count });
-          log({ type: "nudge", kind: "repeat", step, tool: call.name, count });
+          // Not on untrusted results: "move the task forward" there made injected instructions more
+          // likely to be followed (I8); the reminder after the latest one asks for findings instead.
+          if (!tool?.untrusted) {
+            nudges.repeat++;
+            hints += repeatNotice(call, count);
+            log({ type: "nudge", kind: "repeat", step, tool: call.name, count });
+          }
         }
         turn.push({ call, content, hints });
       }
@@ -926,7 +951,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       silentSteps = response.text?.trim() ? 0 : silentSteps + 1;
       if (silentSteps >= SILENT_STEPS_BEFORE_NUDGE && step - lastNoteNudge >= NOTE_NUDGE_COOLDOWN) {
         const last = messages.at(-1)!;
-        if (last.role === "tool") {
+        // Not stored on an untrusted result: the request already adds the reminder after the latest one.
+        if (last.role === "tool" && !toolMap.get(last.name)?.untrusted) {
           messages[messages.length - 1] = { ...last, content: last.content + NOTE_NUDGE };
           lastNoteNudge = step;
           nudges.notes++;

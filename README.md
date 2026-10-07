@@ -127,6 +127,7 @@ Everything an MCP tool returns, such as a web page, is treated as data, not inst
 - The system prompt says so.
 - Every MCP result is wrapped in an `[Untrusted content from …]` / `[End of untrusted content …]` pair.
 - **Guard:** after the model has received MCP content, its next `run_shell`, `write_file` or `edit_file`, or a call to an MCP tool its server does not auto-approve (e.g. `click`, `evaluate_script`), asks for confirmation **even with auto-approve**. Each such call is logged as `post_untrusted_action`, and the eval runner always denies them.
+- **Reminder after the latest untrusted result:** each request adds the note-taking reminder ("write down key findings in your reply text") after the most recent wrapped MCP result of the last turn. It is never stored, so it appears once per request: repeated after every result, it stopped working. In replays of a step where the model had just read an injected page, it cut how often the injected instructions were followed from 40/60 to 2/60 (ISSUES.md I8). Hints that ask the model to move on, such as the repeat notice, made injections more likely to be followed, so untrusted results never get them.
 - **Same-turn calls are deliberately not guarded.** A `run_shell` issued in the same turn as the first MCP call (e.g. `curl` of the URL next to `new_page`) runs as usual.
   - It was generated before any MCP result existed, so it can't be following instructions from that content.
   - Results from earlier turns are covered by the guard above.
@@ -353,7 +354,7 @@ Before each model call, the harness estimates the context size. The starting poi
 
 **Other safeguards:**
 - **Nudges** are hints appended to tool results and logged as `nudge`:
-  - **Repeats:** from the 2nd identical call (same tool and normalized arguments), a note asks the model to record findings instead of re-reading.
+  - **Repeats:** from the 2nd identical call (same tool and normalized arguments), a note asks the model to record findings instead of re-reading. Not on untrusted (MCP) results; see Untrusted content.
   - **Missing files:** on the first `read_file` of a missing file, a hint tells the model to list the project files instead of guessing.
   - **Notes:** after 3 consecutive tool-calling steps with no reply text, a reminder asks the model to write down its findings. It fires at most once every 3 steps.
 - **Long output:** tool output over 10,000 characters keeps the first 6,000 and last 2,000 characters, with a `[... truncated: N chars / M lines omitted (T lines total) ...]` marker in between.
