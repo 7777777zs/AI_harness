@@ -8,7 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { NOTE_NUDGE, runAgent, UNTRUSTED_CONTENT_NOTE, untrustedEndTag, untrustedTag } from "../src/agent.js";
-import { taskUrls, unopenedUrlStatus } from "../src/taskUrls.js";
+import { mentionsUrl, taskUrls, unopenedUrlStatus } from "../src/taskUrls.js";
 import { ConfigError } from "../src/config.js";
 import { STATUS_PREFIX } from "../src/context/coverage.js";
 import { elideToolResults } from "../src/context/compact.js";
@@ -62,9 +62,9 @@ function scripted(steps: Call[][], final = "done") {
     // result (both checked separately); on errors the tags follow "Error: ".
     const untag = (s: string) =>
       s.replace(/^(Error: )?\[Untrusted content from [^\]]*\]\n/, "$1").replace(/\n\[End of untrusted content from [^\]]*\]$/, "");
-    const unremind = (s: string) => (s.endsWith(NOTE_NUDGE) ? s.slice(0, -NOTE_NUDGE.length) : s);
+    const withoutReminder = (s: string) => (s.endsWith(NOTE_NUDGE) ? s.slice(0, -NOTE_NUDGE.length) : s);
     for (const r of requests) {
-      for (const m of r.messages) if (m.role === "tool") out.set(m.toolCallId, untag(unremind(m.content)));
+      for (const m of r.messages) if (m.role === "tool") out.set(m.toolCallId, untag(withoutReminder(m.content)));
     }
     return out;
   };
@@ -719,4 +719,44 @@ test("repeated untrusted calls get no repeat notice (it made injected instructio
   assert.ok(!second.includes("Note: you have called"));
   assert.equal(result.repeatedCalls, 1);
   assert.equal(result.nudges.repeat, 0);
+});
+
+test("a task URL counts as opened only when a call mentions that URL, not another page or a longer port on its host (review)", () => {
+  const [url] = taskUrls("Open http://127.0.0.1:5000/a.html");
+  assert.equal(mentionsUrl({ url: "http://127.0.0.1:5000/a.html" }, url!), true);
+  assert.equal(mentionsUrl({ url: "http://127.0.0.1:50001/a.html" }, url!), false, "a longer port");
+  assert.equal(mentionsUrl({ url: "http://127.0.0.1:5000/other.html" }, url!), false, "another page on the host");
+  const [root] = taskUrls("Summarize http://127.0.0.1:5000");
+  assert.equal(mentionsUrl({ url: "http://127.0.0.1:5000" }, root!), true, "without the trailing slash URL adds");
+  assert.equal(mentionsUrl({ url: "http://127.0.0.1:5000/" }, root!), true);
+});
+
+test("one reminder per request: none after an untrusted result when the stored note-taking nudge is in the same turn (review)", async () => {
+  const echo = (text: string) => ({ name: "mcp__mock__echo", args: { text } });
+  const { client, requests } = scripted([[echo("a")], [echo("b")], [echo("c"), { name: "read_file", args: { path: "x.txt" } }]]);
+  const dir = sandbox();
+  fs.writeFileSync(path.join(dir, "x.txt"), "local");
+  const result = await runAgent({ task: "x", cwd: dir, client, quiet: true, autoApprove: true, mcp: { servers: { mock: mock({ autoApproveTools: ["echo"] }) } } });
+  assert.equal(result.nudges.notes, 1, "the note-taking nudge fired on the read_file result");
+  const reminders = requests[3]!.messages.filter((m) => m.content?.includes("Reminder:")).length;
+  assert.equal(reminders, 1);
+});
+
+test("the stored note-taking nudge skips untrusted results; the request's reminder covers them (review)", async () => {
+  const echo = (text: string) => ({ name: "mcp__mock__echo", args: { text } });
+  const { client, requests } = scripted([[echo("a")], [echo("b")], [echo("c")]]);
+  const result = await runAgent({ task: "x", cwd: sandbox(), client, quiet: true, autoApprove: true, mcp: { servers: { mock: mock({ autoApproveTools: ["echo"] }) } } });
+  assert.equal(result.nudges.notes, 0);
+  assert.equal(requests[3]!.messages.filter((m) => m.content?.includes("Reminder:")).length, 1);
+});
+
+test("a denied MCP call gets no reminder; a read_tool_result page does (review)", async () => {
+  const denied = scripted([[{ name: "mcp__mock__snap", args: {} }]]);
+  await runAgent({ task: "x", cwd: sandbox(), client: denied.client, quiet: true, confirm: async () => false, mcp: { servers: { mock: mock() } } });
+  assert.equal(denied.requests[1]!.messages.find((m) => m.role === "tool")!.content, DENIED);
+
+  const paged = scripted([[{ name: "mcp__mock__big", args: {} }], [{ name: "read_tool_result", args: { id: "mcp-1", offset: 25_000, limit: 10_000 } }]]);
+  await runAgent({ task: "x", cwd: sandbox(), client: paged.client, quiet: true, autoApprove: true, mcp: { servers: { mock: mock({ autoApproveTools: ["big"] }) } } });
+  const page = paged.requests[2]!.messages.find((m) => m.role === "tool" && m.toolCallId === "c1_0")!.content!;
+  assert.ok(page.endsWith(NOTE_NUDGE));
 });

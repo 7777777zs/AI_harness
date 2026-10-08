@@ -20,7 +20,7 @@ import {
 } from "./config.js";
 import { capResult, capTurn, RESULT_CAP_FRACTION, shrinkNewest, TURN_CAP_FRACTION } from "./context/budget.js";
 import { compact } from "./context/compact.js";
-import { Coverage, isWholeProjectTask, STATUS_PREFIX } from "./context/coverage.js";
+import { Coverage, isWholeProjectTask } from "./context/coverage.js";
 import { ContextStore } from "./context/store.js";
 import { ContextTracker, estimateTokens, estimateToolDefs } from "./context/tokens.js";
 import { makeDescriber, makeSummarizer } from "./context/summarize.js";
@@ -32,7 +32,7 @@ import { discoverSkills, type Discovery } from "./skills/load.js";
 import { readOnlyViolation, SkillRegistry, SKILLS_CAP_FRACTION } from "./skills/registry.js";
 import { routeSkill } from "./skills/router.js";
 import { completionGaps, completionMessage, isPlanOnly, PLAN_NUDGE } from "./prefinish.js";
-import { mentionsUrl, taskUrls, unopenedUrlStatus } from "./taskUrls.js";
+import { mentionsUrl, taskUrls, withUnopenedUrls } from "./taskUrls.js";
 
 export const MAX_STEPS = DEFAULTS.maxSteps;
 
@@ -235,7 +235,7 @@ export interface NudgeStats {
   plan: number;
   /** Loaded skills' completion criteria not met by a final answer (at most once per run). */
   completion: number;
-  /** Requests whose status message named a task URL no MCP call had been given yet (one per step). */
+  /** Requests whose status message named a task URL no MCP call had been given yet (retries included). */
   unopenedUrl: number;
 }
 
@@ -307,15 +307,19 @@ export function callKey(call: ToolCall): string {
 
 /**
  * The request's copy of `messages` with NOTE_NUDGE after the latest untrusted result of the last
- * turn, if any. Never stored: in replays the reminder there cut how often injected instructions were
- * followed from 40/60 to 2/60, but repeated after every untrusted result it stopped working (I8).
+ * turn, if any, and if no result of that turn carries it already. Never stored: in replays, the
+ * reminder after the result that held injected instructions cut how often they were followed from
+ * 39/60 to 2/60, but stored after every untrusted result it stopped working (40/60; RESOLVED.md I8).
  */
 export function withUntrustedReminder(messages: Message[], isUntrusted: (tool: string) => boolean): Message[] {
-  for (let i = messages.length - 1; i >= 0 && messages[i]!.role === "tool"; i--) {
+  let start = messages.length;
+  while (start > 0 && messages[start - 1]!.role === "tool") start--;
+  const turn = messages.slice(start);
+  if (turn.some((m) => m.content?.endsWith(NOTE_NUDGE))) return messages; // one reminder per request
+  for (let i = messages.length - 1; i >= start; i--) {
     const m = messages[i]!;
     // Only results that carry untrusted content (wrapped), not answers the harness gave (e.g. denied).
     if (m.role !== "tool" || !isUntrusted(m.name) || !m.content.includes(untrustedEndTag(m.name))) continue;
-    if (m.content.endsWith(NOTE_NUDGE)) return messages;
     const out = [...messages];
     out[i] = { ...m, content: m.content + NOTE_NUDGE };
     return out;
@@ -688,26 +692,30 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     // N5: task URLs no MCP call has been given yet. Said here, not in a tool result: a harness note
     // inside an MCP result stays in history and made gpt-4.1-mini follow injected page text more often.
     const unopenedNow = () => ([...toolMap.values()].some((t) => t.source?.kind === "mcp") ? [...unopenedUrls] : []);
-    const statusText = () => {
-      const files = coverage.statusBlock(opts.task);
-      const unopened = unopenedNow();
-      if (unopened.length === 0) return files;
-      return `${files ?? STATUS_PREFIX}\n${unopenedUrlStatus(unopened)}`;
-    };
-    const withStatus = () => {
+    const statusText = () => withUnopenedUrls(coverage.statusBlock(opts.task), unopenedNow());
+    const isUntrustedTool = (name: string) => toolMap.get(name)?.untrusted === true;
+    /** The messages of the next request: pinned skills, the I8 reminder and the status message added. */
+    const buildRequest = () => {
       const status = statusText();
       const pinned = skills?.pinnedText() ?? "";
       const base = withUntrustedReminder(
         pinned ? [{ ...messages[0]!, content: messages[0]!.content + pinned }, ...messages.slice(1)] : messages,
-        (name) => toolMap.get(name)?.untrusted === true,
+        isUntrustedTool,
       );
+      const unopened = unopenedNow();
+      if (unopened.length) {
+        nudges.unopenedUrl++;
+        log({ type: "nudge", kind: "unopened_url", step, urls: unopened });
+      }
       return status ? [...base, { role: "user" as const, content: status }] : base;
     };
 
     // A3 preflight: never send a request estimated above the context limit.
     const preflight = () => {
       const status = statusText();
-      const estimate = tracker.estimate(messages, toolDefs) + (status ? tracker.tokensOf(status) : 0) + pinnedDelta();
+      const reminder = withUntrustedReminder(messages, isUntrustedTool) !== messages ? tracker.tokensOf(NOTE_NUDGE) : 0;
+      const estimate =
+        tracker.estimate(messages, toolDefs) + (status ? tracker.tokensOf(status) : 0) + reminder + pinnedDelta();
       if (estimate <= contextLimit) return;
       const shrunk = shrinkNewest(messages, estimate - contextLimit, tokensOf);
       if (shrunk.shrunk.length === 0) return;
@@ -731,12 +739,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       await maybeCompact(false);
       preflight();
 
-      let request = withStatus();
-      const unopened = unopenedNow();
-      if (unopened.length) {
-        nudges.unopenedUrl++;
-        log({ type: "nudge", kind: "unopened_url", step, urls: unopened });
-      }
+      let request = buildRequest();
       let response: LLMResponse;
       let sentCount = messages.length;
       try {
@@ -748,7 +751,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         await maybeCompact(true);
         preflight();
         sentCount = messages.length;
-        request = withStatus();
+        request = buildRequest();
         try {
           response = await client.chat(request, toolDefs);
         } catch (retryErr) {

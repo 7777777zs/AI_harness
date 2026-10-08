@@ -1,8 +1,8 @@
 // First-step check for web tasks: does the model open the task's URL with an MCP tool, or refuse
 // ("I cannot access local URLs"), look for it as a file, or call only MCP tools that don't load it
-// (list_pages, a snapshot of the blank tab)? Sends only the first request of each
-// web task, built from the current system prompt, the [Harness status] line and the chrome-devtools tool definitions in
-// evals/fixtures/ (no browser, no MCP server). Each call gets a random working directory and port:
+// (list_pages, a snapshot of the blank tab)? Sends only the first request of each web task, built
+// from the current system prompt, the [Harness status] line and the chrome-devtools tool definitions
+// in evals/fixtures/ (no browser, no MCP server). Each call gets a random working directory and port:
 // gpt-4.1-mini's choice is close to deterministic for one exact prompt but flips with such details,
 // so a rate is only meaningful across many variants.
 //   npx tsx evals/url-check.ts [--runs N] [--task id]
@@ -13,13 +13,12 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { baseSystemPrompt, mcpToolsNote, UNTRUSTED_CONTENT_NOTE } from "../src/agent.js";
 import { loadEnv } from "../src/config.js";
-import { STATUS_PREFIX } from "../src/context/coverage.js";
 import { estimateText } from "../src/context/tokens.js";
 import { createClientFromEnv, missingEnv } from "../src/llm/index.js";
 import { withRetry } from "../src/llm/retry.js";
-import type { ToolDefinition } from "../src/llm/types.js";
+import type { ToolCall, ToolDefinition } from "../src/llm/types.js";
 import { ResultPages } from "../src/mcp/resultPages.js";
-import { taskUrls, unopenedUrlStatus } from "../src/taskUrls.js";
+import { mentionsUrl, taskUrls, withUnopenedUrls } from "../src/taskUrls.js";
 import { tools as builtinTools } from "../src/tools/index.js";
 import { tasks } from "./tasks/index.js";
 
@@ -48,7 +47,7 @@ let inputTokens = 0;
 let outputTokens = 0;
 let totalMisses = 0;
 for (const task of webTasks) {
-  // opened: an MCP call with the task's URL in its arguments (e.g. new_page, navigate_page).
+  // opened: an MCP call with the task URL itself in its arguments (e.g. new_page, navigate_page).
   // otherMcp: MCP calls that don't load it (e.g. only list_pages, or a snapshot of the blank tab).
   const counts = { opened: 0, otherMcp: 0, local: 0, text: 0 };
   const examples: string[] = [];
@@ -59,8 +58,9 @@ for (const task of webTasks) {
       const system = baseSystemPrompt(cwd, "win32") + mcpToolsNote(mcpTools) + UNTRUSTED_CONTENT_NOTE;
       const user = (task.prompt as (web: { baseUrl: string }) => string)({ baseUrl });
       // The harness's first request ends with the [Harness status] line naming the unopened task URL (N5).
-      const urls = taskUrls(user).map(String);
-      const status = urls.length ? [{ role: "user" as const, content: `${STATUS_PREFIX}\n${unopenedUrlStatus(urls)}` }] : [];
+      const urls = taskUrls(user);
+      const statusText = withUnopenedUrls(null, urls.map(String));
+      const status = statusText ? [{ role: "user" as const, content: statusText }] : [];
       const r = await client.chat(
         [
           { role: "system", content: system },
@@ -72,8 +72,8 @@ for (const task of webTasks) {
       inputTokens += r.usage.inputTokens;
       outputTokens += r.usage.outputTokens;
       const names = r.toolCalls.map((c) => c.name);
-      const host = new URL(baseUrl).host;
-      if (r.toolCalls.some((c) => c.name.startsWith("mcp__") && JSON.stringify(c.args ?? {}).includes(host))) counts.opened++;
+      const opened = (args: ToolCall["args"]) => urls.some((url) => mentionsUrl(args, url));
+      if (r.toolCalls.some((c) => c.name.startsWith("mcp__") && opened(c.args))) counts.opened++;
       else if (names.length) {
         if (names.some((n) => n.startsWith("mcp__"))) counts.otherMcp++;
         else counts.local++;
