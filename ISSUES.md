@@ -38,6 +38,7 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 | I27 | [Nudge suggestions not integrated in Phase 3](#i27-nudge-suggestions-not-integrated-in-phase-3) | Code health | **Defer** |
 | I29 | [Windows: `find` in `run_shell` can be Git's Unix `find`](#i29-windows-find-in-run_shell-can-be-gits-unix-find) | Processes | **Accept** |
 | I30 | [The paging note of an oversized untrusted result](#i30-the-paging-note-of-an-oversized-untrusted-result) | Security | **Defer** |
+| I31 | [A shrunk untrusted result loses its reminder](#i31-a-shrunk-untrusted-result-loses-its-reminder) | Security | **Defer** |
 
 ---
 
@@ -188,3 +189,8 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 - **Source:** TEST_REPORT.md, "Issues round 2" (I8).
 - **Problem:** the paging note inside an oversized MCP result ("Search this result with read_tool_result … or read on with offset=…") raised how often the injected instructions were followed: 51/60 without the reminder and 21/60 with it, against 2/60 for a plain result with the reminder. The note is needed to read long pages.
 - **Decision (2026-10-07): Defer.** Next step: replay a long-page state with an injection, comparing the current note with a factual-only marker plus the reminder.
+
+### I31: A shrunk untrusted result loses its reminder
+- **Source:** code review of `issues-round2` (2026-10-07).
+- **Problem:** the I8 reminder is added only after a result that still ends with the untrusted end tag. When the per-turn cap or the preflight shrinks an untrusted result and cuts its tail, the tag and with it the reminder are gone for that request.
+- **Decision (2026-10-07): Defer.** It needs a result large enough to be shrunk in the same turn the injected content arrives; revisit with I30, which concerns the same oversized results.
