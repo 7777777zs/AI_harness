@@ -395,7 +395,7 @@ See **Configuration** above for all settings (`CONTEXT_LIMIT`, `COMPACT_THRESHOL
 npm test
 ```
 
-Unit tests for compaction and the agent loop. They use `node:test` and a fake LLM client, so no API calls are made.
+Unit and integration tests for the agent loop, compaction, tools, safety, MCP (with a mock server), skills, retries and the CLI. They use `node:test`, fake LLM clients and a mock MCP server, so no API calls are made. CI (`.github/workflows/ci.yml`) runs the type check and the tests on Linux, macOS and Windows.
 
 ## Evals
 

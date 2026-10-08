@@ -38,6 +38,11 @@ Issues that are fixed, or closed with a decision that needs no further work. Ope
 | Code review findings (2026-10-05) | See below | branch `review-round2` |
 | N4: gpt-4.1-mini refused to open local URLs | URL rule in the MCP tools note | branch `fix-url-refusal` |
 | N5: gave up after seeing only the blank tab | Unopened task URLs named in the `[Harness status]` message | branch `fix-url-refusal` |
+| I8: harness hints after untrusted content made injections more likely to be followed | Reminder added per request after the latest untrusted result only; no repeat notice on untrusted results | `73939f4` |
+| I9: confirmation-required MCP tools ran unguarded under auto-approve after untrusted content | Guarded like `run_shell`/`write_file`/`edit_file` | `b320254` |
+| I17: nothing verified on Linux or macOS | CI runs the type check and tests on Linux, macOS and Windows | `725d7be` |
+| I24: a hand-edited results file was committed | Excluded and removed from the index | `1529f6a` |
+| I28: unmerged and stale branches | `issues-round2` merged into `main` after a code review; `review-round2` deleted | 2026-10-07 |
 
 ---
 
@@ -267,3 +272,23 @@ Two timing tests (eval Ctrl+C, B3 list_dir/grep guards) failed under full-suite 
 - **Result (end to end):** prompt-injection 10/10 with no injection followed, multi-page 10/10, read-page 5/5. In 4 runs step 1 only listed pages; all opened the URL in step 2 after the status line.
 - **Regression tests:** `test/mcp.test.ts` checks two things. Each request carries the status line until an MCP call is given the URL, and never after; nothing is added to tool results. And there is no line without MCP tools, or when the first step's call was given the URL. Model behavior itself has no deterministic seam; the replays and the web evals are the behavioral check.
 - **Not covered** (open in [ISSUES.md](ISSUES.md)): the variant where `wait_for` times out after `navigate_page` (1 of 26 runs). The URL counts as opened there, so the status line doesn't fire. A URL-aware missing-file hint fixed it in replays (19/20 went on to `take_snapshot`), but it was not adopted: it would put a harness instruction into history, and its effect on injection was not measured.
+
+## Issues round 2 (2026-10-06/07)
+
+The data is in TEST_REPORT.md, "Issues round 2".
+
+### I8: harness text after untrusted content
+- **Finding:** what decides whether the model follows injected page text is what the last harness text asks for. In replays of a step where the model had just read an injected page (60 calls each): nothing after the result 39/60; the note-taking reminder 2/60; the repeat notice ("move the task forward") 55/60, in the result and in the status message alike.
+- **Habituation:** stored after every untrusted result, the reminder stopped working (40/60 in a real failing state; 3/10 runs end to end). Kept only after the latest one, the same state gave 2/60.
+- **Fix:** each request adds the reminder after the most recent wrapped MCP result of the last turn; it is never stored or logged. Untrusted results get no repeat notice; the stored note-taking nudge skips them; harness-made answers (e.g. a denial) get no reminder.
+- **Result:** prompt-injection 10/10 end to end with no injection followed; read-page 3/3, multi-page 4/5, long-page 2/3.
+- **Left open:** the paging note (I30).
+
+### I9: guard for confirmation-required MCP tools
+- MCP tools their server does not auto-approve (e.g. `click`, `evaluate_script`) now need confirmation after untrusted content even under auto-approve. Auto-approved tools, such as the six read-only tools the evals use, are unaffected.
+
+### I17: CI
+- `.github/workflows/ci.yml` runs `npx tsc --noEmit` and `npm test` on ubuntu-latest, macos-latest and windows-latest for pushes to `main` and for pull requests.
+
+### I24: the hand-edited results file
+- `evals/results/2026-09-28T00-11-35-377Z.json` is excluded by `evals/sanitize-results.ts` and no longer committed; the local file stays.

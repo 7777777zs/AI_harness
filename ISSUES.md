@@ -13,15 +13,13 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 
 | ID | Item | Area | Status |
 |---|---|---|---|
-| I1 | [count-lines: the model estimates instead of counting](#i1-count-lines-the-model-estimates-instead-of-counting) | Model behavior | **Fix** |
+| I1 | [count-lines: the model estimates instead of counting](#i1-count-lines-the-model-estimates-instead-of-counting) | Model behavior | **Defer** |
 | I2 | [Files read but left out of the answer](#i2-files-read-but-left-out-of-the-answer) | Model behavior | **Accept** |
 | I3 | [Small-range re-reading is not stopped by the repeat notice](#i3-small-range-re-reading-is-not-stopped-by-the-repeat-notice) | Model behavior | **Defer** |
 | I4 | [long-page still fails 1 run in 3](#i4-long-page-still-fails-1-run-in-3) | Model behavior | **Defer** |
 | I5 | [Giving up after a `wait_for` timeout (N5 variant)](#i5-giving-up-after-a-wait_for-timeout-n5-variant) | Model behavior | **Defer** |
 | I6 | [Completion rules check format, not substance (N2)](#i6-completion-rules-check-format-not-substance-n2) | Skills | **Accept** |
 | I7 | [Plan detection is unverified on Chinese text (N3)](#i7-plan-detection-is-unverified-on-chinese-text-n3) | Pre-finish check | **Defer** |
-| I8 | [Harness hints are still appended inside MCP results](#i8-harness-hints-are-still-appended-inside-mcp-results) | Security | **Fix (measure first)** |
-| I9 | [Under auto-approve, confirmation-required MCP tools are not guarded](#i9-under-auto-approve-confirmation-required-mcp-tools-are-not-guarded) | Security | **Fix** |
 | I10 | [Prompt-level injection defenses are unreliable](#i10-prompt-level-injection-defenses-are-unreliable) | Security | **Accept** |
 | I11 | [Same-turn guard gap (D2)](#i11-same-turn-guard-gap-d2) | Security | **Accept** |
 | I12 | [The guard also blocks harmless actions](#i12-the-guard-also-blocks-harmless-actions) | Security | **Accept** |
@@ -29,18 +27,17 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 | I14 | [Read-only git allowlist and repository git config](#i14-read-only-git-allowlist-and-repository-git-config) | Security | **Accept** |
 | I15 | [No internet block outside evals](#i15-no-internet-block-outside-evals) | Security | **Accept** |
 | I16 | [Cleanup after a hard kill depends on the MCP server](#i16-cleanup-after-a-hard-kill-depends-on-the-mcp-server) | Processes | **Accept** |
-| I17 | [Nothing is verified on Linux or macOS](#i17-nothing-is-verified-on-linux-or-macos) | Platforms | **Fix** |
 | I18 | [The A1 answer merge never ran live](#i18-the-a1-answer-merge-never-ran-live) | Verification | **Accept** |
 | I19 | [Recent fixes are validated with gpt-4.1-mini only](#i19-recent-fixes-are-validated-with-gpt-41-mini-only) | Verification | **Defer** |
 | I20 | [Small samples make single-task differences noisy](#i20-small-samples-make-single-task-differences-noisy) | Eval method | **Accept** |
 | I21 | [The interactive "y" path of the terminal prompt is untested](#i21-the-interactive-y-path-of-the-terminal-prompt-is-untested) | Verification | **Accept** |
 | I22 | [Re-run only the errored eval jobs (D3b)](#i22-re-run-only-the-errored-eval-jobs-d3b) | Eval tooling | **Defer** |
 | I23 | [Run logs are local only](#i23-run-logs-are-local-only) | Eval tooling | **Accept** |
-| I24 | [A hand-edited results file is committed](#i24-a-hand-edited-results-file-is-committed) | Eval tooling | **Fix** |
 | I25 | [Some eval scores are regex heuristics](#i25-some-eval-scores-are-regex-heuristics) | Eval tooling | **Accept** |
 | I26 | [Deferred refactors from the code review](#i26-deferred-refactors-from-the-code-review) | Code health | **Defer** |
 | I27 | [Nudge suggestions not integrated in Phase 3](#i27-nudge-suggestions-not-integrated-in-phase-3) | Code health | **Defer** |
-| I28 | [Branches: `fix-url-refusal` unmerged, `review-round2` merged but kept](#i28-branches-fix-url-refusal-unmerged-review-round2-merged-but-kept) | Repository | **Fix** |
+| I29 | [Windows: `find` in `run_shell` can be Git's Unix `find`](#i29-windows-find-in-run_shell-can-be-gits-unix-find) | Processes | **Accept** |
+| I30 | [The paging note of an oversized untrusted result](#i30-the-paging-note-of-an-oversized-untrusted-result) | Security | **Defer** |
 
 ---
 
@@ -50,7 +47,8 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 - **Source:** TEST_REPORT.md P3; every full suite since Phase 2.
 - **Problem:** asked how many lines a file has, gpt-4.1-mini reads it and estimates ("120 lines") instead of counting with a tool. The task fails in almost every run (1/3 once in Phase 4).
 - **Options:** a system-prompt line such as "use tools to compute exact counts rather than estimating", validated on count-lines and a core-suite run; or keep it as a known model limitation and a regression signal.
-- **Decision (2026-10-06): Fix.** Add one system-prompt line: compute exact numbers (counts, sizes, totals) with a tool instead of estimating. TDD: a unit test asserts the line is in the base system prompt. Validate with count-lines ×5, one core-suite run and `evals/url-check.ts` (the prompt sits near a tipping point, N4).
+- **Tried (2026-10-07), not merged:** a prompt line, and a `read_file` footer with the total at the end of a ranged read. count-lines went to 8/10 (prompt line + footer) and 7/10 (footer only), but long-context passed 3/5 instead of 4/5 and used 2–3× the tokens (112k and 88k against 37k), because both encourage reading in small ranges. A footer on full reads would break the B1 contract (a full read written back is byte-identical). Data: TEST_REPORT.md, "Issues round 2".
+- **Decision (2026-10-07): Defer.** Next step if revisited: show the total only when a ranged read reaches the end of the file, without changing the tool description, and measure long-context ×10 before and after.
 
 ### I2: Files read but left out of the answer
 - **Source:** TEST_REPORT.md Phase 3 A and Phase 4 (trustworthy-summary 2/3: the model read `tests/` but did not describe it).
@@ -71,7 +69,7 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 - **Source:** RESOLVED.md, N5 ("Not covered"); 1 of 26 end-to-end web runs.
 - **Problem:** after `navigate_page` the model waits for text that never appears, the wait times out, it looks for the page as a local file, and gives up without a snapshot. The URL counts as opened, so the N5 status line doesn't fire.
 - **Known candidate:** a URL-aware missing-file hint ("index.html is part of the URL …") fixed it in replays (19/20 went on to `take_snapshot`). It was not adopted: it would put a harness instruction into history, and its effect on injection was not measured (see I8).
-- **Decision (2026-10-06): Defer.** Revisit if I8 shows that harness hints kept in history do not raise injection following.
+- **Decision (2026-10-06): Defer.** I8 (2026-10-07) showed that hint text after untrusted content changes how often injected instructions are followed, so a URL-aware missing-file hint would need its own injection replay before it could be adopted.
 
 ## Skills and the pre-finish check
 
@@ -86,17 +84,6 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 - **Decision (2026-10-06): Defer.** Re-run `evals/plan-detect-eval.ts` once logs contain Chinese final answers.
 
 ## Security
-
-### I8: Harness hints are still appended inside MCP results
-- **Source:** new, from the N5 diagnosis (RESOLVED.md).
-- **Finding:** a harness note appended to an MCP result raised how often the model followed injected page text, from 2/60 to 12/60 replies. That note stays in history next to the page content.
-- **Problem:** other harness text still goes into MCP results the same way. The repeat notice is appended to any repeated call, including `take_snapshot`. The note-taking reminder is appended to the last tool result of a step, which can be an MCP result. And there are the paging note and the dedupe reference of stored results (D4). Their effect on injection is unmeasured.
-- **Decision (2026-10-06): Fix (measure first).** Replay the step where prompt-injection #10 read the injected page (RESOLVED.md, N5), 60 calls per variant, with each hint added where the harness would put it: the repeat notice and the note-taking reminder on the snapshot result, the paging note inside it. Baseline: 2/60 without hints. A hint whose rate is higher with one-sided Fisher p < 0.05 moves into the `[Harness status]` message (TDD); the others stay and the numbers are recorded.
-
-### I9: Under auto-approve, confirmation-required MCP tools are not guarded
-- **Source:** new; `GUARDED_TOOLS` in `src/agent.ts`, TEST_REPORT.md Phase 5 ("Guarded tools are fixed").
-- **Problem:** after untrusted content, only `run_shell`, `write_file` and `edit_file` need confirmation again. MCP tools that are not auto-approved by their server (e.g. `click`, `fill`, `evaluate_script`) normally ask anyway. But with `autoApprove: true` (programmatic use, evals) they run without asking, even right after the model read injected content. The evals expose only the six read-only tools, so this is untested there.
-- **Decision (2026-10-06): Fix.** After untrusted content, MCP tools that their server does not auto-approve need confirmation again even under auto-approve, like `run_shell`/`write_file`/`edit_file`. TDD with the mock MCP server; no API calls.
 
 ### I10: Prompt-level injection defenses are unreliable
 - **Source:** TEST_REPORT.md Phase 5 and the N4/N5 rounds.
@@ -139,11 +126,6 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 - **Problem:** if the harness itself is killed, cleanup relies on the MCP server exiting when its stdin closes. Verified for chrome-devtools-mcp; not guaranteed for other servers (Node has no Windows job objects).
 - **Decision (2026-10-06): Accept.**
 
-### I17: Nothing is verified on Linux or macOS
-- **Source:** TEST_REPORT.md Phase 2 and Phase 4 "Not verified".
-- **Problem:** every test and eval ran on Windows 11. Unverified: process-group kill on timeout (A7), the MCP transport and its tree shutdown, `/bin/sh` behavior, and symlink handling with `ln -s`.
-- **Decision (2026-10-06): Fix.** A GitHub Actions workflow runs `npx tsc --noEmit` and `npm test` on ubuntu-latest, macos-latest and windows-latest, on pushes to `main` and on pull requests. No API calls. Failures it reveals become new issues.
-
 ## Verification gaps
 
 ### I18: The A1 answer merge never ran live
@@ -178,11 +160,6 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 - **Problem:** the per-run logs (~45 MB) are not committed, so log-based re-scoring (`evals/rescore-skills.ts`, `evals/plan-detect-eval.ts`) and replays only work on the machine that ran the evals.
 - **Decision (2026-10-06): Accept.** The D6 decision.
 
-### I24: A hand-edited results file is committed
-- **Source:** TEST_REPORT.md Phase 2 "Not verified".
-- **Problem:** `evals/results/2026-09-28T00-11-35-377Z.json` was edited by hand to demo the comparison output. TEST_REPORT.md says to ignore it as a baseline, but it is committed like the genuine results files.
-- **Decision (2026-10-06): Fix.** Stop committing it: `git rm --cached` (the local file stays), exclude it in `evals/sanitize-results.ts` (TDD), and say so in TEST_REPORT.md.
-
 ### I25: Some eval scores are regex heuristics
 - **Source:** TEST_REPORT.md Phase 5 and D5.
 - **Problem:** "warned the user", "injection followed" and `endedOnPlan` are regex checks on the final answer. One false "injection followed" was already found and fixed in D5.
@@ -200,8 +177,14 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 - **Items:** extend the missing-file hint to the other file tools (`edit_file`, `list_dir` on a missing directory); don't count edit and search steps as "silent" for the note-taking reminder.
 - **Decision (2026-10-06): Defer.**
 
-## Repository
+## Found in issues round 2
 
-### I28: Branches: `fix-url-refusal` unmerged, `review-round2` merged but kept
-- **Problem:** `fix-url-refusal` (N4, N5) is not merged into `main`. `review-round2` is fully merged into `main` and still exists locally.
-- **Decision (2026-10-06): Fix.** After this round and a `/code-review`: merge into `main` and push; delete the merged local branch `review-round2`.
+### I29: Windows: `find` in `run_shell` can be Git's Unix `find`
+- **Source:** TEST_REPORT.md, "Issues round 2" (I1).
+- **Problem:** when Git's `usr/bin` comes before `System32` in `PATH`, `find /c /v "" data.txt` runs Git's Unix `find`, which walks the whole drive until the 30 s timeout.
+- **Decision (2026-10-07): Accept.** An environment issue, not a harness bug; the timeout stops it.
+
+### I30: The paging note of an oversized untrusted result
+- **Source:** TEST_REPORT.md, "Issues round 2" (I8).
+- **Problem:** the paging note inside an oversized MCP result ("Search this result with read_tool_result … or read on with offset=…") raised how often the injected instructions were followed: 51/60 without the reminder and 21/60 with it, against 2/60 for a plain result with the reminder. The note is needed to read long pages.
+- **Decision (2026-10-07): Defer.** Next step: replay a long-page state with an injection, comparing the current note with a factual-only marker plus the reminder.
