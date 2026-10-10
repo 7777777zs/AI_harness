@@ -5,7 +5,7 @@
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { Message } from "./llm/types.js";
+import type { Message, ToolCall } from "./llm/types.js";
 
 export const SESSION_FORMAT = 1;
 
@@ -48,6 +48,43 @@ export function newSessionId(now: Date = new Date()): string {
 export function sessionFile(dir: string, id: string): string {
   if (!/^[A-Za-z0-9-]{1,80}$/.test(id)) throw new SessionError(`invalid session id "${id}"`);
   return path.join(dir, `${id}.jsonl`);
+}
+
+/** The result given to a tool call whose real result was never recorded. */
+export const INTERRUPTED_RESULT =
+  "Error: Interrupted: the harness stopped before this call's result was recorded. " +
+  "The action may or may not have happened; check the current state before repeating it.";
+
+/**
+ * Make every tool call have exactly one result again, as the API requires: a call without a
+ * result gets INTERRUPTED_RESULT (it never retries the call), and a result without a call is
+ * dropped.
+ */
+export function repairDangling(history: Message[]): { history: Message[]; repaired: string[] } {
+  const out: Message[] = [];
+  const repaired: string[] = [];
+  let pending: ToolCall[] = [];
+  const flush = () => {
+    for (const call of pending) {
+      out.push({ role: "tool", toolCallId: call.id, name: call.name, content: INTERRUPTED_RESULT });
+      repaired.push(call.id);
+    }
+    pending = [];
+  };
+  for (const m of history) {
+    if (m.role === "tool") {
+      const i = pending.findIndex((c) => c.id === m.toolCallId);
+      if (i === -1) continue;
+      pending.splice(i, 1);
+      out.push(m);
+      continue;
+    }
+    flush();
+    out.push(m);
+    if (m.role === "assistant") pending = [...m.toolCalls];
+  }
+  flush();
+  return { history: out, repaired };
 }
 
 export class SessionWriter {
@@ -131,5 +168,6 @@ export function loadSession(file: string): LoadedSession {
     else if (record.type === "skills") skills = [...record.names];
   }
   if (!header) throw new SessionError(`${file}: missing session header`);
-  return { id: header.id, file, cwd: header.cwd, history, untrustedPending, skills, repaired: [] };
+  const fixed = repairDangling(history);
+  return { id: header.id, file, cwd: header.cwd, history: fixed.history, untrustedPending, skills, repaired: fixed.repaired };
 }

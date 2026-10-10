@@ -5,7 +5,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Message } from "../src/llm/types.js";
-import { loadSession, SessionError, sessionFile, SessionWriter } from "../src/session.js";
+import { INTERRUPTED_RESULT, loadSession, repairDangling, SessionError, sessionFile, SessionWriter } from "../src/session.js";
+import { validatePairing } from "../src/context/turns.js";
 
 const created: string[] = [];
 after(() => created.forEach((d) => fs.rmSync(d, { recursive: true, force: true })));
@@ -85,4 +86,44 @@ test("a missing file or a file without a header is a SessionError", () => {
   const f = path.join(dir, "x.jsonl");
   fs.writeFileSync(f, JSON.stringify({ type: "message", message: q("x") }) + "\n");
   assert.throws(() => loadSession(f), /header/);
+});
+
+const calls = (...ids: string[]): Message => ({
+  role: "assistant",
+  content: null,
+  toolCalls: ids.map((id) => ({ id, name: "run_shell", args: { command: `echo ${id}` } })),
+});
+const result = (id: string): Message => ({ role: "tool", toolCallId: id, name: "run_shell", content: `out ${id}` });
+const interrupted = (id: string): Message => ({ role: "tool", toolCallId: id, name: "run_shell", content: INTERRUPTED_RESULT });
+
+test("a tool call without a result at the end gets a synthetic interrupted result", () => {
+  const { history, repaired } = repairDangling([q("go"), calls("a", "b"), result("a")]);
+  assert.deepEqual(repaired, ["b"]);
+  assert.deepEqual(history, [q("go"), calls("a", "b"), result("a"), interrupted("b")]);
+  assert.equal(validatePairing(history), null);
+});
+
+test("a missing result before the next message is inserted before that message", () => {
+  const { history, repaired } = repairDangling([q("go"), calls("a"), q("next")]);
+  assert.deepEqual(repaired, ["a"]);
+  assert.deepEqual(history, [q("go"), calls("a"), interrupted("a"), q("next")]);
+});
+
+test("a tool result without its call is dropped", () => {
+  const { history, repaired } = repairDangling([q("go"), result("x"), answer("done")]);
+  assert.deepEqual(repaired, []);
+  assert.deepEqual(history, [q("go"), answer("done")]);
+});
+
+test("a complete history comes back unchanged", () => {
+  const complete = [q("go"), calls("a"), result("a"), answer("done")];
+  assert.deepEqual(repairDangling(complete), { history: complete, repaired: [] });
+});
+
+test("loadSession repairs a session that ended between a call and its result", () => {
+  const w = SessionWriter.create(tmp(), "/p");
+  w.append([q("go"), calls("a")]);
+  const s = loadSession(w.file);
+  assert.deepEqual(s.repaired, ["a"]);
+  assert.deepEqual(s.history.at(-1), interrupted("a"));
 });
