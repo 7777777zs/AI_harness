@@ -16,6 +16,7 @@ import {
   harnessVersion,
   logsDir,
   resolveConfig,
+  sessionsDir,
   type HarnessConfig,
 } from "./config.js";
 import { capResult, capTurn, RESULT_CAP_FRACTION, shrinkNewest, TURN_CAP_FRACTION } from "./context/budget.js";
@@ -33,6 +34,15 @@ import { readOnlyViolation, SkillRegistry, SKILLS_CAP_FRACTION } from "./skills/
 import { routeSkill } from "./skills/router.js";
 import { completionGaps, completionMessage, isPlanOnly, PLAN_NUDGE } from "./prefinish.js";
 import { mentionsUrl, taskUrls, withUnopenedUrls } from "./taskUrls.js";
+import {
+  findLatestSession,
+  loadSession,
+  lockSession,
+  samePath,
+  SessionError,
+  sessionFile,
+  SessionWriter,
+} from "./session.js";
 
 export const MAX_STEPS = DEFAULTS.maxSteps;
 
@@ -102,6 +112,11 @@ export const UNTRUSTED_WARNING =
   "⚠ This action comes right after the model read content from an MCP tool (untrusted, e.g. a web page). " +
   "Approve only if it is what you asked for.";
 
+/** Added to the system prompt of a run that continues an earlier session. */
+export const RESUMED_SESSION_NOTE =
+  "\n\nThis conversation continues an earlier session. Files may have changed since the earlier messages: " +
+  "read a file again before relying on its earlier content or editing it.";
+
 export interface RunAgentOptions {
   task: string;
   /** Sandbox directory: tool paths are restricted to it and shell commands run in it. */
@@ -162,6 +177,12 @@ export interface RunAgentOptions {
    * default 2): a nudge for a plan-only reply, the coverage check, and skill completion criteria.
    */
   prefinishMax?: number;
+  /**
+   * Session history (off when not given): the run's messages are appended to a session file in
+   * `dir` (default ~/.harness/sessions). `resume: "latest"` continues the latest session recorded
+   * for cwd, a session id continues that session, and without `resume` a new session starts.
+   */
+  session?: { resume?: string; dir?: string };
 }
 
 export interface AgentResult {
@@ -213,6 +234,8 @@ export interface AgentResult {
   /** Tokens of the skill router call; included in `usage`. */
   routerUsage: Usage;
   logFile: string;
+  /** The session this run was recorded in, or null without the session option. */
+  session: { id: string; file: string; resumed: boolean; repaired: string[] } | null;
 }
 
 export interface CompactionStats {
@@ -378,6 +401,16 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
   const untrustedGuard: AgentResult["untrustedGuard"] = [];
   /** Set once the model has received a result from an untrusted tool, until a guarded action is approved. */
   let untrustedPending = false;
+  /** Session history (opts.session): the open session file, if any. */
+  let writer: SessionWriter | undefined;
+  let releaseLock: (() => void) | undefined;
+  let sessionInfo: AgentResult["session"] = null;
+  /** Arm or clear the untrusted-content guard; the session records it so a continued run keeps it. */
+  const setUntrusted = (value: boolean) => {
+    if (untrustedPending === value) return;
+    untrustedPending = value;
+    writer?.state(value);
+  };
   let skills: SkillRegistry | undefined;
   /** Pinned skill tokens already included in the last request's actual token count. */
   let pinnedSent = 0;
@@ -423,6 +456,22 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     { role: "system", content: baseSystemPrompt(cwd) },
     { role: "user", content: opts.task },
   ];
+  /** The current question. Level 2 never summarizes it; in a continued session it follows the history. */
+  const question = messages[1]!;
+  /** How many of `messages` are already in the session file (the system prompt never is). */
+  let synced = 1;
+  // Written messages are never edited afterwards: tool results go in at the next step (after the
+  // note-taking nudge may have changed the last one), and rewrites of history are checkpoints.
+  const syncSession = () => {
+    if (!writer || synced >= messages.length) return;
+    writer.append(messages.slice(synced));
+    synced = messages.length;
+  };
+  const checkpointSession = () => {
+    if (!writer) return;
+    writer.checkpoint(messages.slice(1));
+    synced = messages.length;
+  };
 
   const finish = (
     stopReason: AgentResult["stopReason"],
@@ -430,6 +479,11 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     error?: string,
     errorKind?: AgentResult["errorKind"],
   ): AgentResult => {
+    try {
+      syncSession();
+    } catch (err) {
+      log({ type: "session_write_failed", error: err instanceof Error ? err.message : String(err) });
+    }
     // A2: unread (or only partially read) known files are reported by the harness, not the model.
     const footer = stopReason === "done" && finalText !== null && config?.coverageFooter ? coverage.footer() : null;
     if (footer) finalText = `${finalText}\n\n${footer}`;
@@ -462,6 +516,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       skillRouting,
       routerUsage,
       logFile,
+      session: sessionInfo,
     };
     log({ type: "result", ...result });
     if (stopReason !== "error") {
@@ -543,9 +598,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
 
     // Skills: listed in the system prompt; loaded ones are pinned into the system message.
     let discovery: Discovery = { skills: [], warnings: [] };
-    const onLoad = (name: string, tokens: number, source: "model" | "preload" | "router") => {
+    const onLoad = (name: string, tokens: number, source: "model" | "preload" | "router" | "session") => {
       out(c.magenta(`  ✦ skill loaded: ${name} (~${fmt(tokens)} tokens pinned, ${source})`));
       log({ type: "skill_loaded", step, name, tokens, source });
+      writer?.skills(skills?.loaded.map((s) => s.name) ?? []);
     };
     if (config.skillsEnabled) {
       discovery = discoverSkills(opts.skills?.dirs);
@@ -577,6 +633,67 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     if (!skills && (opts.skills?.preload ?? []).length > 0) {
       const why = config.skillsEnabled ? "no skills were found" : "skills are off (SKILLS=off / --no-skills)";
       return finish("error", null, `Invalid configuration: --skill ${opts.skills!.preload![0]}: ${why}`, "config");
+    }
+
+    // Session history: after MCP and skills (their sections are part of the rebuilt system prompt),
+    // before the router (skills reloaded from the session replace its choice).
+    if (opts.session) {
+      const dir = opts.session.dir ?? sessionsDir();
+      const resume = opts.session.resume;
+      try {
+        const file = resume === undefined ? null : resume === "latest" ? findLatestSession(dir, cwd) : sessionFile(dir, resume);
+        if (resume !== undefined && !file) throw new SessionError(`no session to continue in ${cwd}`);
+        if (file && !fs.existsSync(file)) throw new SessionError(`no session ${resume} in ${dir}`);
+        if (file) {
+          releaseLock = lockSession(file);
+          const loaded = loadSession(file);
+          if (!samePath(loaded.cwd, cwd)) {
+            throw new SessionError(`session ${loaded.id} was recorded in ${loaded.cwd}; run it from there (or pass --cwd)`);
+          }
+          writer = SessionWriter.open(file, loaded.id);
+          if (loaded.repaired.length > 0) writer.checkpoint(loaded.history);
+          messages = [{ role: "system", content: messages[0]!.content + RESUMED_SESSION_NOTE }, ...loaded.history, question];
+          synced = 1 + loaded.history.length;
+          untrustedPending = loaded.untrustedPending; // already in the file
+          // Level 1 placeholders and Level 2 use the store; give it the earlier results and their arguments.
+          const calls = new Map<string, ToolCall>();
+          for (const m of loaded.history) {
+            if (m.role === "assistant") for (const tc of m.toolCalls) calls.set(tc.id, tc);
+            else if (m.role === "tool") store.record(m.toolCallId, m.name, calls.get(m.toolCallId)?.args ?? null, m.content);
+          }
+          for (const name of loaded.skills) {
+            if (!skills) {
+              out(c.yellow(`⚠ session skills not loaded: skills are off or none were found`));
+              log({ type: "session_skills_skipped", skills: loaded.skills });
+              break;
+            }
+            const outcome = skills.load(name);
+            if (outcome.ok) {
+              if (outcome.tokens > 0) onLoad(name, outcome.tokens, "session");
+            } else {
+              out(c.yellow(`⚠ session skill ${name} not loaded: ${outcome.error}`));
+              log({ type: "session_skill_failed", name, error: outcome.error });
+            }
+          }
+          sessionInfo = { id: loaded.id, file, resumed: true, repaired: loaded.repaired };
+          out(
+            c.dim(
+              `Continuing session ${loaded.id} (${loaded.history.length} earlier messages` +
+                `${loaded.repaired.length ? `, ${loaded.repaired.length} interrupted tool call(s) marked` : ""})`,
+            ),
+          );
+        } else {
+          writer = SessionWriter.create(dir, cwd);
+          releaseLock = lockSession(writer.file);
+          sessionInfo = { id: writer.id, file: writer.file, resumed: false, repaired: [] };
+        }
+        writer.run(opts.task, logFile);
+        if (skills?.loaded.length) writer.skills(skills.loaded.map((s) => s.name));
+        log({ type: "session", ...sessionInfo, historyMessages: synced - 1 });
+      } catch (err) {
+        if (err instanceof SessionError) return finish("error", null, `Session: ${err.message}`, "config");
+        throw err;
+      }
     }
 
     // A4: log the effective configuration once at the start.
@@ -651,6 +768,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         force,
         remainingWork,
         tokenScale: tracker.ratio,
+        currentQuestion: question,
       });
       if (r.describeError) {
         stats.describeFailures++;
@@ -683,6 +801,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         tracker.reset(r.tokens, messages.length);
         pinnedSent = 0; // the reset count covers history only
         compactions += r.events.length;
+        checkpointSession();
       }
     };
 
@@ -730,12 +849,14 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       pinnedSent = 0;
       out(c.yellow(`⟳ Preflight: request ~${fmt(estimate)} tokens > limit ${fmt(contextLimit)}; shrank ${shrunk.shrunk.length} newest result(s)`));
       log({ type: "preflight_truncated", step, estimate, limit: contextLimit, saved: shrunk.saved, shrunk: shrunk.shrunk });
+      checkpointSession();
     };
 
     while (step < maxSteps) {
       step++;
       out(c.bold(`\n── Step ${step} ──`));
 
+      syncSession();
       await maybeCompact(false);
       preflight();
 
@@ -778,6 +899,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       });
 
       messages.push({ role: "assistant", content: response.text, toolCalls: response.toolCalls });
+      syncSession();
 
       if (response.toolCalls.length === 0) {
         const text = response.text ?? "";
@@ -866,7 +988,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
               untrustedGuard.push({ step, tool: call.name, args: call.args, approved });
               out(c.yellow(`  ⚑ untrusted-content guard: ${call.name} ${approved ? "approved" : "denied"}`));
               log({ type: "post_untrusted_action", step, tool: call.name, args: call.args, approved });
-              if (approved) untrustedPending = false;
+              if (approved) setUntrusted(false);
               return approved;
             },
           };
@@ -948,7 +1070,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         out(color(`  ← ${oneLine(result, 150)} (${result.length} chars)`));
       }
       // Calls in this turn were issued before the model saw these results; the next turn's are not.
-      if (turn.some((t) => toolMap.get(t.call.name)?.untrusted)) untrustedPending = true;
+      if (turn.some((t) => toolMap.get(t.call.name)?.untrusted)) setUntrusted(true);
 
       // Note-taking nudge: tool calls with no reply text for several steps in a row.
       silentSteps = response.text?.trim() ? 0 : silentSteps + 1;
@@ -971,6 +1093,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     return finish("error", null, err instanceof Error ? err.message : String(err), err instanceof LLMApiError ? "api" : "other");
   } finally {
     terminal.close();
+    releaseLock?.();
     // Every MCP server process tree is shut down however the run ended.
     await mcp?.close();
   }
