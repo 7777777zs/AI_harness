@@ -61,3 +61,64 @@ test("--help states the full settings precedence, including the repository .env"
   assert.equal(r.code, 0);
   assert.match(r.stdout, /Settings precedence: these flags > environment variables > .+\.env > .+\.env \(this repository\) > defaults\./);
 });
+
+/** Like cli(), but with a fixed working directory and HARNESS_HOME, so two runs share a session. */
+async function cliAt(cwd: string, home: string, args: string[], apiUrl = "http://127.0.0.1:9/v1") {
+  const child = spawn(process.execPath, ["--import", "tsx", "src/index.ts", "--cwd", cwd, ...args], {
+    cwd: ROOT,
+    env: { ...process.env, HARNESS_HOME: home, OPENAI_API_KEY: "sk-test", OPENAI_MODEL: "fake", OPENAI_BASE_URL: apiUrl },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (d) => (stdout += d));
+  child.stderr.on("data", (d) => (stderr += d));
+  const code = await new Promise<number | null>((r) => child.on("exit", r));
+  return { code, stdout, stderr };
+}
+
+test("--continue picks up the session the previous run recorded in the same directory", async () => {
+  const api = await fakeApi(2);
+  try {
+    const cwd = tmp();
+    const home = tmp();
+    const first = await cliAt(cwd, home, ["first question"], api.url);
+    assert.equal(first.code, 0, first.stderr);
+    const id = /Session: (\S+)/.exec(first.stdout)?.[1];
+    assert.ok(id, first.stdout);
+    const second = await cliAt(cwd, home, ["--continue", "second question"], api.url);
+    assert.equal(second.code, 0, second.stderr);
+    assert.match(second.stdout, new RegExp(`Continuing session ${id}`));
+    assert.match(second.stdout, new RegExp(`Session: ${id}`));
+  } finally {
+    api.close();
+  }
+});
+
+test("--continue without an earlier session fails with a clear message", async () => {
+  const r = await cliAt(tmp(), tmp(), ["--continue", "anything"]);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /no session to continue/);
+});
+
+test("--no-session cannot be combined with --continue or --session", async () => {
+  const r = await cliAt(tmp(), tmp(), ["--no-session", "--continue", "x"]);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /--no-session cannot be used with --continue or --session/);
+  const both = await cliAt(tmp(), tmp(), ["--continue", "--session", "abc", "x"]);
+  assert.equal(both.code, 1);
+  assert.match(both.stderr, /either --continue or --session/);
+});
+
+test("--no-session records nothing", async () => {
+  const api = await fakeApi(1);
+  try {
+    const home = tmp();
+    const r = await cliAt(tmp(), home, ["--no-session", "say done"], api.url);
+    assert.equal(r.code, 0, r.stderr);
+    assert.doesNotMatch(r.stdout, /Session: /);
+    assert.equal(fs.existsSync(path.join(home, "sessions")), false);
+  } finally {
+    api.close();
+  }
+});

@@ -70,11 +70,13 @@ harness --cwd ~/other/project "summarize README.md"
 harness --mcp chrome-devtools "open http://localhost:3000 and tell me what the page says"
 harness --no-mcp "run the tests"
 harness --skill code-review "review my uncommitted changes"
+harness --continue "and where is compaction triggered?"
 harness --help
 ```
 
 - The agent works in the directory you run `harness` from, or in `--cwd <path>` if given. File tools can't reach outside it (see the safety model below), and shell commands start there.
 - Nothing is written into your project unless the task asks for it. Logs go to `~/.harness/logs/<timestamp>.jsonl`.
+- Every run is recorded in a session (`~/.harness/sessions/`); `--continue` picks up the latest one for the directory. See [Sessions](#sessions).
 - From inside this repository you can also run `npm start -- "your task"`. Note that `npm start` always runs in the repository root.
 
 Output:
@@ -84,6 +86,26 @@ Output:
 - Each model request and response is appended to the JSONL log.
 
 Type-check: `npm run typecheck` (same as `npx tsc --noEmit`).
+
+## Sessions
+
+Every CLI run is recorded in a session file, `~/.harness/sessions/<id>.jsonl`, and prints its id at the end. A later run can continue the conversation:
+
+- `--continue`: continue the latest session recorded in this directory.
+- `--session <id>`: continue that session. It must have been recorded in the same directory.
+- `--no-session`: don't record this run.
+
+How it works:
+- **Format:** the file is append-only JSONL. Messages are written as they become final; after a compaction a checkpoint record holds the whole compacted history, and loading starts from the last checkpoint.
+- **System prompt:** never stored. Each run builds it again (directory, MCP tools and skills may have changed) and, when continuing, adds a note that files may have changed since the earlier messages.
+- **Per question:** step budget, pre-finish follow-ups, task URLs and file coverage start fresh with every question.
+- **Carried over:** skills loaded in the session are loaded again (the skill router then does not run), and the untrusted-content guard stays armed if it was armed when the session was last written.
+- **Compaction:** Level 2 never summarizes the current question; in a continued session it stays verbatim right after the summary.
+- **Crashes:** a tool call whose result was never written gets an `Error: Interrupted…` result instead of being retried, and a torn last line is cut off.
+- **One process at a time:** a lock file next to the session refuses a second harness process.
+- **Programmatic use:** `runAgent({ ..., session: { resume: "latest" } })`. Without the `session` option nothing is recorded; the eval runner never passes it.
+
+Session files contain file contents and tool output from your runs, like the logs. They are never written into the project.
 
 ## Safety model
 
@@ -271,6 +293,7 @@ src/
 ├── agent.ts          runAgent(): main loop, provider-agnostic (no `openai` import)
 ├── prefinish.ts      Pre-finish checks: plan-only replies, skill completion criteria
 ├── taskUrls.ts       URLs in the task, and the status line for those no MCP call has opened yet
+├── session.ts        Session files: append, checkpoints, load and repair, latest per directory, lock
 ├── confirm.ts        Terminal y/N prompt
 ├── process.ts        Process-tree kill, registry of long-lived children, Ctrl+C shutdown
 ├── types.ts          Tool / ToolContext types

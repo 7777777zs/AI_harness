@@ -12,6 +12,7 @@ import {
   parseNumber,
   parseOnOff,
   resolveConfig,
+  sessionsDir,
   type SettingOverrides,
 } from "./config.js";
 import { missingEnv, modelFromEnv } from "./llm/index.js";
@@ -34,12 +35,16 @@ Options:
   --no-mcp                    Use no MCP servers
   --skill <name>              Load this skill before the first step (repeatable)
   --no-skills                 Turn the skills system off (SKILLS=off)
+  --continue                  Continue the latest session recorded for this directory
+  --session <id>              Continue this session
+  --no-session                Don't record this run in a session
   -h, --help                  Show this help
 
 Settings precedence: these flags > environment variables > ${path.join(harnessHome(), ".env")} > ${path.join(PACKAGE_ROOT, ".env")} (this repository) > defaults.
 MCP servers are read from ${mcpConfigPath()}.
 Skills are read from ${bundledSkillsDir()} and ${userSkillsDir()} (user skills win on a name clash).
-Logs are written to ${logsDir()}.`;
+Logs are written to ${logsDir()}.
+Sessions are written to ${sessionsDir()}.`;
 
 function fail(message: string): never {
   console.error(`Error: ${message}`);
@@ -63,6 +68,9 @@ try {
       "no-mcp": { type: "boolean" },
       skill: { type: "string", multiple: true },
       "no-skills": { type: "boolean" },
+      continue: { type: "boolean" },
+      session: { type: "string" },
+      "no-session": { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -124,6 +132,10 @@ if (args.values["no-skills"]) {
   if (preload.length) fail("--skill and --no-skills cannot be used together");
   overrides.skillsEnabled = false;
 }
+const resumeFlag = args.values.continue ? "latest" : args.values.session?.trim();
+if (args.values["no-session"] && resumeFlag !== undefined) fail("--no-session cannot be used with --continue or --session");
+if (args.values.continue && args.values.session !== undefined) fail("use either --continue or --session <id>, not both");
+const session = args.values["no-session"] ? undefined : { ...(resumeFlag !== undefined && { resume: resumeFlag }) };
 try {
   // Fail fast, before any output, on invalid settings from any source (including mcp.json).
   if (flagErrors.length) throw new ConfigError(flagErrors[0]!);
@@ -143,7 +155,8 @@ try {
 // Ctrl+C / console close: shut down MCP server process trees before exiting.
 installShutdownHandlers();
 console.log(`Task: ${task}\nModel: ${modelFromEnv().model}\nDirectory: ${cwd}`);
-const result = await runAgent({ task, cwd, logDir: logsDir(), mcp, skills: { preload }, ...overrides });
+const result = await runAgent({ task, cwd, logDir: logsDir(), mcp, skills: { preload }, session, ...overrides });
+if (result.session) console.log(`Session: ${result.session.id} (continue with: harness --continue "…")`);
 if (result.stopReason === "error") {
   console.error(`\nFatal: ${result.error}`);
   process.exitCode = 1;
