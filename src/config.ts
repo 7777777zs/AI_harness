@@ -18,6 +18,10 @@ export function logsDir(): string {
   return path.join(harnessHome(), "logs");
 }
 
+export function sessionsDir(): string {
+  return path.join(harnessHome(), "sessions");
+}
+
 /**
  * Variables that came from a .env file (not the real process environment), with the file.
  * Filled by loadEnv(); used to report where each setting came from.
