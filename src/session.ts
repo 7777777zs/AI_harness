@@ -225,7 +225,9 @@ function isAlive(pid: number): boolean {
 
 /**
  * Take the session's lock file (`<file>.lock`, holding the pid), so two processes never append
- * to the same session. A lock left by a process that no longer runs is taken over.
+ * to the same session. A lock left by a process that no longer runs, or an empty one (killed
+ * before it wrote its pid), is taken over. The lock is also removed when the process exits
+ * without releasing it (Ctrl+C ends the CLI with process.exit, skipping `finally` blocks).
  */
 export function lockSession(file: string, pid: number = process.pid): () => void {
   const lock = `${file}.lock`;
@@ -234,10 +236,17 @@ export function lockSession(file: string, pid: number = process.pid): () => void
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
     const holder = Number(fs.readFileSync(lock, "utf8"));
-    if (Number.isInteger(holder) && holder !== pid && isAlive(holder)) {
-      throw new SessionError(`session is in use by another harness process (pid ${holder})`);
+    if (Number.isInteger(holder) && holder > 0 && holder !== pid && isAlive(holder)) {
+      throw new SessionError(
+        `session is in use by another harness process (pid ${holder}); if no harness is running, delete ${lock}`,
+      );
     }
     fs.writeFileSync(lock, String(pid));
   }
-  return () => fs.rmSync(lock, { force: true });
+  const release = () => {
+    process.off("exit", release);
+    fs.rmSync(lock, { force: true });
+  };
+  process.on("exit", release);
+  return release;
 }

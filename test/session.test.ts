@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import type { Message } from "../src/llm/types.js";
 import {
   findLatestSession,
@@ -174,4 +176,33 @@ test("lockSession refuses a session held by a live process and takes over a stal
   const again = lockSession(w.file);
   assert.equal(fs.readFileSync(`${w.file}.lock`, "utf8"), String(process.pid));
   again();
+});
+
+test("a lock file left empty by a killed process is treated as stale", () => {
+  const w = SessionWriter.create(tmp(), "/p");
+  fs.writeFileSync(`${w.file}.lock`, ""); // killed between creating the lock and writing the pid
+  const release = lockSession(w.file);
+  assert.equal(fs.readFileSync(`${w.file}.lock`, "utf8"), String(process.pid));
+  release();
+});
+
+test("the in-use error names the lock file to delete", () => {
+  const w = SessionWriter.create(tmp(), "/p");
+  fs.writeFileSync(`${w.file}.lock`, String(process.ppid)); // a live process other than this one
+  try {
+    assert.throws(() => lockSession(w.file), (e: unknown) => e instanceof SessionError && e.message.includes(`${w.file}.lock`));
+  } finally {
+    fs.rmSync(`${w.file}.lock`, { force: true });
+  }
+});
+
+test("a lock is removed when the process exits without releasing it (Ctrl+C calls process.exit)", () => {
+  const dir = tmp();
+  const w = SessionWriter.create(dir, "/p");
+  const sessionTs = pathToFileURL(path.join(import.meta.dirname, "..", "src", "session.ts")).href;
+  const script = path.join(dir, "locker.ts");
+  fs.writeFileSync(script, `import { lockSession } from ${JSON.stringify(sessionTs)};\nlockSession(process.argv[2]!);\nprocess.exit(0);\n`);
+  const r = spawnSync(process.execPath, ["--import", "tsx", script, w.file], { cwd: path.join(import.meta.dirname, ".."), encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(fs.existsSync(`${w.file}.lock`), false);
 });
