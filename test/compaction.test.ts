@@ -10,6 +10,7 @@ import {
   compact,
   elideToolResults,
   ELIDED_PREFIX,
+  summarizeOlder,
   type Describer,
   type DescribeItem,
   type Summarizer,
@@ -264,4 +265,36 @@ test("truncation keeps head and tail and reports omitted chars and lines", () =>
 test("truncation reports sensible counts for output that is one huge line", () => {
   const out = truncate("y".repeat(50_000));
   assert.match(out, /truncated: 42,000 chars \/ 0 lines omitted \(1 lines total\)/);
+});
+
+test("Level 2 keeps the current question of a continued session, right after the summary", async () => {
+  const QUESTION: Message = { role: "user", content: "the second question" };
+  const firstAnswer: Message = { role: "assistant", content: "first answer", toolCalls: [] };
+  const messages = [SYSTEM, TASK, ...group(1), firstAnswer, QUESTION, ...group(2), ...group(3), ...group(4)];
+  let seenTask = "";
+  let seenInput: Message[] = [];
+  const summarize: Summarizer = async (older, task) => {
+    seenTask = task;
+    seenInput = older;
+    return "summary text";
+  };
+  const r = await summarizeOlder(messages, summarize, 1, undefined, undefined, QUESTION);
+  assert.ok(r);
+  assert.equal(r.messages.indexOf(QUESTION), 3); // [system, task, summary, question, ...last group]
+  assert.equal(seenTask, "the second question");
+  assert.ok(!seenInput.includes(QUESTION));
+  assert.equal(validatePairing(r.messages), null);
+});
+
+test("when the current question is pinned (a fresh run), Level 2 works as before", async () => {
+  const messages = [SYSTEM, TASK, ...group(1), ...group(2), ...group(3)];
+  let seenTask = "";
+  const summarize: Summarizer = async (_older, task) => {
+    seenTask = task;
+    return "summary text";
+  };
+  const withQuestion = await summarizeOlder(messages, summarize, 1, undefined, undefined, TASK);
+  const without = await summarizeOlder(messages, summarize, 1);
+  assert.deepEqual(withQuestion!.messages, without!.messages);
+  assert.equal(seenTask, "the original task");
 });

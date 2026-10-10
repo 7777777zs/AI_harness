@@ -72,6 +72,11 @@ export interface CompactOptions {
   remainingWork?: () => string;
   /** Calibration ratio (actual / heuristic tokens) applied to this function's own estimates. */
   tokenScale?: number;
+  /**
+   * The user message of the current question. Level 2 never summarizes it: in a continued
+   * session it comes after the earlier history, outside the pinned messages.
+   */
+  currentQuestion?: Message;
 }
 
 export interface CompactResult {
@@ -280,7 +285,8 @@ export async function elideToolResults(
 
 /**
  * Level 2: replace everything between the pinned messages and the last `keepTurns` turn
- * groups with one summary message. The cut is at a turn-group boundary, so only complete
+ * groups with one summary message. The current question, if it falls in that span, is kept
+ * verbatim right after the summary. The cut is at a turn-group boundary, so only complete
  * groups (assistant message + all its tool results) are removed. The summarizer sees the
  * ORIGINAL tool results from `store`, not Level 1 placeholders; results without a stored
  * original are passed as they are (their Level 1 description).
@@ -292,21 +298,29 @@ export async function summarizeOlder(
   keepTurns = KEEP_TURNS,
   store?: ContextStore,
   remainingWork?: () => string,
+  currentQuestion?: Message,
 ) {
-  const { pinned, middle, recent } = splitTurns(messages, keepTurns);
-  if (!middle.some((m) => m.role === "assistant")) return null;
-  const input = middle.map((m): Message => (m.role === "tool" ? { ...m, content: level2Input(m, store) } : m));
-  const raw = await summarize(input, pinned[1]?.content ?? "");
+  const { pinned, recent, kept, older } = summarizable(messages, keepTurns, currentQuestion);
+  if (!older.some((m) => m.role === "assistant")) return null;
+  const input = older.map((m): Message => (m.role === "tool" ? { ...m, content: level2Input(m, store) } : m));
+  const raw = await summarize(input, (currentQuestion ?? pinned[1])?.content ?? "");
   const text = sanitizeSummary(raw, remainingWork?.());
   const summary: Message = { role: "user", content: `${SUMMARY_PREFIX}\n${text}` };
   return {
-    messages: [...pinned, summary, ...recent],
-    removed: middle.length,
+    messages: [...pinned, summary, ...(kept ? [kept] : []), ...recent],
+    removed: older.length,
     summary: text,
-    spanTokens: estimateTokens(middle),
+    spanTokens: estimateTokens(older),
     summaryTokens: estimateTokens([summary]),
     inputTokens: estimateTokens(input),
   };
+}
+
+/** splitTurns, with the current question taken out of the span Level 2 summarizes. */
+function summarizable(messages: Message[], keepTurns: number, currentQuestion?: Message) {
+  const split = splitTurns(messages, keepTurns);
+  const kept = currentQuestion && split.middle.includes(currentQuestion) ? currentQuestion : undefined;
+  return { ...split, kept, older: kept ? split.middle.filter((m) => m !== kept) : split.middle };
 }
 
 /**
@@ -393,7 +407,7 @@ export async function compact(messages: Message[], opts: CompactOptions): Promis
     return result;
   }
 
-  const { middle } = splitTurns(result.messages, keepTurns);
+  const { older: middle } = summarizable(result.messages, keepTurns, opts.currentQuestion);
   if (!middle.some((m) => m.role === "assistant")) {
     result.notes.push(`nothing older than the last ${keepTurns} turns to summarize`);
     return result;
@@ -406,7 +420,7 @@ export async function compact(messages: Message[], opts: CompactOptions): Promis
 
   let l2;
   try {
-    l2 = await summarizeOlder(result.messages, opts.summarize, keepTurns, opts.store, opts.remainingWork);
+    l2 = await summarizeOlder(result.messages, opts.summarize, keepTurns, opts.store, opts.remainingWork, opts.currentQuestion);
   } catch (err) {
     result.notes.push(`Level 2 summarization failed: ${err instanceof Error ? err.message : String(err)}`);
     return result;
