@@ -171,3 +171,73 @@ export function loadSession(file: string): LoadedSession {
   const fixed = repairDangling(history);
   return { id: header.id, file, cwd: header.cwd, history: fixed.history, untrustedPending, skills, repaired: fixed.repaired };
 }
+
+/** Same directory? Case-insensitive on Windows, where paths are. */
+export function samePath(a: string, b: string): boolean {
+  const ra = path.resolve(a);
+  const rb = path.resolve(b);
+  return process.platform === "win32" ? ra.toLowerCase() === rb.toLowerCase() : ra === rb;
+}
+
+/** The header of a session file, read from its first line only; null if it has none. */
+function readHeader(file: string): Extract<SessionRecord, { type: "header" }> | null {
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(8192);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    const record = JSON.parse(buf.subarray(0, n).toString("utf8").split("\n")[0]!) as SessionRecord;
+    return record.type === "header" ? record : null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+/** The most recently written session recorded in `cwd`, or null. */
+export function findLatestSession(dir: string, cwd: string): string | null {
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir).filter((n) => n.endsWith(".jsonl"));
+  } catch {
+    return null;
+  }
+  let best: { file: string; mtime: number } | null = null;
+  for (const name of names) {
+    const file = path.join(dir, name);
+    const header = readHeader(file);
+    if (!header || !samePath(header.cwd, cwd)) continue;
+    const mtime = fs.statSync(file).mtimeMs;
+    if (!best || mtime > best.mtime) best = { file, mtime };
+  }
+  return best?.file ?? null;
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/**
+ * Take the session's lock file (`<file>.lock`, holding the pid), so two processes never append
+ * to the same session. A lock left by a process that no longer runs is taken over.
+ */
+export function lockSession(file: string, pid: number = process.pid): () => void {
+  const lock = `${file}.lock`;
+  try {
+    fs.writeFileSync(lock, String(pid), { flag: "wx" });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+    const holder = Number(fs.readFileSync(lock, "utf8"));
+    if (Number.isInteger(holder) && holder !== pid && isAlive(holder)) {
+      throw new SessionError(`session is in use by another harness process (pid ${holder})`);
+    }
+    fs.writeFileSync(lock, String(pid));
+  }
+  return () => fs.rmSync(lock, { force: true });
+}

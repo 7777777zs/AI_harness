@@ -5,7 +5,17 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Message } from "../src/llm/types.js";
-import { INTERRUPTED_RESULT, loadSession, repairDangling, SessionError, sessionFile, SessionWriter } from "../src/session.js";
+import {
+  findLatestSession,
+  INTERRUPTED_RESULT,
+  loadSession,
+  lockSession,
+  repairDangling,
+  samePath,
+  SessionError,
+  sessionFile,
+  SessionWriter,
+} from "../src/session.js";
 import { validatePairing } from "../src/context/turns.js";
 
 const created: string[] = [];
@@ -126,4 +136,42 @@ test("loadSession repairs a session that ended between a call and its result", (
   const s = loadSession(w.file);
   assert.deepEqual(s.repaired, ["a"]);
   assert.deepEqual(s.history.at(-1), interrupted("a"));
+});
+
+test("findLatestSession picks the most recently written session of this directory", () => {
+  const dir = tmp();
+  const older = SessionWriter.create(dir, "/work/a");
+  const other = SessionWriter.create(dir, "/work/b");
+  const newer = SessionWriter.create(dir, "/work/a");
+  const t = Date.now() / 1000;
+  fs.utimesSync(older.file, t - 100, t - 100);
+  fs.utimesSync(other.file, t, t);
+  fs.utimesSync(newer.file, t - 10, t - 10);
+  assert.equal(findLatestSession(dir, "/work/a"), newer.file);
+  assert.equal(findLatestSession(dir, "/work/b"), other.file);
+});
+
+test("findLatestSession returns null without a matching session or without the directory", () => {
+  const dir = tmp();
+  SessionWriter.create(dir, "/work/a");
+  assert.equal(findLatestSession(dir, "/work/zzz"), null);
+  assert.equal(findLatestSession(path.join(dir, "missing"), "/work/a"), null);
+});
+
+test("samePath compares resolved paths", () => {
+  assert.equal(samePath("/x/./y", "/x/y"), true);
+  assert.equal(samePath("/x/y", "/x/z"), false);
+  if (process.platform === "win32") assert.equal(samePath("C:\Work", "c:\work"), true);
+});
+
+test("lockSession refuses a session held by a live process and takes over a stale lock", () => {
+  const w = SessionWriter.create(tmp(), "/p");
+  const release = lockSession(w.file);
+  assert.throws(() => lockSession(w.file, process.pid + 1), (e: unknown) => e instanceof SessionError && /in use/.test(e.message));
+  release();
+  assert.equal(fs.existsSync(`${w.file}.lock`), false);
+  fs.writeFileSync(`${w.file}.lock`, "2147483646"); // no such process
+  const again = lockSession(w.file);
+  assert.equal(fs.readFileSync(`${w.file}.lock`, "utf8"), String(process.pid));
+  again();
 });
