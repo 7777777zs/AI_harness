@@ -160,3 +160,14 @@ test("an Ollama model without num_ctx gets a warning (its window is Ollama's def
     api.close();
   }
 });
+
+test("a server whose /api/show is not Ollama's (no model_info) is not checked and gets no warning", async () => {
+  const api = await fakeApi(1, { ollamaShow: { status: "ok" } });
+  try {
+    const r = await cli(["--context-limit", "60000", "say done"], api.url);
+    assert.equal(r.code, 0, r.stderr);
+    assert.ok(!/num_ctx/.test(r.stdout + r.stderr));
+  } finally {
+    api.close();
+  }
+});

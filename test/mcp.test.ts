@@ -760,3 +760,12 @@ test("a denied MCP call gets no reminder; a read_tool_result page does (review)"
   const page = paged.requests[2]!.messages.find((m) => m.role === "tool" && m.toolCallId === "c1_0")!.content!;
   assert.ok(page.endsWith(NOTE_NUDGE));
 });
+
+test("the request-only reminder after untrusted results never triggers the I33 'continue' follow-up", async () => {
+  const echo = (text: string) => ({ name: "mcp__mock__echo", args: { text } });
+  const { client, requests } = scripted([[echo("a")], [echo("b")], [echo("c")]], "The pages say a, b and c.");
+  const result = await runAgent({ task: "x", cwd: sandbox(), client, quiet: true, autoApprove: true, mcp: { servers: { mock: mock({ autoApproveTools: ["echo"] }) } } });
+  assert.equal(result.finalText, "The pages say a, b and c.");
+  assert.equal(result.nudges.afterNotes, 0);
+  assert.equal(requests.length, 4, "no follow-up request");
+});

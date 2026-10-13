@@ -583,7 +583,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       opts.compactClient ?? (separateCompactModel && !opts.client ? createClientFromEnv(config.compactModel) : rawClient);
     const compactClient = retrying("compaction", rawCompactClient);
 
-    // The server's window must hold CONTEXT_LIMIT: a server such as Ollama cuts the start of a longer
+    // The server's window must hold CONTEXT_LIMIT: some local model servers cut the start of a longer
     // prompt (the system prompt first) without an error.
     for (const [role, raw, model] of [
       ["main", rawClient, mainModel],
@@ -744,7 +744,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       node: process.version,
       harness: version,
     });
-    const effort = !opts.client && envModel.reasoningEffort ? ` reasoning_effort=${envModel.reasoningEffort}` : "";
+    const effort = !opts.client && envModel.reasoningEffort ? ` reasoningEffort=${envModel.reasoningEffort}` : "";
     out(c.dim(`Config: model=${mainModel} (${modelSource})${effort} ${describeConfig(config, mainModel)} | harness ${version.version}${version.commit ? ` @ ${version.commit}` : ""}`));
     for (const s of mcp?.statuses ?? []) {
       if (s.status !== "connected") continue;

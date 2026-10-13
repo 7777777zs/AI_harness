@@ -1648,8 +1648,8 @@ The only difference is rename-function, and the "off" failure was the harness is
 "Before" and "after" refer to the I33 fix (`a0d2e1f`). The context cap changed nothing measurable: the capped tasks never came near 30,000 tokens, and the five tasks with their own smaller limit kept it.
 
 - **I33, before the fix:** the final reply came right after the note-taking reminder, with no tool call, in 3 of the 14b runs and 4 of the 8b runs, about a third of their failures.
-- **After the fix:** the follow-up fired 13 times. gpt-4.1-mini 3 (all passed), 14b 4 (1 passed), 8b 6 (3 passed). The runs that had stopped early because of I33 (14b fix-bug, 8b edit-line and long-context) passed.
-- **gpt-4.1-mini is unaffected:** its one change is count-lines (I1, a model limitation), and no follow-up fired in that run.
+- **After the fix:** the follow-up fired 13 times. gpt-4.1-mini 3 (all passed), 14b 4 (1 passed), 8b 6 (3 passed). Of the runs that had stopped early because of I33, 2 of 3 passed on 14b (fix-bug, long-context; large-file-edit still failed) and 2 of 4 on 8b (edit-line, long-context; find-call-sites and large-file-edit still failed).
+- **gpt-4.1-mini is unaffected:** its one change is count-lines (I1, a model limitation), and no follow-up fired in the count-lines run.
 - **What still fails on the local models:**
   - multi-step edits stop part-way (rename-function, large-file-edit, shell-tree);
   - whole-project summaries skip files;

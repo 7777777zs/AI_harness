@@ -143,3 +143,21 @@ test("OPENAI_REASONING_EFFORT reaches the client and is reported by modelFromEnv
     }
   }
 });
+
+test("an unknown OPENAI_REASONING_EFFORT stops the harness at startup with a clear message", async () => {
+  const { missingEnv } = await import("../src/llm/index.js");
+  const saved = { effort: process.env.OPENAI_REASONING_EFFORT, key: process.env.OPENAI_API_KEY, model: process.env.OPENAI_MODEL };
+  try {
+    process.env.OPENAI_API_KEY = "sk-test";
+    process.env.OPENAI_MODEL = "m";
+    process.env.OPENAI_REASONING_EFFORT = "nonee";
+    assert.equal(missingEnv(), 'OPENAI_REASONING_EFFORT="nonee" is not one of none, minimal, low, medium, high.');
+    process.env.OPENAI_REASONING_EFFORT = "none";
+    assert.equal(missingEnv(), null);
+  } finally {
+    for (const [name, value] of [["OPENAI_REASONING_EFFORT", saved.effort], ["OPENAI_API_KEY", saved.key], ["OPENAI_MODEL", saved.model]] as const) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});

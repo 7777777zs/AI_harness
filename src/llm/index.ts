@@ -10,10 +10,17 @@ export const REQUIRED_ENV: Record<string, string> = {
   OPENAI_MODEL: "OPENAI_MODEL is not set (e.g. OPENAI_MODEL=gpt-4.1-mini).",
 };
 
-/** Returns the error message for the first missing env var, or null. */
+/** Values `reasoning_effort` accepts; anything else is a typo, not a setting. */
+export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high"];
+
+/** Returns the error message for the first missing (or invalid) env var, or null. */
 export function missingEnv(): string | null {
   for (const [name, message] of Object.entries(REQUIRED_ENV)) {
     if (!process.env[name]) return message;
+  }
+  const effort = process.env.OPENAI_REASONING_EFFORT;
+  if (effort && !REASONING_EFFORTS.includes(effort)) {
+    return `OPENAI_REASONING_EFFORT="${effort}" is not one of ${REASONING_EFFORTS.join(", ")}.`;
   }
   return null;
 }

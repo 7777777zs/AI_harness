@@ -41,6 +41,7 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 | I31 | [A shrunk untrusted result loses its reminder](#i31-a-shrunk-untrusted-result-loses-its-reminder) | Security | **Defer** |
 | I32 | [Session review leftovers](#i32-session-review-leftovers) | Sessions | **Defer** |
 | I34 | [Local models narrate one file per turn and use up the pre-finish follow-ups](#i34-local-models-narrate-one-file-per-turn-and-use-up-the-pre-finish-follow-ups) | Pre-finish check | **Defer** |
+| I35 | [Ollama review leftovers](#i35-ollama-review-leftovers) | Local models | **Defer** |
 
 ---
 
@@ -214,3 +215,16 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 - **Problem:** the model reads one file, then replies with text only ("Summary of auth.py … Next, I will read billing.py"), again and again. The plan nudge and the I33 follow-up each fire once, so with `PREFINISH_MAX=2` the third such reply is accepted as the final answer after 2 of 12 files.
 - **Candidate fixes:** a larger `PREFINISH_MAX` for local models (a setting, no code), letting the plan nudge fire more than once, or catching "Next, I will …" endings that follow a partial result.
 - **Decision (2026-10-13): Defer.** Measure first: rerun the whole-project tasks on qwen3 with `PREFINISH_MAX` 4–6 to see whether the budget alone is the limit.
+
+### I35: Ollama review leftovers
+- **Source:** code review of `feat/ollama-qwen` (2026-10-13). Fixed before the merge: two overstated results in TEST_REPORT.md and RESOLVED.md, validation of `OPENAI_REASONING_EFFORT`, provider wording in `agent.ts`, and tests for the request-only reminder (no I33 follow-up) and a non-Ollama `/api/show` (no check).
+- **Problem:**
+  - Untested: the context check of a separate compaction client, and an `/api/show` that hangs (the 3 s timeout).
+  - The I33 follow-up keys on the step number. If the preflight shrinks the result that carried the reminder, the follow-up still fires although the model never saw the reminder.
+  - The context error always says `CONTEXT_LIMIT=…`, also when the value came from `--context-limit`.
+  - Judgement-call smells:
+    - the I33 block repeats the plan-nudge block (four one-shot flags now);
+    - the model and its reasoning effort travel together without a type;
+    - the 22-line context-window block in `runAgent` could be a helper;
+    - `window` as a variable name.
+- **Decision (2026-10-13): Defer.** None changes a measured result. The smells go with I26 when `runAgent` is split.

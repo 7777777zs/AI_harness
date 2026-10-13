@@ -73,7 +73,7 @@ $env:OPENAI_REASONING_EFFORT = "none"        # optional: turns Qwen3's thinking 
 ```
 
 - **Context window.** Ollama answers a prompt longer than the model's window with HTTP 200 and cuts its start, the system prompt first. So `CONTEXT_LIMIT` must not exceed the window. Pin the window in a Modelfile (`FROM qwen3:14b` and `PARAMETER num_ctx 32768`, then `ollama create qwen3-14b-32k -f Modelfile`). At startup the harness reads `num_ctx` from Ollama's `/api/show`: a larger `CONTEXT_LIMIT` is a configuration error, and a model without `num_ctx` gets a warning (its window is Ollama's default, which depends on the version and GPU memory).
-- **Thinking.** Qwen3 thinks by default. `OPENAI_REASONING_EFFORT=none` is sent as `reasoning_effort` and is the only switch that works on Ollama's OpenAI-compatible endpoint. It was about 20× faster in the core tasks measured. It is recorded in `run_start`, the `Config:` line and eval results.
+- **Thinking.** Qwen3 thinks by default. `OPENAI_REASONING_EFFORT=none` is sent as `reasoning_effort` and is the only switch that works on Ollama's OpenAI-compatible endpoint. Allowed values: none, minimal, low, medium, high; anything else stops the harness at startup. It was about 20× faster in the core tasks measured. It is recorded in `run_start`, the `Config:` line and eval results.
 - **Evals.** The runner gives most tasks a 100,000-token limit; add `--context-limit 30000` so no task exceeds the model's window.
 - **Quality.** In the 19 core tasks (thinking off, one run each), qwen3-14b passed 10 and qwen3-8b 12, against 17–18 for gpt-4.1-mini (TEST_REPORT.md, "Local Qwen3 through Ollama").
 
