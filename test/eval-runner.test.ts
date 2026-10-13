@@ -177,3 +177,40 @@ test("a bad --context-limit fails at once with the shared settings message", asy
   assert.equal(await new Promise<number | null>((r) => child.on("exit", r)), 1);
   assert.match(stderr, /^Error: --context-limit="abc" is not an integer/);
 });
+
+// ---- --prefinish-max: a larger pre-finish budget for models that need more follow-ups (I34) ----
+
+test("evalSettings: --prefinish-max overrides the default budget", async () => {
+  const { evalSettings } = await import("../evals/options.js");
+  const { tasks } = await import("../evals/tasks/index.js");
+  assert.equal(evalSettings(tasks[0]!, { mainModel: "m", prefinishMax: 6 }).prefinishMax, 6);
+  assert.equal(evalSettings(tasks[0]!, { mainModel: "m" }).prefinishMax, 2);
+});
+
+test("--prefinish-max reaches every run (run_start) and a bad value fails at once", async () => {
+  const api = await fakeApi(5);
+  const resultsDir = tmp();
+  try {
+    const child = spawn(process.execPath, ["--import", "tsx", "evals/run.ts", "--task", "create-file", "--prefinish-max", "6", "--results-dir", resultsDir], {
+      cwd: ROOT,
+      env: { ...process.env, OPENAI_API_KEY: "sk-test", OPENAI_MODEL: "fake", OPENAI_BASE_URL: api.url },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    child.stdout.on("data", (d) => (output += d));
+    child.stderr.on("data", (d) => (output += d));
+    assert.equal(await new Promise<number | null>((r) => child.on("exit", r)), 0, output);
+    const file = fs.readdirSync(resultsDir).find((f) => f.endsWith(".json"))!;
+    const results = JSON.parse(fs.readFileSync(path.join(resultsDir, file), "utf8"));
+    assert.equal(results.options["prefinish-max"], "6");
+    const log = fs.readFileSync(path.resolve(ROOT, results.results[0].logFile), "utf8").split("\n")[0]!;
+    assert.equal(JSON.parse(log).config.prefinishMax, 6);
+  } finally {
+    api.close();
+  }
+  const bad = spawn(process.execPath, ["--import", "tsx", "evals/run.ts", "--prefinish-max", "11"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+  let stderr = "";
+  bad.stderr.on("data", (d) => (stderr += d));
+  assert.equal(await new Promise<number | null>((r) => bad.on("exit", r)), 1);
+  assert.match(stderr, /^Error: --prefinish-max=11 is out of range \(0–10\)/);
+});

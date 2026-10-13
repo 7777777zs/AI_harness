@@ -88,7 +88,7 @@ const RESULTS_DIR = path.join(EVALS_DIR, "results");
 
 const USAGE =
   "Usage: npm run eval -- [--task id] [--runs N] [--concurrency N] [--skills off|available|preloaded|routed] " +
-  "[--without-mcp] [--without-skill-tasks] [--compact-model M] [--context-limit N] [--results-dir DIR] [--keep] [--verbose]\n" +
+  "[--without-mcp] [--without-skill-tasks] [--compact-model M] [--context-limit N] [--prefinish-max N] [--results-dir DIR] [--keep] [--verbose]\n" +
   'Put -- after "npm run eval" so npm passes the options on, e.g. npm run eval -- --runs 3';
 
 function parseRunnerArgs() {
@@ -111,6 +111,8 @@ function parseRunnerArgs() {
         "results-dir": { type: "string" },
         /** Cap on every task's context limit, for a server with a smaller window (e.g. a local Ollama model). */
         "context-limit": { type: "string" },
+        /** The pre-finish budget (PREFINISH_MAX) for every run; default 2. */
+        "prefinish-max": { type: "string" },
       },
     });
   } catch (err) {
@@ -132,8 +134,10 @@ function positiveInt(name: string, raw: string): number {
 
 // Validated like the CLI flag (same range and message), before anything else runs.
 let contextLimitCap: number | undefined;
+let prefinishMax: number | undefined;
 try {
   if (args["context-limit"] !== undefined) contextLimitCap = parseNumber(2_000, 10_000_000, true)(args["context-limit"], "--context-limit");
+  if (args["prefinish-max"] !== undefined) prefinishMax = parseNumber(0, 10, true)(args["prefinish-max"], "--prefinish-max");
 } catch (err) {
   console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
@@ -231,7 +235,7 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       quiet: !args.verbose,
       logDir: path.join(logsRoot, `${task.id}-${run}`),
       // Every setting explicit: ~/.harness/.env and env vars can't change eval behavior (A8).
-      ...evalSettings(task, { mainModel: process.env.OPENAI_MODEL, compactModel: args["compact-model"], skills: skillsCondition, contextLimitCap }),
+      ...evalSettings(task, { mainModel: process.env.OPENAI_MODEL, compactModel: args["compact-model"], skills: skillsCondition, contextLimitCap, prefinishMax }),
       // Nobody can answer: the untrusted-content guard is recorded (result.untrustedGuard) and denied.
       confirmUntrusted: async () => false,
     });

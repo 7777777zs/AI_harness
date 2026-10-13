@@ -35,6 +35,8 @@ export interface EvalRunSettings {
    * smaller than the default (a local Ollama model), which truncates longer prompts silently.
    */
   contextLimitCap?: number;
+  /** `--prefinish-max`: the pre-finish budget (default 2); local models narrate more and need more (I34). */
+  prefinishMax?: number;
 }
 
 export function evalSettings(
@@ -50,7 +52,7 @@ export function evalSettings(
     coverageCheck: DEFAULTS.coverageCheck,
     coverageFooter: DEFAULTS.coverageFooter,
     maxSteps: task.maxSteps ?? DEFAULTS.maxSteps,
-    prefinishMax: DEFAULTS.prefinishMax,
+    prefinishMax: run.prefinishMax ?? DEFAULTS.prefinishMax,
     ...(compactModel !== undefined && { compactModel }),
     mcp: { servers: task.mcpServers ?? {} },
     skillsEnabled: run.skills === "available" || run.skills === "preloaded" || run.skills === "routed",
