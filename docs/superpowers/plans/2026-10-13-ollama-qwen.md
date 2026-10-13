@@ -79,3 +79,11 @@ Expected:
 - The CLI runs a tool-using task on `qwen3-14b-32k`, fully on the GPU.
 - The eval runner can cap the context limit, and the core suite has results for both models next to gpt-4.1-mini.
 - Every code change came with a failing test first, `npm test` and `tsc` pass, and the change was reviewed with `/code-review` before merging.
+
+## Outcome (2026-10-13)
+
+- **Tasks 0–4:** Ollama 0.40.3 runs both models fully on the GPU (ROCm, gfx1100), with a 32k context. The configuration-only connection works. Thinking arrives in a separate `reasoning` field, so no stripping was needed. The truncation probe confirmed pitfall 1: 42,055 prompt tokens became 16,386, the system prompt was dropped, and the server returned HTTP 200.
+- **Task 5:** eval runner `--context-limit` (`e24e3a4`); startup check of the server's num_ctx through `LLMClient.contextWindow()` (`5e43082`).
+- **Task 6:** the only working switch for thinking is `reasoning_effort: "none"`, so `OPENAI_REASONING_EFFORT` was added (`e81f14e`). Off was about 20× faster with no measurable quality loss on 5 tasks, so it was used for the core suite.
+- **Task 7:** core suite 8/19 (14b) and 10/19 (8b) against 18/19 for gpt-4.1-mini. A third of the local failures were I33, which was fixed (`a0d2e1f`): 10/19 and 12/19 afterwards, and gpt-4.1-mini unaffected (17/19; its change is count-lines). Open: I34.
+- **Task 8:** README "Local models (Ollama)", TEST_REPORT.md "Local Qwen3 through Ollama", ISSUES.md I34, RESOLVED.md I33.

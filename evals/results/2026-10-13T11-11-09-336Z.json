@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-10-13T11-11-09-336Z",
+  "model": "qwen3-14b-32k",
+  "options": {
+    "task": "find-string",
+    "context-limit": "30000",
+    "concurrency": 1,
+    "runs": 1,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false,
+    "skills": "off"
+  },
+  "summary": [
+    {
+      "taskId": "find-string",
+      "runs": 1,
+      "passes": 1,
+      "errors": 0,
+      "avgSteps": 2,
+      "avgTokens": 3773,
+      "avgSeconds": 10.889,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "find-string",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 2,
+      "inputTokens": 3130,
+      "outputTokens": 643,
+      "durationMs": 10889,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 3130,
+      "mainOutputTokens": 643,
+      "tokenRatio": 0.9433341598479213,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-13T11-11-09-336Z\\find-string-1\\2026-10-13T11-11-09-345Z.jsonl",
+      "toolCalls": {
+        "grep": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 1600,
+      "skillsCondition": "off",
+      "skillsLoaded": []
+    }
+  ]
+}

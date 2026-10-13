@@ -1,0 +1,73 @@
+{
+  "timestamp": "2026-10-13T11-11-22-352Z",
+  "model": "qwen3-14b-32k",
+  "options": {
+    "task": "multi-file-summary",
+    "context-limit": "30000",
+    "concurrency": 1,
+    "runs": 1,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false,
+    "skills": "off"
+  },
+  "summary": [
+    {
+      "taskId": "multi-file-summary",
+      "runs": 1,
+      "passes": 0,
+      "errors": 0,
+      "avgSteps": 4,
+      "avgTokens": 11986,
+      "avgSeconds": 81.36,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "failures": [
+        "files not named: calc.py, keys.py, gc.py, throttle.py, export.py, gateway.py; purpose missing for: calc.py, keys.py, gc.py, throttle.py, export.py, gateway.py"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "multi-file-summary",
+      "run": 1,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 6705,
+      "outputTokens": 5281,
+      "durationMs": 81360,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 6705,
+      "mainOutputTokens": 5281,
+      "tokenRatio": 0.9569308847410171,
+      "answerMerged": false,
+      "unreadAtEnd": 1,
+      "logFile": "evals\\results\\logs\\2026-10-13T11-11-22-352Z\\multi-file-summary-1\\2026-10-13T11-11-23-261Z.jsonl",
+      "toolCalls": {
+        "list_dir": 2
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 1868,
+      "skillsCondition": "off",
+      "skillsLoaded": [],
+      "reason": "files not named: calc.py, keys.py, gc.py, throttle.py, export.py, gateway.py; purpose missing for: calc.py, keys.py, gc.py, throttle.py, export.py, gateway.py"
+    }
+  ]
+}

@@ -60,6 +60,23 @@ Invalid values stop the harness with a clear message instead of falling back sil
 
 A `.env` in the directory you run `harness` from is **never** read, so a project's own secrets don't leak into the agent. Set `HARNESS_HOME` to use a directory other than `~/.harness`. The eval runner passes every setting explicitly, so your `.env` can't change eval behaviour.
 
+### Local models (Ollama)
+
+Ollama serves an OpenAI-compatible API, so a local model needs only environment variables:
+
+```powershell
+$env:OPENAI_BASE_URL = "http://127.0.0.1:11434/v1"
+$env:OPENAI_API_KEY = "ollama"               # any non-empty value
+$env:OPENAI_MODEL = "qwen3-14b-32k"          # see the Modelfile below
+$env:CONTEXT_LIMIT = "30000"                 # at most the model's num_ctx
+$env:OPENAI_REASONING_EFFORT = "none"        # optional: turns Qwen3's thinking off
+```
+
+- **Context window.** Ollama answers a prompt longer than the model's window with HTTP 200 and cuts its start, the system prompt first. So `CONTEXT_LIMIT` must not exceed the window. Pin the window in a Modelfile (`FROM qwen3:14b` and `PARAMETER num_ctx 32768`, then `ollama create qwen3-14b-32k -f Modelfile`). At startup the harness reads `num_ctx` from Ollama's `/api/show`: a larger `CONTEXT_LIMIT` is a configuration error, and a model without `num_ctx` gets a warning (its window is Ollama's default, which depends on the version and GPU memory).
+- **Thinking.** Qwen3 thinks by default. `OPENAI_REASONING_EFFORT=none` is sent as `reasoning_effort` and is the only switch that works on Ollama's OpenAI-compatible endpoint. It was about 20× faster in the core tasks measured. It is recorded in `run_start`, the `Config:` line and eval results.
+- **Evals.** The runner gives most tasks a 100,000-token limit; add `--context-limit 30000` so no task exceeds the model's window.
+- **Quality.** In the 19 core tasks (thinking off, one run each), qwen3-14b passed 10 and qwen3-8b 12, against 17–18 for gpt-4.1-mini (TEST_REPORT.md, "Local Qwen3 through Ollama").
+
 ## Usage
 
 ```bash
@@ -312,7 +329,7 @@ src/
 │   ├── types.ts      LLMClient interface, Message, ToolCall, LLMResponse, ContextLengthError
 │   ├── index.ts      createClientFromEnv() / modelFromEnv(): the one place that picks a provider
 │   ├── retry.ts      Retries of transient API errors (backoff, Retry-After, jitter)
-│   └── openai.ts     OpenAI Chat Completions adapter
+│   └── openai.ts     OpenAI Chat Completions adapter (also OpenAI-compatible servers such as Ollama)
 ├── context/
 │   ├── tokens.ts     Token estimate (API ground truth + heuristic for new messages)
 │   ├── turns.ts      Turn-group splitting and tool-call pairing validation
@@ -387,6 +404,7 @@ Before each model call, the harness estimates the context size. The starting poi
 - **Pre-finish check:** a reply without tool calls is the final answer. Before accepting it, the harness may send a follow-up instead.
   - **The budget:** at most `PREFINISH_MAX` follow-ups per run (default 2), each kind at most once. With a budget of 1, a plan nudge would use it up and the real answer would go unchecked.
   - **Plan only:** if the reply only announces work ("I will read each page…", "接下来我将…"), the model is told to do it now. Such a reply is not kept as an answer.
+  - **Notes after the reminder:** a reply without tool calls in the step right after the note-taking reminder is the notes the reminder asked for, so the model is told to continue. Such a reply is not kept as an answer. Local models stopped mid-task there (RESOLVED.md, I33).
   - **Coverage check:** if the model tries to finish a whole-project task while listed files are unread, it is asked to read them or say what it skipped. Set `COVERAGE_CHECK=off` to disable.
   - **Completion criteria** of loaded skills: see [Skills](#completion-criteria).
   - **One message:** when coverage and completion both fail on the same answer, they are sent together.

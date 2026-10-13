@@ -1,0 +1,75 @@
+{
+  "timestamp": "2026-10-13T11-12-47-057Z",
+  "model": "qwen3-14b-32k",
+  "options": {
+    "task": "rename-function",
+    "context-limit": "30000",
+    "concurrency": 1,
+    "runs": 1,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false,
+    "skills": "off"
+  },
+  "summary": [
+    {
+      "taskId": "rename-function",
+      "runs": 1,
+      "passes": 1,
+      "errors": 0,
+      "avgSteps": 20,
+      "avgTokens": 90363,
+      "avgSeconds": 301.756,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 4,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 11,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "rename-function",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "max_steps",
+      "steps": 20,
+      "inputTokens": 71153,
+      "outputTokens": 19210,
+      "durationMs": 301756,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 4,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 11,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 71153,
+      "mainOutputTokens": 19210,
+      "tokenRatio": 1.1484398099460311,
+      "answerMerged": false,
+      "unreadAtEnd": 4,
+      "logFile": "evals\\results\\logs\\2026-10-13T11-12-47-057Z\\rename-function-1\\2026-10-13T11-12-47-066Z.jsonl",
+      "toolCalls": {
+        "glob": 2,
+        "list_dir": 1,
+        "grep": 6,
+        "edit_file": 8,
+        "run_shell": 1,
+        "read_file": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 5561,
+      "skillsCondition": "off",
+      "skillsLoaded": []
+    }
+  ]
+}

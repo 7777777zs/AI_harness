@@ -38,6 +38,7 @@ Issues that are fixed, or closed with a decision that needs no further work. Ope
 | Code review findings (2026-10-05) | See below | branch `review-round2` |
 | N4: gpt-4.1-mini refused to open local URLs | URL rule in the MCP tools note | branch `fix-url-refusal` |
 | N5: gave up after seeing only the blank tab | Unopened task URLs named in the `[Harness status]` message | branch `fix-url-refusal` |
+| I33: the note-taking reminder ended runs early on a local model | A text-only reply right after the reminder gets one "continue" follow-up (pre-finish) | branch `feat/ollama-qwen`, `a0d2e1f` |
 | I8: harness hints after untrusted content made injections more likely to be followed | Reminder added per request after the latest untrusted result only; no repeat notice on untrusted results | `73939f4` |
 | I9: confirmation-required MCP tools ran unguarded under auto-approve after untrusted content | Guarded like `run_shell`/`write_file`/`edit_file` | `b320254` |
 | I17: nothing verified on Linux or macOS | CI runs the type check and tests on Linux, macOS and Windows | `725d7be` |
@@ -292,3 +293,11 @@ The data is in TEST_REPORT.md, "Issues round 2".
 
 ### I24: the hand-edited results file
 - `evals/results/2026-09-28T00-11-35-377Z.json` is excluded by `evals/sanitize-results.ts` and no longer committed; the local file stays.
+
+### I33: The note-taking reminder can end a run early on a local model
+- **Source:** Task 6 of docs/superpowers/plans/2026-10-13-ollama-qwen.md (2026-10-13), qwen3-14b-32k with thinking off (`OPENAI_REASONING_EFFORT=none`).
+- **Problem:** after 3 silent steps the reminder "Before continuing, write down key findings … in your reply text" is appended to the last tool result. In rename-function, the model then replied with its findings only, without a tool call. The harness takes a reply without tool calls as the final answer, so the run ended after 1 of 5 edits. gpt-4.1-mini usually writes the notes and calls the next tool in the same reply.
+- **Candidate fixes:** reword the reminder (e.g. notes "in the same reply as your next tool call"; D5 showed that such wording can break other tasks), or treat a text-only reply right after the reminder as not final and continue, through the existing pre-finish path.
+- **Measured:** in the core suite the final reply came right after the reminder in 3 of 19 runs on qwen3-14b-32k and 4 on qwen3-8b-32k, about a third of their failures.
+- **Fix (`a0d2e1f`):** a reply without tool calls in the step right after the reminder gets one follow-up ("Noted. … continue the task with tool calls now") through the pre-finish path: at most once per run, within `PREFINISH_MAX`, not kept as an answer.
+- **Result:** 14b 8 → 10 of 19, 8b 10 → 12; the runs that had stopped early passed. gpt-4.1-mini 17/19 (its one change is count-lines, I1); the follow-up fired 3 times there and all 3 passed. Related, still open: I34.

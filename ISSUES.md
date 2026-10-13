@@ -40,7 +40,7 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 | I30 | [The paging note of an oversized untrusted result](#i30-the-paging-note-of-an-oversized-untrusted-result) | Security | **Defer** |
 | I31 | [A shrunk untrusted result loses its reminder](#i31-a-shrunk-untrusted-result-loses-its-reminder) | Security | **Defer** |
 | I32 | [Session review leftovers](#i32-session-review-leftovers) | Sessions | **Defer** |
-| I33 | [The note-taking reminder can end a run early on a local model](#i33-the-note-taking-reminder-can-end-a-run-early-on-a-local-model) | Nudges | **Defer** |
+| I34 | [Local models narrate one file per turn and use up the pre-finish follow-ups](#i34-local-models-narrate-one-file-per-turn-and-use-up-the-pre-finish-follow-ups) | Pre-finish check | **Defer** |
 
 ---
 
@@ -209,8 +209,8 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 
 ## Found with a local model (Ollama)
 
-### I33: The note-taking reminder can end a run early on a local model
-- **Source:** Task 6 of docs/superpowers/plans/2026-10-13-ollama-qwen.md (2026-10-13), qwen3-14b-32k with thinking off (`OPENAI_REASONING_EFFORT=none`).
-- **Problem:** after 3 silent steps the reminder "Before continuing, write down key findings … in your reply text" is appended to the last tool result. In rename-function, the model then replied with its findings only, without a tool call. The harness takes a reply without tool calls as the final answer, so the run ended after 1 of 5 edits. gpt-4.1-mini usually writes the notes and calls the next tool in the same reply.
-- **Candidate fixes:** reword the reminder (e.g. notes "in the same reply as your next tool call"; D5 showed that such wording can break other tasks), or treat a text-only reply right after the reminder as not final and continue, through the existing pre-finish path.
-- **Decision (2026-10-13): Defer.** Task 7 (core suite on the local models) counts how often it happens; fix it test-first after that.
+### I34: Local models narrate one file per turn and use up the pre-finish follow-ups
+- **Source:** the core suite on qwen3 after the I33 fix (TEST_REPORT.md, "Local Qwen3 through Ollama"), e.g. qwen3-14b-32k summary-with-footer.
+- **Problem:** the model reads one file, then replies with text only ("Summary of auth.py … Next, I will read billing.py"), again and again. The plan nudge and the I33 follow-up each fire once, so with `PREFINISH_MAX=2` the third such reply is accepted as the final answer after 2 of 12 files.
+- **Candidate fixes:** a larger `PREFINISH_MAX` for local models (a setting, no code), letting the plan nudge fire more than once, or catching "Next, I will …" endings that follow a partial result.
+- **Decision (2026-10-13): Defer.** Measure first: rerun the whole-project tasks on qwen3 with `PREFINISH_MAX` 4–6 to see whether the budget alone is the limit.

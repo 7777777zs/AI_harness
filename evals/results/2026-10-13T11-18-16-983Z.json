@@ -1,0 +1,75 @@
+{
+  "timestamp": "2026-10-13T11-18-16-983Z",
+  "model": "qwen3-14b-32k",
+  "reasoningEffort": "none",
+  "options": {
+    "task": "rename-function",
+    "context-limit": "30000",
+    "concurrency": 1,
+    "runs": 1,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false,
+    "skills": "off"
+  },
+  "summary": [
+    {
+      "taskId": "rename-function",
+      "runs": 1,
+      "passes": 0,
+      "errors": 0,
+      "avgSteps": 4,
+      "avgTokens": 7343,
+      "avgSeconds": 5.838,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "failures": [
+        "node check.js exited 1: src/stats.mjs does not export calculateAverage | src/stats.mjs still exports calcAvg | src/index.mjs does not re-export calculateAverage"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "rename-function",
+      "run": 1,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 7058,
+      "outputTokens": 285,
+      "durationMs": 5838,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 7058,
+      "mainOutputTokens": 285,
+      "tokenRatio": 0.9713739446159991,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-13T11-18-16-983Z\\rename-function-1\\2026-10-13T11-18-16-992Z.jsonl",
+      "toolCalls": {
+        "grep": 2,
+        "edit_file": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 1948,
+      "skillsCondition": "off",
+      "skillsLoaded": [],
+      "reason": "node check.js exited 1: src/stats.mjs does not export calculateAverage | src/stats.mjs still exports calcAvg | src/index.mjs does not re-export calculateAverage"
+    }
+  ]
+}

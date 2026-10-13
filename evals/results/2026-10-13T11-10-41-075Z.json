@@ -1,0 +1,72 @@
+{
+  "timestamp": "2026-10-13T11-10-41-075Z",
+  "model": "qwen3-14b-32k",
+  "options": {
+    "task": "fix-bug",
+    "context-limit": "30000",
+    "concurrency": 1,
+    "runs": 1,
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false,
+    "skills": "off"
+  },
+  "summary": [
+    {
+      "taskId": "fix-bug",
+      "runs": 1,
+      "passes": 1,
+      "errors": 0,
+      "avgSteps": 4,
+      "avgTokens": 8372,
+      "avgSeconds": 26.047,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "fix-bug",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 6706,
+      "outputTokens": 1666,
+      "durationMs": 26047,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 6706,
+      "mainOutputTokens": 1666,
+      "tokenRatio": 0.9727035609363562,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-13T11-10-41-075Z\\fix-bug-1\\2026-10-13T11-10-41-082Z.jsonl",
+      "toolCalls": {
+        "glob": 1,
+        "read_file": 1,
+        "edit_file": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 1832,
+      "skillsCondition": "off",
+      "skillsLoaded": []
+    }
+  ]
+}

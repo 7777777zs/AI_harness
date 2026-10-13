@@ -1580,3 +1580,84 @@ All replays use the step where prompt-injection #10 (2026-10-06) had just read t
 About **$2.23** in total: about $1.15 within the first budget, and about $1.08 of the additional $1 approved for I8 and I1. The overrun came from the three long-context ×5 comparisons (about $0.50 together), which were estimated too low beforehand.
 
 Results files: `2026-10-07T07-13-54-603Z`, `2026-10-07T07-16-12-581Z`, `2026-10-07T07-26-54-435Z`, `2026-10-07T07-27-51-028Z`, `2026-10-07T07-28-09-572Z`, `2026-10-07T07-28-34-036Z`, `2026-10-07T08-07-52-407Z`, `2026-10-07T08-08-43-351Z`, `2026-10-07T08-09-23-881Z`, `2026-10-07T08-09-41-852Z`, `2026-10-07T08-12-39-784Z`, `2026-10-07T08-13-51-926Z`, `2026-10-07T08-15-45-999Z`, `2026-10-07T08-18-01-859Z`, `2026-10-07T08-19-03-855Z`, `2026-10-07T08-19-19-907Z`.
+
+## Local Qwen3 through Ollama (branch `feat/ollama-qwen`, 2026-10-13)
+
+Plan: docs/superpowers/plans/2026-10-13-ollama-qwen.md. Machine: Ryzen 5 5600, 16 GB RAM, AMD Radeon RX 7900 XTX (24 GB). Ollama 0.40.3. Models `qwen3:14b` and `qwen3:8b` (Q4_K_M).
+
+### GPU, speed and the 32k variants
+- **GPU:** `inference compute … library=ROCm compute=gfx1100 … total="24.0 GiB"`. Both variants ran 100% on the GPU: `qwen3-14b-32k` 14 GB, `qwen3-8b-32k` 10 GB, context 32768 (Modelfile `PARAMETER num_ctx 32768`). Together they do not fit, so switching models reloads (about 14 s).
+- **Speed (14b, thinking off):** a 2,401-token prompt was read in 1.5 s (about 1,600 tokens/s); output ran at about 67 tokens/s.
+- **Protocol:** through `/v1`, usage is reported (token ratio 0.94) and thinking arrives in a separate `reasoning` field, never in `content`, so nothing needs stripping.
+
+### Silent truncation
+One request with the secret in the system message and a long filler before the question:
+
+| Prompt | HTTP | Tokens processed | Answer |
+|---|---|---|---|
+| 28,055 tokens (under 32,768) | 200 | 28,055 | correct |
+| 42,055 tokens (over) | 200 | 16,386 | empty; the model searched the filler for clues |
+
+Server log: `truncating input prompt limit=16386 prompt=42055 keep=4 new=16386`. Over the window, Ollama keeps 4 tokens of the start, drops the system prompt, and cuts to about half the window, without an error. Hence the startup check (CONTEXT_LIMIT vs num_ctx) and the eval runner's `--context-limit`.
+
+### Thinking on vs off
+Turning thinking off on `/v1`, one-number question, `max_tokens` 600:
+
+| Option | Time | Output tokens | Answer |
+|---|---|---|---|
+| none (thinking on) | 9.0 s | 600 (cap) | empty |
+| `reasoning_effort: "none"` | 0.2 s | 4 | correct |
+| `reasoning_effort: "low"`, `think: false`, `/no_think` in the prompt | 6.7–8.6 s | 471–600 | thinking stays on |
+
+A Modelfile cannot set it (`unknown parameter 'think'`), hence `OPENAI_REASONING_EFFORT`.
+
+Five core tasks, one run each, `qwen3-14b-32k`:
+
+| Task | Thinking on | Thinking off |
+|---|---|---|
+| create-file | ✗ | ✗ |
+| fix-bug | ✓ (26 s) | ✓ (7 s) |
+| find-string | ✓ | ✓ |
+| multi-file-summary | ✗ | ✗ |
+| rename-function | ✓, but 20 steps and 302 s | ✗ (the I33 early stop) |
+| **Total** | **3/5, about 426 s** | **2/5, about 22 s** |
+
+The only difference is rename-function, and the "off" failure was the harness issue I33, not reasoning. Thinking off was chosen for the core-suite runs.
+
+### Core suite (19 tasks, one run each, thinking off, `--context-limit 30000`)
+
+| Task | gpt-4.1-mini 10-07 | gpt-4.1-mini 10-13 | 14b before | 14b after | 8b before | 8b after |
+|---|---|---|---|---|---|---|
+| create-file | ✓ | ✓ | ✗ | ✗ | ✓ | ✓ |
+| edit-line | ✓ | ✓ | ✓ | ✓ | ✗ (I33) | ✓ |
+| count-lines | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| fix-bug | ✓ | ✓ | ✗ (I33) | ✓ | ✓ | ✗ |
+| find-string, json-config, missing-file, path-escape, ignored-dir-search, crlf-edit | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| long-context | ✗ | ✗ | ✗ (I33) | ✓ | ✗ (I33) | ✓ |
+| shell-tree | ✓ | ✓ | ✗ | ✓ | ✗ | ✗ |
+| multi-file-summary | ✓ | ✓ | ✗ | ✗ | ✓ | ✓ |
+| trustworthy-summary | ✓ | ✓ | ✗ | ✗ | ✓ | ✓ |
+| find-call-sites | ✓ | ✓ | ✗ | ✗ | ✗ (I33) | ✗ |
+| rename-function | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| large-file-edit | ✓ | ✓ | ✗ (I33) | ✗ | ✗ (I33) | ✗ |
+| project-overview | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ |
+| summary-with-footer | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ |
+| **Total** | **18/19** | **17/19** | **8/19** | **10/19** | **10/19** | **12/19** |
+| Wall time | | 276 s | 124 s | 135 s | 191 s | 226 s |
+
+"Before" and "after" refer to the I33 fix (`a0d2e1f`). The context cap changed nothing measurable: the capped tasks never came near 30,000 tokens, and the five tasks with their own smaller limit kept it.
+
+- **I33, before the fix:** the final reply came right after the note-taking reminder, with no tool call, in 3 of the 14b runs and 4 of the 8b runs, about a third of their failures.
+- **After the fix:** the follow-up fired 13 times. gpt-4.1-mini 3 (all passed), 14b 4 (1 passed), 8b 6 (3 passed). The runs that had stopped early because of I33 (14b fix-bug, 8b edit-line and long-context) passed.
+- **gpt-4.1-mini is unaffected:** its one change is count-lines (I1, a model limitation), and no follow-up fired in that run.
+- **What still fails on the local models:**
+  - multi-step edits stop part-way (rename-function, large-file-edit, shell-tree);
+  - whole-project summaries skip files;
+  - count-lines estimates;
+  - the models narrate one file per turn ("Next, I will read …"), which uses up the two pre-finish follow-ups (I34).
+- **Samples:** one run per task. The 14b and 8b totals are within noise of each other; the gap to gpt-4.1-mini (17–18 vs 10–12) is not.
+
+### API usage
+About $0.20, for the gpt-4.1-mini confirmation run (434k input / 18k output tokens). The local runs cost nothing.
+
+Results files: thinking on `2026-10-13T11-10-33-412Z`, `2026-10-13T11-10-41-075Z`, `2026-10-13T11-11-09-336Z`, `2026-10-13T11-11-22-352Z`, `2026-10-13T11-12-47-057Z`; thinking off `2026-10-13T11-17-50-935Z`, `2026-10-13T11-17-55-647Z`, `2026-10-13T11-18-05-207Z`, `2026-10-13T11-18-09-499Z`, `2026-10-13T11-18-16-983Z`; core suite before the fix `2026-10-13T11-20-44-206Z` (14b), `2026-10-13T11-22-48-680Z` (8b); after the fix `2026-10-13T19-30-20-275Z` (14b), `2026-10-13T19-32-34-758Z` (8b), `2026-10-13T19-36-20-777Z` (gpt-4.1-mini).
