@@ -40,6 +40,7 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 | I30 | [The paging note of an oversized untrusted result](#i30-the-paging-note-of-an-oversized-untrusted-result) | Security | **Defer** |
 | I31 | [A shrunk untrusted result loses its reminder](#i31-a-shrunk-untrusted-result-loses-its-reminder) | Security | **Defer** |
 | I32 | [Session review leftovers](#i32-session-review-leftovers) | Sessions | **Defer** |
+| I33 | [The note-taking reminder can end a run early on a local model](#i33-the-note-taking-reminder-can-end-a-run-early-on-a-local-model) | Nudges | **Defer** |
 
 ---
 
@@ -205,3 +206,11 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
   - `RunAgentOptions.session.dir` lets a programmatic caller put session files outside `$HARNESS_HOME/sessions`; only the tests use it.
   - Judgement-call smells: `resume` mixes the value `"latest"` with session ids; the ~60-line session block in `runAgent` could be a helper; `summarizable()` runs twice per compaction; names such as `{ older: middle }` and a second `kept`.
 - **Decision (2026-10-13): Defer.** The CLI starts one run per process, so the lock race needs two harness processes starting on the same stale lock at once. The smells change no behavior; do them with I26 when this code changes next.
+
+## Found with a local model (Ollama)
+
+### I33: The note-taking reminder can end a run early on a local model
+- **Source:** Task 6 of docs/superpowers/plans/2026-10-13-ollama-qwen.md (2026-10-13), qwen3-14b-32k with thinking off (`OPENAI_REASONING_EFFORT=none`).
+- **Problem:** after 3 silent steps the reminder "Before continuing, write down key findings … in your reply text" is appended to the last tool result. In rename-function, the model then replied with its findings only, without a tool call. The harness takes a reply without tool calls as the final answer, so the run ended after 1 of 5 edits. gpt-4.1-mini usually writes the notes and calls the next tool in the same reply.
+- **Candidate fixes:** reword the reminder (e.g. notes "in the same reply as your next tool call"; D5 showed that such wording can break other tasks), or treat a text-only reply right after the reminder as not final and continue, through the existing pre-finish path.
+- **Decision (2026-10-13): Defer.** Task 7 (core suite on the local models) counts how often it happens; fix it test-first after that.
