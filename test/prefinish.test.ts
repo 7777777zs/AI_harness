@@ -192,8 +192,8 @@ test("PREFINISH_MAX is validated and set explicitly by the eval settings", () =>
 
 test("totalNudges counts every kind of nudge, including the pre-finish ones (plan, completion)", () => {
   // Distinct powers of two: a missing or doubled kind changes the sum.
-  const stats: NudgeStats = { notes: 1, missingFile: 2, repeat: 4, coverage: 8, plan: 16, completion: 32, unopenedUrl: 64 };
-  assert.equal(totalNudges(stats), 127);
+  const stats: NudgeStats = { notes: 1, missingFile: 2, repeat: 4, coverage: 8, plan: 16, completion: 32, unopenedUrl: 64, afterNotes: 128 };
+  assert.equal(totalNudges(stats), 255);
 });
 
 test("requiredSections match heading lines only (Markdown headings or bold-only lines), not body text", () => {
@@ -216,4 +216,42 @@ test("requiredSections match heading lines only (Markdown headings or bold-only 
   // web-research's own pattern still works.
   assert.equal(gaps("^#+\\s*Conflicts", "## Answer\nx\n\n## Conflicts\nNone found."), 0);
   assert.equal(gaps("^#+\\s*Conflicts", "## Answer\nThe conflicts are listed below."), 1);
+});
+
+// ---- I33: a notes-only reply right after the note-taking reminder is not a final answer ----
+
+const fourFiles = () => {
+  const dir = tmp();
+  for (const f of ["a", "b", "c", "d"]) fs.writeFileSync(path.join(dir, `${f}.txt`), `fact ${f}`);
+  return dir;
+};
+const read = (f: string) => ({ tool: "read_file", args: { path: `${f}.txt` } });
+
+test("a text-only reply right after the note-taking reminder gets one 'continue' follow-up and is not kept as an answer (I33)", async () => {
+  const dir = fourFiles();
+  // Three silent tool steps trigger the reminder; the model then only writes notes.
+  const s = scripted([read("a"), read("b"), read("c"), "Key findings so far: a, b and c hold facts.", read("d"), "Done: facts a, b, c and d."]);
+  const result = await runAgent({ task: "Collect the facts.", cwd: dir, client: s.client, quiet: true, coverageCheck: false });
+  assert.equal(result.stopReason, "done");
+  assert.equal(result.finalText, "Done: facts a, b, c and d.");
+  assert.deepEqual(result.answerHistory, ["Done: facts a, b, c and d."], "the notes are not an answer");
+  assert.equal(s.followUps().length, 1);
+  assert.match(s.followUps()[0]!, /^Noted\. A reply without tool calls ends the run/);
+  assert.equal(result.nudges.afterNotes, 1);
+  assert.ok(logOf(result.logFile).some((l) => l.type === "nudge" && l.kind === "after_notes"));
+});
+
+test("after the reminder, the notes reply is the final answer when the pre-finish budget is 0 (I33)", async () => {
+  const s = scripted([read("a"), read("b"), read("c"), "Key findings so far: a, b and c hold facts."]);
+  const result = await runAgent({ task: "Collect the facts.", cwd: fourFiles(), client: s.client, quiet: true, coverageCheck: false, prefinishMax: 0 });
+  assert.equal(result.finalText, "Key findings so far: a, b and c hold facts.");
+  assert.equal(s.followUps().length, 0);
+});
+
+test("a text-only reply without the reminder before it ends the run as usual (I33)", async () => {
+  const s = scripted([read("a"), "The fact is: fact a."]);
+  const result = await runAgent({ task: "Collect the fact.", cwd: fourFiles(), client: s.client, quiet: true, coverageCheck: false });
+  assert.equal(result.finalText, "The fact is: fact a.");
+  assert.equal(s.followUps().length, 0);
+  assert.equal(result.nudges.afterNotes, 0);
 });

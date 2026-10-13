@@ -9,6 +9,14 @@ export const PLAN_NUDGE =
   "Your reply only describes what you are going to do, and a reply without tool calls ends the run. " +
   "Do the work now with tool calls. If you truly need information only the user can give, say so in a complete final answer.";
 
+/**
+ * Sent once when the reply right after the note-taking reminder has no tool calls: it is the notes
+ * the reminder asked for, not an answer (I33: local models stopped there, mid-task).
+ */
+export const AFTER_NOTES_NUDGE =
+  "Noted. A reply without tool calls ends the run, so continue the task with tool calls now. " +
+  "Reply without tool calls only when the task is complete; that reply is your final answer.";
+
 const ACTION =
   "read|open|visit|check|gather|start|navigate|list|look|review|search|fetch|examine|explore|continue|run|write|create|fix|analy[sz]e|inspect|go";
 /** "I will read…", "Let me open…", "Next, I'll check…", "…then proceed to read…" */

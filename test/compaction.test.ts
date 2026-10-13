@@ -237,7 +237,8 @@ test("the repeated-call notice appears from the 2nd identical call, not on the 1
       return { text: "done", toolCalls: [], usage: { inputTokens: 0, outputTokens: 0 }, raw: null };
     },
   };
-  const result = await runAgent({ task: "x", cwd: dir, client, quiet: true });
+  // prefinishMax 0: the "done" right after the note-taking reminder would otherwise get a follow-up (I33).
+  const result = await runAgent({ task: "x", cwd: dir, client, quiet: true, prefinishMax: 0 });
 
   assert.equal(seen.length, 3);
   assert.equal(seen[0], "alpha", "1st call: no notice");
