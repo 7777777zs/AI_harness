@@ -39,6 +39,7 @@ Issues that are fixed, or closed with a decision that needs no further work. Ope
 | N4: gpt-4.1-mini refused to open local URLs | URL rule in the MCP tools note | branch `fix-url-refusal` |
 | N5: gave up after seeing only the blank tab | Unopened task URLs named in the `[Harness status]` message | branch `fix-url-refusal` |
 | I33: the note-taking reminder ended runs early on a local model | A text-only reply right after the reminder gets one "continue" follow-up (pre-finish) | branch `feat/ollama-qwen`, `a0d2e1f` |
+| I34: local models used up the pre-finish follow-ups | The plan and after-notes follow-ups repeat within `PREFINISH_MAX`; eval runner `--prefinish-max` (effect within noise) | branch `feat/prefinish-repeat`, `1eb81df`, `3678928` |
 | I8: harness hints after untrusted content made injections more likely to be followed | Reminder added per request after the latest untrusted result only; no repeat notice on untrusted results | `73939f4` |
 | I9: confirmation-required MCP tools ran unguarded under auto-approve after untrusted content | Guarded like `run_shell`/`write_file`/`edit_file` | `b320254` |
 | I17: nothing verified on Linux or macOS | CI runs the type check and tests on Linux, macOS and Windows | `725d7be` |
@@ -301,3 +302,11 @@ The data is in TEST_REPORT.md, "Issues round 2".
 - **Measured:** in the core suite the final reply came right after the reminder in 3 of 19 runs on qwen3-14b-32k and 4 on qwen3-8b-32k, about a third of their failures.
 - **Fix (`a0d2e1f`):** a reply without tool calls in the step right after the reminder gets one follow-up ("Noted. … continue the task with tool calls now") through the pre-finish path: at most once per run, within `PREFINISH_MAX`, not kept as an answer.
 - **Result:** 14b 8 → 10 of 19, 8b 10 → 12. Of the runs that had stopped early, 2 of 3 passed on 14b and 2 of 4 on 8b; the rest failed for other reasons (multi-step edits). gpt-4.1-mini 17/19 (its one change is count-lines, I1); the follow-up fired 3 times there and all 3 passed. Related, still open: I34.
+
+### I34: Local models narrate one file per turn and use up the pre-finish follow-ups
+- **Source:** the core suite on qwen3 after the I33 fix (TEST_REPORT.md, "Local Qwen3 through Ollama"), e.g. qwen3-14b-32k summary-with-footer.
+- **Problem:** the model reads one file, then replies with text only ("Summary of auth.py … Next, I will read billing.py"), again and again. The plan nudge and the I33 follow-up each fire once, so with `PREFINISH_MAX=2` the third such reply is accepted as the final answer after 2 of 12 files.
+- **Candidate fixes:** a larger `PREFINISH_MAX` for local models (a setting, no code), letting the plan nudge fire more than once, or catching "Next, I will …" endings that follow a partial result.
+- **Finding:** a larger budget alone could not help: each kind of follow-up fired at most once per run, and the eval runner passed the default budget explicitly.
+- **Fix (`1eb81df`, `3678928`):** the plan and after-notes follow-ups repeat while `PREFINISH_MAX` lasts (the coverage and completion checks still fire once); the eval runner sets the budget with `--prefinish-max`. The default stays 2.
+- **Result:** with budget 6 and thinking off, 14b 10 → 11 and 8b 12 → 11 of 19: no measurable effect at one run per task. gpt-4.1-mini (default budget) unaffected: no plan nudge fired in its run.

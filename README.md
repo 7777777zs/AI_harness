@@ -457,7 +457,7 @@ Options:
 - `--results-dir <dir>`: write results and logs there instead of `evals/results/`.
 - `--verbose`: show the agent's output.
 - `--compact-model <model>`: use a different model for compaction calls (default: the model under test).
-- `--prefinish-max <n>`: the pre-finish budget (`PREFINISH_MAX`, 0–10, default 2) for every run. Local models that reply one step at a time need more (e.g. 6).
+- `--prefinish-max <n>`: the pre-finish budget (`PREFINISH_MAX`, 0–10, default 2) for every run. Meant for models that reply one step at a time (ISSUES.md I34 → RESOLVED.md); in the core suite its effect was within noise.
 - `--context-limit <tokens>`: no task gets a larger context limit than this (2000–10000000). Use it when the server's window is smaller than a task's limit, e.g. a local Ollama model, which truncates longer prompts silently.
 - `--without-mcp`: skip the tasks that need an MCP server.
 - `--without-skill-tasks`: skip the with/without-skills tasks (`onboarding`, `bugfix`, `web-research`, `code-review`).

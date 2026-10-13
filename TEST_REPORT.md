@@ -1661,3 +1661,43 @@ The only difference is rename-function, and the "off" failure was the harness is
 About $0.20, for the gpt-4.1-mini confirmation run (434k input / 18k output tokens). The local runs cost nothing.
 
 Results files: thinking on `2026-10-13T11-10-33-412Z`, `2026-10-13T11-10-41-075Z`, `2026-10-13T11-11-09-336Z`, `2026-10-13T11-11-22-352Z`, `2026-10-13T11-12-47-057Z`; thinking off `2026-10-13T11-17-50-935Z`, `2026-10-13T11-17-55-647Z`, `2026-10-13T11-18-05-207Z`, `2026-10-13T11-18-09-499Z`, `2026-10-13T11-18-16-983Z`; core suite before the fix `2026-10-13T11-20-44-206Z` (14b), `2026-10-13T11-22-48-680Z` (8b); after the fix `2026-10-13T19-30-20-275Z` (14b), `2026-10-13T19-32-34-758Z` (8b), `2026-10-13T19-36-20-777Z` (gpt-4.1-mini).
+
+## Qwen3 with reasoning, a larger pre-finish budget, and where the failures come from (branch `feat/prefinish-repeat`, 2026-10-13)
+
+**Questions:** is the gap to gpt-4.1-mini partly because the harness was tuned on gpt-4.1-mini, and does Qwen3 close it with its reasoning (thinking) on? Also I34: does a larger pre-finish budget help?
+
+**Changes measured:** the plan nudge and the after-notes follow-up may now repeat while `PREFINISH_MAX` lasts (`1eb81df`), and the eval runner has `--prefinish-max` (`3678928`). The default budget stays 2.
+
+### Core suite (19 tasks, one run each, `--context-limit 30000` for the local models)
+
+| Run | Thinking | Budget | Pass |
+|---|---|---|---|
+| gpt-4.1-mini (2026-10-07 / 13 after I33 / 13 now) | – | 2 | 18 / 17 / **16** |
+| qwen3-14b-32k | off | 2 → **6** | 10 → **11** |
+| qwen3-14b-32k | **on** | 6 | **12** |
+| qwen3-8b-32k | off | 2 → **6** | 12 → **11** |
+| qwen3-8b-32k | **on** | 6 | **13** |
+
+Wall time for the 19 tasks: 14b 241 s off and 1,743 s on; 8b 203 s off and 532 s on; gpt-4.1-mini 188 s.
+
+- **gpt-4.1-mini is not affected by the change:** no plan nudge fired in its run, so the repeat rule never acted. Its three failures are count-lines (I1), find-call-sites (missed the test-file call, no follow-up fired) and project-overview (30 steps; only the coverage check fired). The 18 → 17 → 16 drift is run-to-run variance; long-context passed this time.
+- **The larger budget (I34):** 14b 10 → 11, 8b 12 → 11 with thinking off. No measurable effect at one run per task. In one run (14b project-overview) six plan nudges fired and the model still ended on narration.
+- **Reasoning:** with thinking on, 14b 11 → 12 and 8b 11 → 13, at about 7× (14b) and 2.6× (8b) the time.
+- **Where Qwen beats gpt-4.1-mini:** long-context passed in all 6 Qwen runs since the I33 fix (both sizes, thinking on and off). gpt-4.1-mini passed it in 1 of 3. find-call-sites passed on 14b with thinking on and failed on gpt-4.1-mini this round.
+
+### Where the local failures come from
+The 29 failures of the four runs above, classified from the run logs:
+
+| Cause | Failures | Examples |
+|---|---|---|
+| **Harness interaction** | **4** | I36: a reply with reasoning only (empty content, no tool call, `finish_reason: stop`) accepted as an empty final answer, 3 runs of 8b with thinking on, all in step 1; pre-finish budget used up while the model kept narrating, 1 run (14b project-overview) |
+| **Model capability** | **25** | create-file splits the sentence onto two lines; count-lines estimates (120, 100, 49); find-call-sites misses or adds a call site; rename-function cannot finish in 20 steps; large-file-edit leaves the file unchanged; edit-line writes `timeout = 60`; find-string says the string is absent; missing-file never looks for the file |
+
+- **Answer to the question:** yes, part of the gap came from the harness being tuned on gpt-4.1-mini. Before the I33 fix, harness interactions caused about a third of the local failures. After the I33 and I34 changes they cause 4 of 29, 3 of them the new I36. The rest of the gap is the models: mostly multi-step edits and exact formatting or counting.
+- **Upper bound, not measured:** without the three I36 runs, 8b with thinking on would be at most 16/19, the level of gpt-4.1-mini in the last runs.
+- **Samples:** one run per task and configuration; single-task differences are noise except where they repeat (long-context, 6 of 6).
+
+### API usage
+About $0.21 for the gpt-4.1-mini check (459k input / 16k output tokens). The local runs cost nothing.
+
+Results files: `2026-10-13T22-43-46-312Z` (gpt-4.1-mini), `2026-10-13T22-46-54-304Z` (14b off, budget 6), `2026-10-13T22-50-55-602Z` (8b off, budget 6), `2026-10-13T22-54-18-086Z` (14b on, budget 6), `2026-10-13T23-23-21-418Z` (8b on, budget 6).
