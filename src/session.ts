@@ -141,8 +141,10 @@ export function loadSession(file: string): LoadedSession {
   } catch {
     throw new SessionError(`session file not found: ${file}`);
   }
+  // The last element is "" when the file ends with a newline; otherwise it is a torn write. Either
+  // way it is not a record: an unterminated line is never loaded, matching what open() cuts off.
   const lines = text.split("\n");
-  if (lines.at(-1) === "") lines.pop();
+  lines.pop();
   let header: Extract<SessionRecord, { type: "header" }> | undefined;
   let history: Message[] = [];
   let untrustedPending = false;
@@ -152,8 +154,6 @@ export function loadSession(file: string): LoadedSession {
     try {
       record = JSON.parse(line) as SessionRecord;
     } catch {
-      // Only the last line can be torn (the process died while writing it).
-      if (i === lines.length - 1 && !text.endsWith("\n")) break;
       throw new SessionError(`${file} line ${i + 1}: not valid JSON`);
     }
     if (i === 0) {

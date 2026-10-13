@@ -73,6 +73,15 @@ test("a torn last line from an interrupted write is ignored, and open() cuts it 
   assert.deepEqual(loadSession(w.file).history, [q("kept"), q("next")]);
 });
 
+test("an unterminated last line is never loaded, even when it is complete JSON, matching what open() cuts off", () => {
+  const w = SessionWriter.create(tmp(), "/p");
+  w.append([q("kept")]);
+  fs.appendFileSync(w.file, JSON.stringify({ type: "message", message: q("unterminated") })); // no newline
+  assert.deepEqual(loadSession(w.file).history, [q("kept")]);
+  SessionWriter.open(w.file, w.id).append([q("next")]);
+  assert.deepEqual(loadSession(w.file).history, [q("kept"), q("next")]);
+});
+
 test("a corrupt line in the middle is an error, not silently skipped", () => {
   const w = SessionWriter.create(tmp(), "/p");
   fs.appendFileSync(w.file, "not json\n");

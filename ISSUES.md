@@ -39,6 +39,7 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 | I29 | [Windows: `find` in `run_shell` can be Git's Unix `find`](#i29-windows-find-in-run_shell-can-be-gits-unix-find) | Processes | **Accept** |
 | I30 | [The paging note of an oversized untrusted result](#i30-the-paging-note-of-an-oversized-untrusted-result) | Security | **Defer** |
 | I31 | [A shrunk untrusted result loses its reminder](#i31-a-shrunk-untrusted-result-loses-its-reminder) | Security | **Defer** |
+| I32 | [Session review leftovers](#i32-session-review-leftovers) | Sessions | **Defer** |
 
 ---
 
@@ -194,3 +195,13 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 - **Source:** code review of `issues-round2` (2026-10-07).
 - **Problem:** the I8 reminder is added only after a result that still ends with the untrusted end tag. When the per-turn cap or the preflight shrinks an untrusted result and cuts its tail, the tag and with it the reminder are gone for that request.
 - **Decision (2026-10-07): Defer.** It needs a result large enough to be shrunk in the same turn the injected content arrives; revisit with I30, which concerns the same oversized results.
+
+## Found in the session-history review
+
+### I32: Session review leftovers
+- **Source:** code review of `feat/session-continue` (2026-10-13). Two findings were fixed before the merge: an unterminated but complete last line was loaded yet cut off by `SessionWriter.open`, and the lock was taken before the directory check.
+- **Problem:**
+  - Taking over a stale lock is read-then-write, not atomic: two processes that find the same stale lock can both take it. A run in the same process as the lock holder can also share the session.
+  - `RunAgentOptions.session.dir` lets a programmatic caller put session files outside `$HARNESS_HOME/sessions`; only the tests use it.
+  - Judgement-call smells: `resume` mixes the value `"latest"` with session ids; the ~60-line session block in `runAgent` could be a helper; `summarizable()` runs twice per compaction; names such as `{ older: middle }` and a second `kept`.
+- **Decision (2026-10-13): Defer.** The CLI starts one run per process, so the lock race needs two harness processes starting on the same stale lock at once. The smells change no behavior; do them with I26 when this code changes next.

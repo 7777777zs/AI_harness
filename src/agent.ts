@@ -645,11 +645,14 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         if (resume !== undefined && !file) throw new SessionError(`no session to continue in ${cwd}`);
         if (file && !fs.existsSync(file)) throw new SessionError(`no session ${resume} in ${dir}`);
         if (file) {
+          // The directory check comes before the lock, so a session from elsewhere fails with that
+          // directory and nothing is written; the session is loaded again once it is locked.
+          const recorded = loadSession(file);
+          if (!samePath(recorded.cwd, cwd)) {
+            throw new SessionError(`session ${recorded.id} was recorded in ${recorded.cwd}; run it from there (or pass --cwd)`);
+          }
           releaseLock = lockSession(file);
           const loaded = loadSession(file);
-          if (!samePath(loaded.cwd, cwd)) {
-            throw new SessionError(`session ${loaded.id} was recorded in ${loaded.cwd}; run it from there (or pass --cwd)`);
-          }
           writer = SessionWriter.open(file, loaded.id);
           if (loaded.repaired.length > 0) writer.checkpoint(loaded.history);
           messages = [{ role: "system", content: messages[0]!.content + RESUMED_SESSION_NOTE }, ...loaded.history, question];

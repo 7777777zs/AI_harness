@@ -226,6 +226,21 @@ test("continuing from another directory fails before anything is written", async
   assert.equal(fs.readFileSync(first.session!.file, "utf8"), before);
 });
 
+test("a session from another directory fails with that directory before its lock is touched", async () => {
+  const sessions = tmp();
+  const first = await run({ task: "one", cwd: tmp(), client: fakeClient(() => final("ok")).client }, sessions);
+  // Held by a live process other than this one: the directory error must still win, and the lock stays.
+  const lock = `${first.session!.file}.lock`;
+  fs.writeFileSync(lock, String(process.ppid));
+  try {
+    const r = await run({ task: "two", cwd: tmp(), client: fakeClient(() => final("ok")).client }, sessions, first.session!.id);
+    assert.match(r.error!, /was recorded in/);
+    assert.equal(fs.readFileSync(lock, "utf8"), String(process.ppid));
+  } finally {
+    fs.rmSync(lock, { force: true });
+  }
+});
+
 test("continuing with no earlier session, or a locked one, is a clear error", async () => {
   const cwd = tmp();
   const sessions = tmp();
