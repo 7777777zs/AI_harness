@@ -130,3 +130,48 @@ test("a --task removed by --without-mcp / --without-skill-tasks says why, instea
     assert.ok(!stderr.includes("unknown task"), stderr);
   }
 });
+
+// ---- --context-limit: a cap for servers with a smaller window (e.g. a local Ollama model) ----
+
+test("evalSettings: a context-limit cap lowers larger task limits, keeps smaller ones, and scales the recent budget", async () => {
+  const { evalSettings } = await import("../evals/options.js");
+  const { tasks } = await import("../evals/tasks/index.js");
+  const unlimited = tasks.find((t) => t.contextLimit === undefined)!;
+  const small = tasks.find((t) => t.contextLimit === 8_000)!;
+  const capped = evalSettings(unlimited, { mainModel: "m", contextLimitCap: 30_000 });
+  assert.equal(capped.contextLimit, 30_000);
+  assert.equal(capped.recentBudget, 12_000);
+  assert.equal(evalSettings(small, { mainModel: "m", contextLimitCap: 30_000 }).contextLimit, 8_000);
+  assert.equal(evalSettings(unlimited, { mainModel: "m" }).contextLimit, 100_000, "no cap: unchanged");
+});
+
+test("--context-limit is applied to every run and recorded in the results file", async () => {
+  const api = await fakeApi(5);
+  const resultsDir = tmp();
+  try {
+    const child = spawn(process.execPath, ["--import", "tsx", "evals/run.ts", "--task", "create-file", "--context-limit", "30000", "--results-dir", resultsDir], {
+      cwd: ROOT,
+      env: { ...process.env, OPENAI_API_KEY: "sk-test", OPENAI_MODEL: "fake", OPENAI_BASE_URL: api.url },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    child.stdout.on("data", (d) => (output += d));
+    child.stderr.on("data", (d) => (output += d));
+    assert.equal(await new Promise<number | null>((r) => child.on("exit", r)), 0, output);
+    const file = fs.readdirSync(resultsDir).find((f) => f.endsWith(".json"))!;
+    const results = JSON.parse(fs.readFileSync(path.join(resultsDir, file), "utf8"));
+    assert.equal(results.options["context-limit"], "30000");
+    const log = fs.readFileSync(path.resolve(ROOT, results.results[0].logFile), "utf8").split("\n")[0]!;
+    assert.equal(JSON.parse(log).config.contextLimit, 30_000);
+  } finally {
+    api.close();
+  }
+});
+
+test("a bad --context-limit fails at once with the shared settings message", async () => {
+  const child = spawn(process.execPath, ["--import", "tsx", "evals/run.ts", "--context-limit", "abc"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+  let stderr = "";
+  child.stderr.on("data", (d) => (stderr += d));
+  assert.equal(await new Promise<number | null>((r) => child.on("exit", r)), 1);
+  assert.match(stderr, /^Error: --context-limit="abc" is not an integer/);
+});

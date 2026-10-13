@@ -439,6 +439,7 @@ Options:
 - `--results-dir <dir>`: write results and logs there instead of `evals/results/`.
 - `--verbose`: show the agent's output.
 - `--compact-model <model>`: use a different model for compaction calls (default: the model under test).
+- `--context-limit <tokens>`: no task gets a larger context limit than this (2000–10000000). Use it when the server's window is smaller than a task's limit, e.g. a local Ollama model, which truncates longer prompts silently.
 - `--without-mcp`: skip the tasks that need an MCP server.
 - `--without-skill-tasks`: skip the with/without-skills tasks (`onboarding`, `bugfix`, `web-research`, `code-review`).
 - `--skills off|available|preloaded|routed`: `off` (default) runs without skills. `available` lists the bundled skills, so the model has to decide to load one. `preloaded` loads the task's skill up front. `routed` lets the skill router pick. Skills always come from the repository's `skills/`, never from `~/.harness/skills/`.

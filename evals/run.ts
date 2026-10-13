@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { ANSWER_MERGE_SEPARATOR, runAgent, totalNudges } from "../src/agent.js";
-import { loadEnv } from "../src/config.js";
+import { loadEnv, parseNumber } from "../src/config.js";
 import { missingEnv } from "../src/llm/index.js";
 import { installShutdownHandlers, onInterrupt, registerCleanup } from "../src/process.js";
 import { tasks } from "./tasks/index.js";
@@ -88,7 +88,7 @@ const RESULTS_DIR = path.join(EVALS_DIR, "results");
 
 const USAGE =
   "Usage: npm run eval -- [--task id] [--runs N] [--concurrency N] [--skills off|available|preloaded|routed] " +
-  "[--without-mcp] [--without-skill-tasks] [--compact-model M] [--results-dir DIR] [--keep] [--verbose]\n" +
+  "[--without-mcp] [--without-skill-tasks] [--compact-model M] [--context-limit N] [--results-dir DIR] [--keep] [--verbose]\n" +
   'Put -- after "npm run eval" so npm passes the options on, e.g. npm run eval -- --runs 3';
 
 function parseRunnerArgs() {
@@ -109,6 +109,8 @@ function parseRunnerArgs() {
         skills: { type: "string", default: "off" },
         /** Where results (and logs/) go; default evals/results. */
         "results-dir": { type: "string" },
+        /** Cap on every task's context limit, for a server with a smaller window (e.g. a local Ollama model). */
+        "context-limit": { type: "string" },
       },
     });
   } catch (err) {
@@ -126,6 +128,15 @@ function positiveInt(name: string, raw: string): number {
     process.exit(1);
   }
   return n;
+}
+
+// Validated like the CLI flag (same range and message), before anything else runs.
+let contextLimitCap: number | undefined;
+try {
+  if (args["context-limit"] !== undefined) contextLimitCap = parseNumber(2_000, 10_000_000, true)(args["context-limit"], "--context-limit");
+} catch (err) {
+  console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
 }
 
 loadEnv();
@@ -220,7 +231,7 @@ async function runJob(task: EvalTask, run: number): Promise<RunRecord> {
       quiet: !args.verbose,
       logDir: path.join(logsRoot, `${task.id}-${run}`),
       // Every setting explicit: ~/.harness/.env and env vars can't change eval behavior (A8).
-      ...evalSettings(task, { mainModel: process.env.OPENAI_MODEL, compactModel: args["compact-model"], skills: skillsCondition }),
+      ...evalSettings(task, { mainModel: process.env.OPENAI_MODEL, compactModel: args["compact-model"], skills: skillsCondition, contextLimitCap }),
       // Nobody can answer: the untrusted-content guard is recorded (result.untrustedGuard) and denied.
       confirmUntrusted: async () => false,
     });

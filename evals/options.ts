@@ -30,13 +30,18 @@ export interface EvalRunSettings {
    * listed and the skill router picks one before the first step.
    */
   skills?: "off" | "available" | "preloaded" | "routed";
+  /**
+   * `--context-limit`: no task gets a larger context limit than this. For a server whose window is
+   * smaller than the default (a local Ollama model), which truncates longer prompts silently.
+   */
+  contextLimitCap?: number;
 }
 
 export function evalSettings(
   task: EvalTask,
   run: EvalRunSettings,
 ): SettingOverrides & { mcp: McpRunOptions; skills: { dirs: string[]; preload: string[] } } {
-  const contextLimit = task.contextLimit ?? DEFAULTS.contextLimit;
+  const contextLimit = Math.min(task.contextLimit ?? DEFAULTS.contextLimit, run.contextLimitCap ?? Infinity);
   const compactModel = run.compactModel ?? run.mainModel;
   return {
     contextLimit,
