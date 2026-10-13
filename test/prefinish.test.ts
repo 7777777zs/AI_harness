@@ -255,3 +255,30 @@ test("a text-only reply without the reminder before it ends the run as usual (I3
   assert.equal(s.followUps().length, 0);
   assert.equal(result.nudges.afterNotes, 0);
 });
+
+// ---- I34: the plan nudge and the after-notes follow-up repeat while the budget lasts ----
+
+test("the plan nudge fires again for a second plan-only reply while PREFINISH_MAX allows (I34)", async () => {
+  const dir = fourFiles();
+  const s = scripted(["I will read a.txt to find the facts.", "Next, I will read a.txt and report.", read("a"), "The facts are: fact a."]);
+  const result = await runAgent({ task: "Find the facts.", cwd: dir, client: s.client, quiet: true, coverageCheck: false, prefinishMax: 4 });
+  assert.equal(result.finalText, "The facts are: fact a.");
+  assert.equal(result.nudges.plan, 2);
+  assert.deepEqual(result.answerHistory, ["The facts are: fact a."]);
+});
+
+test("the after-notes follow-up fires again after a second reminder while PREFINISH_MAX allows (I34)", async () => {
+  const dir = fourFiles();
+  // Reminder after step 3 and again after step 6 (3 silent steps, 3-step cooldown); notes-only replies at 4 and 7.
+  const s = scripted([read("a"), read("b"), read("c"), "Notes: a, b, c.", read("d"), read("a"), "Notes: d and a again.", read("b"), "Done: facts a, b, c and d."]);
+  const result = await runAgent({ task: "Collect the facts.", cwd: dir, client: s.client, quiet: true, coverageCheck: false, prefinishMax: 4 });
+  assert.equal(result.finalText, "Done: facts a, b, c and d.");
+  assert.equal(result.nudges.afterNotes, 2);
+});
+
+test("repeated follow-ups still stop at the budget: the third plan-only reply is accepted with PREFINISH_MAX 2 (I34)", async () => {
+  const s = scripted(["I will read a.txt.", "I will read a.txt now.", "I will read a.txt next."]);
+  const result = await runAgent({ task: "Find the facts.", cwd: fourFiles(), client: s.client, quiet: true, coverageCheck: false, prefinishMax: 2 });
+  assert.equal(result.nudges.plan, 2);
+  assert.equal(result.finalText, "I will read a.txt next.");
+});

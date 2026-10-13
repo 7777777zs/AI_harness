@@ -254,13 +254,13 @@ export interface NudgeStats {
   repeat: number;
   /** Coverage check before accepting a final answer (at most once per run). */
   coverage: number;
-  /** "Do it now" after a reply that only announced work (at most once per run). */
+  /** "Do it now" after a reply that only announced work (repeats while PREFINISH_MAX lasts). */
   plan: number;
   /** Loaded skills' completion criteria not met by a final answer (at most once per run). */
   completion: number;
   /** Requests whose status message named a task URL no MCP call had been given yet (retries included). */
   unopenedUrl: number;
-  /** "Continue" after a reply without tool calls right after the note-taking reminder (at most once per run). */
+  /** "Continue" after a reply without tool calls right after the note-taking reminder (repeats while PREFINISH_MAX lasts). */
   afterNotes: number;
 }
 
@@ -442,8 +442,6 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
   const answerHistory: string[] = [];
   let config: HarnessConfig | null = null;
   let coverageChecked = false;
-  let planNudged = false;
-  let afterNotesNudged = false;
   let completionChecked = false;
   /** Pre-finish follow-ups sent so far (all kinds share PREFINISH_MAX). */
   let prefinishUsed = 0;
@@ -933,11 +931,12 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
 
       if (response.toolCalls.length === 0) {
         const text = response.text ?? "";
-        // Pre-finish check: up to PREFINISH_MAX follow-ups per run, each kind at most once.
+        // Pre-finish check: up to PREFINISH_MAX follow-ups per run. The plan and after-notes follow-ups
+        // may repeat while the budget lasts (a model that narrates one file per turn needs several,
+        // I34); the coverage and completion checks of an answer fire at most once.
         const canFollowUp = prefinishUsed < config.prefinishMax;
         // A reply that only announces work would end the run; it is not an answer (A1 never sees it).
-        if (canFollowUp && !planNudged && isPlanOnly(text)) {
-          planNudged = true;
+        if (canFollowUp && isPlanOnly(text)) {
           prefinishUsed++;
           nudges.plan++;
           out(c.yellow("  ⚑ the reply only announces work; asking the model to do it"));
@@ -946,8 +945,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
           continue;
         }
         // Right after the note-taking reminder, a reply without tool calls is the requested notes.
-        if (canFollowUp && !afterNotesNudged && lastNoteNudge === step - 1) {
-          afterNotesNudged = true;
+        if (canFollowUp && lastNoteNudge === step - 1) {
           prefinishUsed++;
           nudges.afterNotes++;
           out(c.yellow("  ⚑ the reply after the note-taking reminder has no tool calls; asking the model to continue"));
