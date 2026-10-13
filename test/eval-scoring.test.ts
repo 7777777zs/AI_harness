@@ -64,7 +64,7 @@ test("review task reports low recall and the rename false alarm as separate prob
   }
 });
 
-test("calibration report: reproducible provenance (no branch, no post-commit diff hash; line-ending independent hashes)", async () => {
+test("calibration report: records only what reproduces from a clean checkout (commit, LF-normalized hashes; no branch name)", async () => {
   const { calibrationReport, sourceSha256 } = await import("../evals/review-calibration.js");
   assert.equal(sourceSha256("a\r\nb\r\n"), sourceSha256("a\nb\n"));
   const report = calibrationReport();

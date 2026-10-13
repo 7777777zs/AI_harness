@@ -10,7 +10,7 @@ The outcome now requires `found.length >= 2 && !renameFlagged`, in `scoreCodeRev
 
 ## Reproducible experiment
 
-```powershell
+```
 npx tsx evals/review-calibration.ts           # or: npm run eval:calibrate
 npx tsx evals/review-calibration.ts --json
 node --import tsx --import ./test/setup.ts --test test/eval-scoring.test.ts
