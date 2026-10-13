@@ -1249,7 +1249,7 @@ In one web-research run the model tried Wikipedia and other external sites, was 
 ### 3. Outcome vs process (re-scored offline from the logs)
 - **Re-scored offline:** onboarding, web-research and code-review were re-scored from the final answers in the run logs (`evals/rescore-skills.ts`, shared logic in `evals/scoring.ts`).
 - **bugfix:** its sandboxes are deleted after each run, so old runs are scored from the check's recorded reason. "not fixed" is the outcome; "no added test fails on the original code" is the process. New runs record both directly.
-- **Unchanged:** the task pass criteria are the same as before, so pass rates stay comparable.
+- **Unchanged:** the task pass criteria are the same as before, so pass rates stay comparable. (Since 2026-10-13, code-review also fails when the harmless rename is reported as a defect; it was reported in 0 of the runs below, so their results are unchanged. See notes/GRADER-CALIBRATION.md.)
 
 | Skill | Outcome | Process |
 |---|---|---|

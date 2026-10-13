@@ -142,7 +142,7 @@ export const DEFECTS = [
 export interface CodeReviewScore {
   /** Planted defects found (recall numerator, of 3). */
   found: string[];
-  /** At least 2 of 3 found. */
+  /** At least 2 of 3 found, without flagging the known harmless rename. */
   outcome: boolean;
   /** Findings grouped critical/major/minor (the skill's format). */
   severityGrouping: boolean;
@@ -184,7 +184,7 @@ export function scoreCodeReview(finalText: string | null): CodeReviewScore {
   });
   return {
     found,
-    outcome: found.length >= 2,
+    outcome: found.length >= 2 && !renameFlagged,
     severityGrouping: /critical/i.test(answer) && /major/i.test(answer) && /minor/i.test(answer),
     renameFlagged,
     otherFindings: other,

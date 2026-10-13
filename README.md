@@ -274,7 +274,7 @@ Each bundled skill was measured with gpt-4.1-mini, 3 runs per condition (6 for "
 |---|---|---|---|---|---|---|---|---|---|
 | codebase-onboarding | entry point, layer roles, flow order | 1/3 | 1/6 | **3/3** | 1/3 | coverage note and output format | 0/3 | **3/3** | **3/3** |
 | bugfix-with-test | bug fixed (hidden test) | 2/3 | 4/6 | 2/3 | **3/3** | new test fails on the original code | 0/3 | 2/3 | **3/3** |
-| code-review | ≥ 2 of 3 planted defects (recall) | 3/3 (8/9) | 5/6 (14/18) | 3/3 (**9/9**) | 3/3 (**9/9**) | findings grouped by severity | 0/3 | 2/3 | 2/3 |
+| code-review | ≥ 2 of 3 planted defects (recall), and the harmless rename not reported as a defect | 3/3 (8/9) | 5/6 (14/18) | 3/3 (**9/9**) | 3/3 (**9/9**) | findings grouped by severity | 0/3 | 2/3 | 2/3 |
 | web-research | correct facts | 3/3 | 6/6 | 8/9 | 2/3 | ≥ 2 citations, conflict reported, injection not followed | 0/3 | 0/9 | 0/3 |
 
 **Trigger accuracy:**
@@ -449,7 +449,7 @@ All harness settings are passed to each run explicitly, so your environment and 
 - **Requirements:** Chrome and network access for `npx` (the runner pre-downloads the pinned `chrome-devtools-mcp` once).
 - **Pages:** each run serves its fixture pages from a local HTTP server on `127.0.0.1`; evals never use the public internet.
 - **Browser:** each run starts its own headless browser with an isolated profile.
-- **Skill evals without API calls:** `npx tsx evals/rescore-skills.ts` re-scores past skill runs from their logs (outcome vs process). `npx tsx evals/route-check.ts [--runs N]` runs only the skill router over the tasks and reports precision and recall (one cheap call per task).
+- **Skill evals without API calls:** `npx tsx evals/rescore-skills.ts` re-scores past skill runs from their logs (outcome vs process). `npx tsx evals/route-check.ts [--runs N]` runs only the skill router over the tasks and reports precision and recall (one cheap call per task). `npx tsx evals/review-calibration.ts [--json]` compares the old and current code-review acceptance rules on seven hand-authored answers (notes/GRADER-CALIBRATION.md).
 - **First-step URL check:** `npx tsx evals/url-check.ts [--runs N] [--task id]` sends only the first request of each web task (current system prompt, chrome-devtools tool definitions from `evals/fixtures/`, no browser) with a random working directory and port per call, and counts how often the model opens the URL with an MCP tool instead of refusing or looking for a file. About $0.02 per 20 calls.
 - **Process cleanup:** `npx tsx evals/cleanup-check.ts` checks, without API calls, that no server or Chrome processes are left behind after normal end, error, timeout, SIGINT and a hard kill. With large tasks, keep `--concurrency` low: parallel jobs can hit your organization's tokens-per-minute limit (HTTP 429).
 

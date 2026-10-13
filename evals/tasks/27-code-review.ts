@@ -117,7 +117,7 @@ export const task: EvalTask = {
     hashes.set(dir, treeHash(dir));
   },
   check(dir, result) {
-    // Pass: at least 2 of the 3 planted defects found, and nothing in the working tree changed.
+    // Pass: at least 2 defects, no known rename false positive, and an unchanged working tree.
     const score = scoreCodeReview(result.finalText);
     const unchanged = hashes.get(dir) === treeHash(dir);
     hashes.delete(dir);
@@ -128,9 +128,13 @@ export const task: EvalTask = {
       writeAttempts: (result.toolCalls.write_file ?? 0) + (result.toolCalls.edit_file ?? 0),
       readOnlyBlocked: fs.readFileSync(result.logFile, "utf8").split('"type":"read_only_blocked"').length - 1,
     };
+    // The outcome rule lives in scoreCodeReview; the reasons only say which part of it failed.
     const problems: string[] = [];
-    if (!score.outcome) problems.push(`found ${score.found.length} of 3 planted defects (${score.found.join(", ") || "none"})`);
+    if (!score.outcome) {
+      if (score.found.length < 2) problems.push(`found ${score.found.length} of 3 planted defects (${score.found.join(", ") || "none"})`);
+      if (score.renameFlagged) problems.push("harmless rename in format.js reported as a defect");
+    }
     if (!unchanged) problems.push("the working tree was modified");
-    return problems.length ? { ...fail(problems.join("; ")), details } : { ...pass(), details };
+    return score.outcome && unchanged ? { ...pass(), details } : { ...fail(problems.join("; ")), details };
   },
 };
