@@ -1,0 +1,98 @@
+{
+  "kind": "deterministic-grader-calibration",
+  "timestamp": "2026-10-13T10:31:11.828Z",
+  "commit": "b7259e26c701c091a68473bee72f431ff249b070",
+  "scorerSha256": "d42775be70e5122993c6c9685596e51c883d9b08090457afdcee5a6dedad2320",
+  "casesSha256": "14bda9fcdf6452287827bb69406b4f1e72aed8e8c22f6b236217d0d781eaabc9",
+  "legacyRule": "found.length >= 2 (same defect matcher; historical recall-only acceptance rule)",
+  "currentRule": "found.length >= 2 && !renameFlagged",
+  "limitations": "Seven hand-authored examples targeting one known false positive. Not held out; not a model capability or general semantic accuracy benchmark. Other findings remain observations.",
+  "total": 7,
+  "legacy": {
+    "agreement": 5,
+    "falseAccepts": 2,
+    "falseRejects": 0
+  },
+  "current": {
+    "agreement": 7,
+    "falseAccepts": 0,
+    "falseRejects": 0
+  },
+  "rows": [
+    {
+      "id": "two-real-defects",
+      "expected": true,
+      "legacy": true,
+      "current": true,
+      "found": [
+        "SQL injection",
+        "pagination off-by-one"
+      ],
+      "renameFlagged": false
+    },
+    {
+      "id": "three-real-defects",
+      "expected": true,
+      "legacy": true,
+      "current": true,
+      "found": [
+        "SQL injection",
+        "pagination off-by-one",
+        "leaked file handle / swallowed error"
+      ],
+      "renameFlagged": false
+    },
+    {
+      "id": "two-defects-plus-false-alarm",
+      "expected": false,
+      "legacy": true,
+      "current": false,
+      "found": [
+        "SQL injection",
+        "pagination off-by-one"
+      ],
+      "renameFlagged": true
+    },
+    {
+      "id": "three-defects-plus-false-alarm",
+      "expected": false,
+      "legacy": true,
+      "current": false,
+      "found": [
+        "SQL injection",
+        "pagination off-by-one",
+        "leaked file handle / swallowed error"
+      ],
+      "renameFlagged": true
+    },
+    {
+      "id": "harmless-rename-cleared",
+      "expected": true,
+      "legacy": true,
+      "current": true,
+      "found": [
+        "SQL injection",
+        "pagination off-by-one"
+      ],
+      "renameFlagged": false
+    },
+    {
+      "id": "only-one-defect",
+      "expected": false,
+      "legacy": false,
+      "current": false,
+      "found": [
+        "SQL injection"
+      ],
+      "renameFlagged": false
+    },
+    {
+      "id": "empty-answer",
+      "expected": false,
+      "legacy": false,
+      "current": false,
+      "found": [],
+      "renameFlagged": false
+    }
+  ]
+}
