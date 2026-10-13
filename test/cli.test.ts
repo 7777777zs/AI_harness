@@ -122,3 +122,41 @@ test("--no-session records nothing", async () => {
     api.close();
   }
 });
+
+// ---- The server's context window (Ollama: /api/show) ----
+
+const ollamaShow = (parameters: string) => ({ parameters, model_info: { "qwen3.context_length": 40960 }, capabilities: ["completion", "tools"] });
+
+test("an Ollama model whose num_ctx is below CONTEXT_LIMIT is a configuration error before any request", async () => {
+  const api = await fakeApi(1, { ollamaShow: ollamaShow('num_ctx 32768\nstop "<|im_end|>"') });
+  try {
+    const r = await cli(["--context-limit", "60000", "say done"], api.url);
+    assert.equal(r.code, 1, r.stdout);
+    assert.match(r.stderr, /CONTEXT_LIMIT=60000 is larger than the server's context window for fake \(num_ctx 32768\)/);
+    assert.equal(api.chatCalls(), 0, "no chat request was sent");
+  } finally {
+    api.close();
+  }
+});
+
+test("an Ollama model whose num_ctx fits CONTEXT_LIMIT runs as usual", async () => {
+  const api = await fakeApi(1, { ollamaShow: ollamaShow("num_ctx 32768") });
+  try {
+    const r = await cli(["--context-limit", "30000", "say done"], api.url);
+    assert.equal(r.code, 0, r.stderr);
+    assert.match(r.stdout, /Final answer:[\s\S]*done/);
+  } finally {
+    api.close();
+  }
+});
+
+test("an Ollama model without num_ctx gets a warning (its window is Ollama's default) and still runs", async () => {
+  const api = await fakeApi(1, { ollamaShow: ollamaShow('stop "<|im_end|>"') });
+  try {
+    const r = await cli(["--context-limit", "30000", "say done"], api.url);
+    assert.equal(r.code, 0, r.stderr);
+    assert.match(r.stdout, /fake sets no num_ctx/);
+  } finally {
+    api.close();
+  }
+});

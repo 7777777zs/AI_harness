@@ -39,6 +39,18 @@ export interface LLMResponse {
 export interface LLMClient {
   /** `tools` may be empty, in which case the model cannot call tools. */
   chat(messages: Message[], tools: ToolDefinition[]): Promise<LLMResponse>;
+  /**
+   * The server's context window for this client's model, if the provider can tell; null when it
+   * can't (no check). Some servers (Ollama) cut the start of a longer prompt without an error.
+   */
+  contextWindow?(): Promise<ContextWindow | null>;
+}
+
+export interface ContextWindow {
+  /** The window in tokens, or null when the server says it depends on its own defaults. */
+  tokens: number | null;
+  /** Where the number comes from, or why it is unknown (shown to the user). */
+  note: string;
 }
 
 /**

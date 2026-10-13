@@ -5,7 +5,10 @@ import type {
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
 import { ContextLengthError, LLMApiError } from "./types.js";
-import type { LLMClient, LLMResponse, Message, ToolCall, ToolDefinition } from "./types.js";
+import type { ContextWindow, LLMClient, LLMResponse, Message, ToolCall, ToolDefinition } from "./types.js";
+
+/** How long to wait for an OpenAI-compatible server to describe the model (Ollama's /api/show). */
+const SHOW_TIMEOUT_MS = 3_000;
 
 export class OpenAIClient implements LLMClient {
   private client: OpenAI;
@@ -13,6 +16,32 @@ export class OpenAIClient implements LLMClient {
   constructor(apiKey: string, private model: string) {
     // Retries are handled by withRetry (src/llm/retry.ts) so every attempt is logged and bounded.
     this.client = new OpenAI({ apiKey, maxRetries: 0 });
+  }
+
+  /**
+   * Only for a custom OPENAI_BASE_URL: if it is an Ollama server, its /api/show gives the model's
+   * num_ctx. Any other server (no /api/show, an error, a timeout) means "can't tell".
+   */
+  async contextWindow(): Promise<ContextWindow | null> {
+    if (!process.env.OPENAI_BASE_URL) return null;
+    let show: { parameters?: unknown; model_info?: unknown };
+    try {
+      const res = await fetch(`${new URL(this.client.baseURL).origin}/api/show`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: this.model }),
+        signal: AbortSignal.timeout(SHOW_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      show = (await res.json()) as typeof show;
+    } catch {
+      return null;
+    }
+    if (typeof show !== "object" || show === null || !("model_info" in show)) return null; // not Ollama
+    const numCtx = /^num_ctx\s+(\d+)/m.exec(typeof show.parameters === "string" ? show.parameters : "");
+    return numCtx
+      ? { tokens: Number(numCtx[1]), note: `num_ctx ${numCtx[1]}` }
+      : { tokens: null, note: `${this.model} sets no num_ctx, so its window is Ollama's default, which depends on the Ollama version and the GPU memory` };
   }
 
   async chat(messages: Message[], tools: ToolDefinition[]): Promise<LLMResponse> {

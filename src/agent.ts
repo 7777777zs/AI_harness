@@ -576,10 +576,32 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     const mainModel = opts.client ? "(custom client)" : envModel.model;
     const modelSource = opts.client ? "option" : envModel.source;
     const separateCompactModel = config.compactModel !== undefined && config.compactModel !== envModel.model;
-    const compactClient = retrying(
-      "compaction",
-      opts.compactClient ?? (separateCompactModel && !opts.client ? createClientFromEnv(config.compactModel) : rawClient),
-    );
+    const rawCompactClient =
+      opts.compactClient ?? (separateCompactModel && !opts.client ? createClientFromEnv(config.compactModel) : rawClient);
+    const compactClient = retrying("compaction", rawCompactClient);
+
+    // The server's window must hold CONTEXT_LIMIT: a server such as Ollama cuts the start of a longer
+    // prompt (the system prompt first) without an error.
+    for (const [role, raw, model] of [
+      ["main", rawClient, mainModel],
+      ["compaction", rawCompactClient, config.compactModel ?? mainModel],
+    ] as const) {
+      if (role === "compaction" && raw === rawClient) continue;
+      const window = await raw.contextWindow?.();
+      if (!window) continue;
+      log({ type: "context_window", role, model, tokens: window.tokens, note: window.note, contextLimit });
+      if (window.tokens === null) {
+        out(c.yellow(`⚠ ${window.note}; make sure it holds CONTEXT_LIMIT=${contextLimit}.`));
+      } else if (contextLimit > window.tokens) {
+        return finish(
+          "error",
+          null,
+          `Invalid configuration: CONTEXT_LIMIT=${contextLimit} is larger than the server's context window for ${model} ` +
+            `(${window.note}); longer prompts would be cut without an error. Set CONTEXT_LIMIT to at most ${window.tokens}.`,
+          "config",
+        );
+      }
+    }
 
     // MCP servers start in parallel; one that fails is reported and skipped, never fatal.
     if (Object.keys(mcpServers).length > 0) {
