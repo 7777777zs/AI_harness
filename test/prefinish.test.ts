@@ -282,3 +282,21 @@ test("repeated follow-ups still stop at the budget: the third plan-only reply is
   assert.equal(result.nudges.plan, 2);
   assert.equal(result.finalText, "I will read a.txt next.");
 });
+
+test("repeated plan nudges leave one follow-up for a pending answer check: the coverage check still fires (I34)", async () => {
+  const dir = tmp();
+  for (const f of ["a.py", "b.py", "c.py"]) fs.writeFileSync(path.join(dir, f), "x = 1\n");
+  const plan = "I will read each file next.";
+  const s = scripted([{ tool: "list_dir", args: {} }, plan, plan, plan, plan, plan, plan, "Overview: a.py sets x.", "Overview: a.py, b.py and c.py set x."]);
+  const result = await runAgent({ task: "Give an overview of this project.", cwd: dir, client: s.client, quiet: true, coverageCheck: true, prefinishMax: 6 });
+  assert.equal(result.nudges.plan, 5, "one of the six follow-ups is kept for the coverage check");
+  assert.equal(result.nudges.coverage, 1);
+});
+
+test("without a pending answer check, repeated plan nudges may use the whole budget (I34)", async () => {
+  const plan = "I will read a.txt next.";
+  const s = scripted([plan, plan, plan, "The facts are: fact a."]);
+  const result = await runAgent({ task: "Find the facts.", cwd: fourFiles(), client: s.client, quiet: true, coverageCheck: true, prefinishMax: 3 });
+  assert.equal(result.nudges.plan, 3);
+  assert.equal(result.finalText, "The facts are: fact a.");
+});

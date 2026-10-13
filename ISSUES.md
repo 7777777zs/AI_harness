@@ -40,8 +40,9 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 | I30 | [The paging note of an oversized untrusted result](#i30-the-paging-note-of-an-oversized-untrusted-result) | Security | **Defer** |
 | I31 | [A shrunk untrusted result loses its reminder](#i31-a-shrunk-untrusted-result-loses-its-reminder) | Security | **Defer** |
 | I32 | [Session review leftovers](#i32-session-review-leftovers) | Sessions | **Defer** |
-| I36 | [A reasoning-only reply is accepted as an empty final answer](#i36-a-reasoning-only-reply-is-accepted-as-an-empty-final-answer) | Pre-finish check | **Defer** |
 | I35 | [Ollama review leftovers](#i35-ollama-review-leftovers) | Local models | **Defer** |
+| I36 | [A reasoning-only reply is accepted as an empty final answer](#i36-a-reasoning-only-reply-is-accepted-as-an-empty-final-answer) | Pre-finish check | **Defer** |
+| I37 | [summary-with-footer fails a run that read every file](#i37-summary-with-footer-fails-a-run-that-read-every-file) | Eval tooling | **Defer** |
 
 ---
 
@@ -228,3 +229,9 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 - **Problem:** in step 1 the model returned 1,400–3,300 characters of reasoning, empty content and no tool call (`finish_reason: stop`). A reply without tool calls is the final answer, so the run ended with an empty answer.
 - **Candidate fixes:** treat an empty reply without tool calls as not final: retry the request once, or send a pre-finish follow-up ("Your reply was empty; continue the task") within `PREFINISH_MAX`.
 - **Decision (2026-10-13): Defer**, pending a decision on the fix. Upper bound of the effect: 8b with thinking on 13/19 → at most 16/19.
+
+### I37: summary-with-footer fails a run that read every file
+- **Source:** the classification of the local failures (TEST_REPORT.md, "Qwen3 with reasoning…"): qwen3-14b-32k, thinking off and on.
+- **Problem:** the check of `evals/tasks/19-summary-with-footer.ts` requires the harness coverage footer. The footer is only added when listed files were left unread or read in part. Both runs listed and read all 12 known files, so there was correctly no footer, and the check failed them as "footer missing (data fixtures were known but not read)".
+- **Candidate fix:** accept a missing footer when the run's coverage shows nothing unread or partly read (`result.coverage`), and keep the per-file summary check.
+- **Decision (2026-10-13): Defer.** Fixing it changes how this task is scored, so earlier results would need re-scoring alongside it.

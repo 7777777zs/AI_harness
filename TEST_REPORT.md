@@ -1683,17 +1683,17 @@ Wall time for the 19 tasks: 14b 241 s off and 1,743 s on; 8b 203 s off and 532 s
 - **gpt-4.1-mini is not affected by the change:** no plan nudge fired in its run, so the repeat rule never acted. Its three failures are count-lines (I1), find-call-sites (missed the test-file call, no follow-up fired) and project-overview (30 steps; only the coverage check fired). The 18 → 17 → 16 drift is run-to-run variance; long-context passed this time.
 - **The larger budget (I34):** 14b 10 → 11, 8b 12 → 11 with thinking off. No measurable effect at one run per task. In one run (14b project-overview) six plan nudges fired and the model still ended on narration.
 - **Reasoning:** with thinking on, 14b 11 → 12 and 8b 11 → 13, at about 7× (14b) and 2.6× (8b) the time.
-- **Where Qwen beats gpt-4.1-mini:** long-context passed in all 6 Qwen runs since the I33 fix (both sizes, thinking on and off). gpt-4.1-mini passed it in 1 of 3. find-call-sites passed on 14b with thinking on and failed on gpt-4.1-mini this round.
+- **Where Qwen beats gpt-4.1-mini:** long-context passed in all 6 Qwen runs since the I33 fix (both sizes, thinking on and off). gpt-4.1-mini passed it in 1 of 3 core-suite runs, and in 10 of 15 in the other committed runs of that task (2026-10-07), so about 11 of 18 overall. find-call-sites passed on 14b with thinking on and failed on gpt-4.1-mini this round.
 
 ### Where the local failures come from
 The 29 failures of the four runs above, classified from the run logs:
 
 | Cause | Failures | Examples |
 |---|---|---|
-| **Harness interaction** | **4** | I36: a reply with reasoning only (empty content, no tool call, `finish_reason: stop`) accepted as an empty final answer, 3 runs of 8b with thinking on, all in step 1; pre-finish budget used up while the model kept narrating, 1 run (14b project-overview) |
-| **Model capability** | **25** | create-file splits the sentence onto two lines; count-lines estimates (120, 100, 49); find-call-sites misses or adds a call site; rename-function cannot finish in 20 steps; large-file-edit leaves the file unchanged; edit-line writes `timeout = 60`; find-string says the string is absent; missing-file never looks for the file |
+| **Harness or eval interaction** | **6** | I36: a reply with reasoning only (empty content, no tool call, `finish_reason: stop`) accepted as an empty final answer, 3 runs of 8b with thinking on, all in step 1. The pre-finish budget used up by plan nudges, so the coverage check never fired, 1 run (14b project-overview; fixed in this branch, see below). I37: summary-with-footer failed because the model read all 12 known files, so the harness correctly added no coverage footer, but the check requires one, 2 runs (14b off and on) |
+| **Model capability** | **23** | create-file splits the sentence onto two lines; count-lines estimates (120, 100, 49); find-call-sites misses or adds a call site; rename-function cannot finish in 20 steps; large-file-edit leaves the file unchanged; edit-line writes `timeout = 60`; find-string says the string is absent; missing-file never looks for the file |
 
-- **Answer to the question:** yes, part of the gap came from the harness being tuned on gpt-4.1-mini. Before the I33 fix, harness interactions caused about a third of the local failures. After the I33 and I34 changes they cause 4 of 29, 3 of them the new I36. The rest of the gap is the models: mostly multi-step edits and exact formatting or counting.
+- **Answer to the question:** yes, part of the gap came from the harness being tuned on gpt-4.1-mini. Before the I33 fix, harness interactions caused about a third of the local failures. After the I33 and I34 changes they cause 6 of 29: 3 the new I36, 2 an eval check (I37), and 1 the coverage check starved by repeated plan nudges. The rest of the gap is the models: mostly multi-step edits and exact formatting or counting.
 - **Upper bound, not measured:** without the three I36 runs, 8b with thinking on would be at most 16/19, the level of gpt-4.1-mini in the last runs.
 - **Samples:** one run per task and configuration; single-task differences are noise except where they repeat (long-context, 6 of 6).
 
@@ -1701,3 +1701,5 @@ The 29 failures of the four runs above, classified from the run logs:
 About $0.21 for the gpt-4.1-mini check (459k input / 16k output tokens). The local runs cost nothing.
 
 Results files: `2026-10-13T22-43-46-312Z` (gpt-4.1-mini), `2026-10-13T22-46-54-304Z` (14b off, budget 6), `2026-10-13T22-50-55-602Z` (8b off, budget 6), `2026-10-13T22-54-18-086Z` (14b on, budget 6), `2026-10-13T23-23-21-418Z` (8b on, budget 6).
+
+**Review fix (same branch):** the code review found that repeating plan nudges could use up the budget before the coverage check (the 14b project-overview run above: six plan nudges, no coverage check, 8 files unread). While a coverage or completion check may still be due, the repeating follow-ups now leave it one slot; a budget of 1 keeps the old rule. The runs above were made before this fix.
