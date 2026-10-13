@@ -114,3 +114,32 @@ test("modelFromEnv: the model under test and where it was set (environment or a 
     else process.env.OPENAI_MODEL = saved;
   }
 });
+
+test("adapter: a reasoning effort is sent as reasoning_effort on every request; without one the field is absent", async () => {
+  stubFetch(200, completion({ content: "391" }));
+  await new OpenAIClient("sk-test", "test-model", "none").chat(messages, []);
+  assert.equal(requests[0].reasoning_effort, "none");
+  stubFetch(200, completion({ content: "391" }));
+  await new OpenAIClient("sk-test", "test-model").chat(messages, []);
+  assert.ok(!("reasoning_effort" in requests[0]));
+});
+
+test("OPENAI_REASONING_EFFORT reaches the client and is reported by modelFromEnv", async () => {
+  const saved = { model: process.env.OPENAI_MODEL, effort: process.env.OPENAI_REASONING_EFFORT, key: process.env.OPENAI_API_KEY };
+  try {
+    process.env.OPENAI_MODEL = "model-x";
+    process.env.OPENAI_API_KEY = "sk-test";
+    process.env.OPENAI_REASONING_EFFORT = "none";
+    envFileSources.delete("OPENAI_MODEL");
+    assert.deepEqual(modelFromEnv(), { model: "model-x", source: "env", reasoningEffort: "none" });
+    stubFetch(200, completion({ content: "ok" }));
+    const { createClientFromEnv } = await import("../src/llm/index.js");
+    await createClientFromEnv().chat(messages, []);
+    assert.equal(requests[0].reasoning_effort, "none");
+  } finally {
+    for (const [name, value] of [["OPENAI_MODEL", saved.model], ["OPENAI_REASONING_EFFORT", saved.effort], ["OPENAI_API_KEY", saved.key]] as const) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});

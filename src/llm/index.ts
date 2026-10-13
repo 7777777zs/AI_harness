@@ -18,14 +18,22 @@ export function missingEnv(): string | null {
   return null;
 }
 
-/** The model under test (OPENAI_MODEL) and where it was set: the environment or a .env file. */
-export function modelFromEnv(): { model: string | undefined; source: "env" | ".env" } {
-  return { model: process.env.OPENAI_MODEL, source: envFileSources.has("OPENAI_MODEL") ? ".env" : "env" };
+/**
+ * The model under test (OPENAI_MODEL), where it was set (the environment or a .env file), and
+ * OPENAI_REASONING_EFFORT if set (results with and without it are not comparable).
+ */
+export function modelFromEnv(): { model: string | undefined; source: "env" | ".env"; reasoningEffort?: string } {
+  const reasoningEffort = process.env.OPENAI_REASONING_EFFORT || undefined;
+  return {
+    model: process.env.OPENAI_MODEL,
+    source: envFileSources.has("OPENAI_MODEL") ? ".env" : "env",
+    ...(reasoningEffort && { reasoningEffort }),
+  };
 }
 
 /** A client for `model`, or for OPENAI_MODEL when no model is given (e.g. COMPACT_MODEL unset). */
 export function createClientFromEnv(model?: string): LLMClient {
   const missing = missingEnv();
   if (missing) throw new Error(missing);
-  return new OpenAIClient(process.env.OPENAI_API_KEY!, model ?? process.env.OPENAI_MODEL!);
+  return new OpenAIClient(process.env.OPENAI_API_KEY!, model ?? process.env.OPENAI_MODEL!, modelFromEnv().reasoningEffort);
 }

@@ -727,6 +727,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       type: "run_start",
       model: mainModel,
       modelSource,
+      ...(!opts.client && envModel.reasoningEffort && { reasoningEffort: envModel.reasoningEffort }),
       compactModel: config.compactModel ?? mainModel,
       config,
       mcp: mcp?.statuses ?? [],
@@ -740,7 +741,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       node: process.version,
       harness: version,
     });
-    out(c.dim(`Config: model=${mainModel} (${modelSource}) ${describeConfig(config, mainModel)} | harness ${version.version}${version.commit ? ` @ ${version.commit}` : ""}`));
+    const effort = !opts.client && envModel.reasoningEffort ? ` reasoning_effort=${envModel.reasoningEffort}` : "";
+    out(c.dim(`Config: model=${mainModel} (${modelSource})${effort} ${describeConfig(config, mainModel)} | harness ${version.version}${version.commit ? ` @ ${version.commit}` : ""}`));
     for (const s of mcp?.statuses ?? []) {
       if (s.status !== "connected") continue;
       out(c.dim(`MCP ${s.name}: ${s.tools.length} tool(s); auto-approved: ${s.autoApproved.length ? s.autoApproved.join(", ") : "none"}`));

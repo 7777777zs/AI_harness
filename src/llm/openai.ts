@@ -13,7 +13,8 @@ const SHOW_TIMEOUT_MS = 3_000;
 export class OpenAIClient implements LLMClient {
   private client: OpenAI;
 
-  constructor(apiKey: string, private model: string) {
+  /** `reasoningEffort` is sent as reasoning_effort, e.g. "none" turns Qwen3's thinking off on Ollama. */
+  constructor(apiKey: string, private model: string, private reasoningEffort?: string) {
     // Retries are handled by withRetry (src/llm/retry.ts) so every attempt is logged and bounded.
     this.client = new OpenAI({ apiKey, maxRetries: 0 });
   }
@@ -52,6 +53,7 @@ export class OpenAIClient implements LLMClient {
         messages: messages.map(toOpenAIMessage),
         // OpenAI rejects an empty tools array, so omit it entirely.
         ...(tools.length > 0 && { tools: tools.map(toOpenAITool) }),
+        ...(this.reasoningEffort && { reasoning_effort: this.reasoningEffort as OpenAI.ReasoningEffort }),
       });
     } catch (err) {
       if (isContextLengthError(err)) throw new ContextLengthError((err as Error).message);

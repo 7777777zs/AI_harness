@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { ANSWER_MERGE_SEPARATOR, runAgent, totalNudges } from "../src/agent.js";
 import { loadEnv, parseNumber } from "../src/config.js";
-import { missingEnv } from "../src/llm/index.js";
+import { missingEnv, modelFromEnv } from "../src/llm/index.js";
 import { installShutdownHandlers, onInterrupt, registerCleanup } from "../src/process.js";
 import { tasks } from "./tasks/index.js";
 import { classifyOutcome, evalSettings } from "./options.js";
@@ -388,7 +388,8 @@ function writeResults(records: RunRecord[], extra: Record<string, unknown> = {})
   const sorted = [...records].sort((a, b) => order.get(a.taskId)! - order.get(b.taskId)! || a.run - b.run);
   fs.mkdirSync(resultsDir, { recursive: true });
   const outFile = path.join(resultsDir, `${timestamp}.json`);
-  const data = { timestamp, model: process.env.OPENAI_MODEL, options: { ...args, runs, concurrency }, ...extra, summary: summarize(sorted), results: sorted };
+  const effort = modelFromEnv().reasoningEffort;
+  const data = { timestamp, model: process.env.OPENAI_MODEL, ...(effort && { reasoningEffort: effort }), options: { ...args, runs, concurrency }, ...extra, summary: summarize(sorted), results: sorted };
   fs.writeFileSync(`${outFile}.tmp`, JSON.stringify(data, null, 2) + "\n");
   fs.renameSync(`${outFile}.tmp`, outFile);
   return outFile;

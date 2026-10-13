@@ -145,13 +145,13 @@ test("evalSettings: a context-limit cap lowers larger task limits, keeps smaller
   assert.equal(evalSettings(unlimited, { mainModel: "m" }).contextLimit, 100_000, "no cap: unchanged");
 });
 
-test("--context-limit is applied to every run and recorded in the results file", async () => {
+test("--context-limit and OPENAI_REASONING_EFFORT are applied to every run and recorded in the results file", async () => {
   const api = await fakeApi(5);
   const resultsDir = tmp();
   try {
     const child = spawn(process.execPath, ["--import", "tsx", "evals/run.ts", "--task", "create-file", "--context-limit", "30000", "--results-dir", resultsDir], {
       cwd: ROOT,
-      env: { ...process.env, OPENAI_API_KEY: "sk-test", OPENAI_MODEL: "fake", OPENAI_BASE_URL: api.url },
+      env: { ...process.env, OPENAI_API_KEY: "sk-test", OPENAI_MODEL: "fake", OPENAI_BASE_URL: api.url, OPENAI_REASONING_EFFORT: "none" },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let output = "";
@@ -163,6 +163,8 @@ test("--context-limit is applied to every run and recorded in the results file",
     assert.equal(results.options["context-limit"], "30000");
     const log = fs.readFileSync(path.resolve(ROOT, results.results[0].logFile), "utf8").split("\n")[0]!;
     assert.equal(JSON.parse(log).config.contextLimit, 30_000);
+    assert.equal(results.reasoningEffort, "none");
+    assert.equal(JSON.parse(log).reasoningEffort, "none");
   } finally {
     api.close();
   }
