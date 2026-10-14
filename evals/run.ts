@@ -1,4 +1,4 @@
-// Eval runner: npm run eval -- [--task id] [--suite default|hard] [--runs N] [--concurrency N] [--skills off|available|preloaded|routed] [--without-mcp] [--without-skill-tasks] [--keep] [--verbose]
+// Eval runner: npm run eval -- [--task id] [--runs N] [--suite default|hard] [--concurrency N] [--skills off|available|preloaded|routed] [--without-mcp] [--without-skill-tasks] [--keep] [--verbose]
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

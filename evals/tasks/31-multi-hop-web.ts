@@ -80,7 +80,7 @@ export const task: EvalTask = {
     const text = result.finalText ?? "";
     const problems: string[] = [];
     if (!/Okafor/i.test(text)) problems.push("wrong mayor (not Helen Okafor)");
-    if (!/2 October 1987|October 2,? 1987|1987-10-02/i.test(text)) problems.push("opening date missing (2 October 1987)");
+    if (!/\b2(?:nd)? Oct(?:ober|\.)? 1987|\bOct(?:ober|\.)? 2(?:nd)?,? 1987|1987-10-02/i.test(text)) problems.push("opening date missing (2 October 1987)");
     if (!/government\/mayors\.html/.test(text)) problems.push("no citation of the mayors list");
     if (!/harbor-point-history\.html|1987-10-03-reopening\.html/.test(text)) problems.push("no citation of a page with the opening date");
     const details = {

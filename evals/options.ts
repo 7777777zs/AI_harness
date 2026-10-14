@@ -7,12 +7,14 @@
 import { DEFAULTS, type SettingOverrides } from "../src/config.js";
 import type { McpRunOptions } from "../src/mcp/config.js";
 import { bundledSkillsDir } from "../src/skills/load.js";
-import type { EvalTask } from "./types.js";
+import type { EvalTask, Suite } from "./types.js";
+
+const isSuite = (s: string): s is Suite => s === "default" || s === "hard";
 
 export interface TaskSelection {
   /** --task: one task by id, from any suite. */
   task?: string | undefined;
-  /** --suite: "default" (every task outside the hard suite) or "hard" (only the hard suite). */
+  /** --suite as given on the command line; validated here ("default" or "hard", see Suite). */
   suite?: string | undefined;
   withoutMcp?: boolean | undefined;
   withoutSkillTasks?: boolean | undefined;
@@ -21,7 +23,7 @@ export interface TaskSelection {
 /** The tasks a runner invocation runs, or why there are none. */
 export function selectTasks(all: EvalTask[], opts: TaskSelection): { selected: EvalTask[]; error: string | null } {
   const suite = opts.suite ?? "default";
-  if (suite !== "default" && suite !== "hard") return { selected: [], error: `--suite must be default or hard, got "${suite}"` };
+  if (!isSuite(suite)) return { selected: [], error: `--suite must be default or hard, got "${suite}"` };
   const requested = opts.task
     ? all.filter((t) => t.id === opts.task)
     : all.filter((t) => (suite === "hard") === (t.suite === "hard"));

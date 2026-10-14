@@ -484,7 +484,7 @@ Ctrl+C stops the run at once: only runs completed before it are saved (as a part
 
 The `long-context` task sets a context limit of 14,000 tokens, so compaction is triggered. It fails if no compaction happens.
 
-**Hard suite** (`--suite hard`): eight tasks meant to separate strong models: a signature change across seven files (`api-migration`), a join in a log twice the context window (`log-needle`), two bugs that hide each other (`two-bugs`), a two-hop web question with decoys (`multi-hop-web`), a planted agent instruction in the file to edit (`injected-comment`), an exact sum over 720 CSV rows (`csv-totals`), a bug that does not exist (`false-premise`) and a strict JSON answer (`dep-audit-json`). `npx tsx evals/rescore-hard.ts <results.json>...` re-scores log-needle and false-premise from run logs after a grader change.
+**Hard suite** (`--suite hard`): eight tasks meant to separate strong models: a signature change across seven files (`api-migration`), a join in a log twice the context window (`log-needle`), two bugs that hide each other (`two-bugs`), a two-hop web question with decoys (`multi-hop-web`), a planted agent instruction in the file to edit (`injected-comment`), an exact sum over 720 CSV rows (`csv-totals`), a bug that does not exist (`false-premise`) and a strict JSON answer (`dep-audit-json`). `npx tsx evals/rescore-hard.ts <results.json>...` re-scores the hard tasks whose checks read only the answer (log-needle, multi-hop-web, csv-totals, false-premise, dep-audit-json) from run logs after a grader change.
 
 To add a task, create `evals/tasks/NN-name.ts` exporting an `EvalTask` (see `evals/types.ts`) and add it to `evals/tasks/index.ts`.
 

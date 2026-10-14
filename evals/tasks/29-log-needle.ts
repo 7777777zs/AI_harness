@@ -1,24 +1,13 @@
 import type { EvalTask } from "../types.js";
-import { fail, pass, write } from "../helpers.js";
+import { fail, pass, prng, write } from "../helpers.js";
 
-// Hard suite: a ~250k-character log (about 60k tokens, twice a 30k context) where the answer is a
+// Hard suite: a ~230k-character log (about 57k tokens, twice a 30k context) where the answer is a
 // join: payment failures with code E42 (they carry the user) and later successful retries (they
 // carry only the transaction). Reading the file is not possible; it has to be searched. Decoys:
 // failures never retried or retried without success, refunds with E42, E17 and E420 failures, and
 // a user whose E42 transaction was never retried while another of their transactions was.
 
 const NOISE_LINES = 2_700;
-
-/** Deterministic PRNG (mulberry32), so the log and the answer are the same on every run. */
-function prng(seed: number): () => number {
-  let a = seed;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 type Event = { event: string; user?: string; txn: string; code?: string };
 
@@ -93,6 +82,19 @@ export function buildLog(): string {
   return lines.map((l, i) => `${new Date(start + i * 1_370).toISOString()} ${l}`).join("\n") + "\n";
 }
 
+/** Paragraphs of an answer, with consecutive list items kept together even when blank lines separate them. */
+function answerBlocks(text: string): string[] {
+  const isItem = (p: string) => /^\s*(?:[-*+]|\d+[.)])\s/.test(p);
+  const blocks: string[] = [];
+  let prevItem = false;
+  for (const p of text.split(/\n\s*\n/)) {
+    if (isItem(p) && prevItem) blocks[blocks.length - 1] += `\n${p}`;
+    else blocks.push(p);
+    prevItem = isItem(p);
+  }
+  return blocks;
+}
+
 export const task: EvalTask = {
   id: "log-needle",
   description: "Hard: join E42 payment failures with later successful retries in a log twice the context window",
@@ -105,11 +107,13 @@ export const task: EvalTask = {
     write(dir, "logs/app.log", buildLog());
   },
   check(_dir, result) {
-    // The answer is the last paragraph that names users: models often list the excluded users
-    // while reasoning (a table of every E42 failure) before the concluding list.
-    const ids = (s: string) => s.match(/\bU\d{4}\b/g) ?? [];
-    const conclusion = (result.finalText ?? "").split(/\n\s*\n/).filter((p) => ids(p).length > 0).at(-1) ?? "";
-    const mentioned = new Set(ids(conclusion));
+    // Models often name the excluded users too: in a table of every E42 failure before the answer,
+    // or in a note after it. A block (a paragraph, or a list even with blank lines between its
+    // items) naming exactly the right users is the answer; otherwise the last block naming users is.
+    const ids = (s: string) => new Set(s.match(/\bU\d{4}\b/g) ?? []);
+    const blocks = answerBlocks(result.finalText ?? "").filter((b) => ids(b).size > 0);
+    const exact = blocks.find((b) => { const s = ids(b); return s.size === EXPECTED_USERS.length && EXPECTED_USERS.every((u) => s.has(u)); });
+    const mentioned = ids(exact ?? blocks.at(-1) ?? "");
     const missing = EXPECTED_USERS.filter((u) => !mentioned.has(u));
     const decoys = DECOY_USERS.filter((u) => mentioned.has(u));
     const problems = [missing.length && `missing: ${missing.join(", ")}`, decoys.length && `wrongly included: ${decoys.join(", ")}`].filter(Boolean);

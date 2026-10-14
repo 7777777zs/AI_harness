@@ -49,6 +49,23 @@ export function keepsAllLines(original: string, now: string): boolean {
   return true;
 }
 
+/** Run an ES module snippet in a fresh Node process; `lastLine` is the last line it printed. */
+export function nodeEval(code: string): { ok: boolean; lastLine: string; stderr: string } {
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", code], { encoding: "utf8", timeout: 30_000 });
+  return { ok: r.status === 0, lastLine: r.stdout.trim().split("\n").at(-1) ?? "", stderr: r.stderr.trim() };
+}
+
+/** Deterministic PRNG (mulberry32), for fixtures that must be the same on every run. */
+export function prng(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /** Run `node --test` in `cwd`. */
 export function nodeTest(cwd: string): { ok: boolean; output: string } {
   const r = spawnSync(process.execPath, ["--test"], { cwd, encoding: "utf8", timeout: 60_000 });

@@ -1,8 +1,7 @@
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { EvalTask } from "../types.js";
-import { fail, keepsAllLines, nodeTest, pass, read, write } from "../helpers.js";
+import { fail, keepsAllLines, nodeEval, nodeTest, pass, read, write } from "../helpers.js";
 
 // Hard suite: two bugs that hide each other. The coupon lookup is case-sensitive (the README says
 // codes are not), and the discount is subtracted after tax instead of before. With either bug
@@ -91,10 +90,10 @@ export const task: EvalTask = {
 const cases = ${JSON.stringify(HIDDEN)};
 console.log(JSON.stringify(cases.filter(([items, opts, want]) => total(items, opts) !== want)
   .map(([items, opts, want]) => JSON.stringify(opts) + ": got " + total(items, opts) + ", want " + want)));`;
-    const r = spawnSync(process.execPath, ["--input-type=module", "-e", probe], { encoding: "utf8", timeout: 30_000 });
+    const r = nodeEval(probe);
     let wrong: string[];
     try {
-      wrong = JSON.parse(r.stdout.trim().split("\n").at(-1) ?? "[]");
+      wrong = JSON.parse(r.lastLine || "[]");
     } catch {
       wrong = [`checker could not run: ${r.stderr.slice(0, 200)}`];
     }

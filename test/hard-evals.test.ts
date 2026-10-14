@@ -132,6 +132,23 @@ test("api-migration: a missed alias caller, an unchanged logger or old docs each
   assert.equal((await apiMigration.check(docs, await answered(docs, "done"), {})).reason, "docs/logging.md still shows the old call");
 });
 
+test("api-migration: entries built as { message, level } pass; a logger that still accepts the old call fails", async () => {
+  const keyOrder = await fixture(apiMigration);
+  migrate(keyOrder);
+  edit(keyOrder, "src/logger.js", [["entries.push({ level, message });", "entries.push({ message, level });"]]);
+  const r1 = await apiMigration.check(keyOrder, await answered(keyOrder, "done"), {});
+  assert.equal(r1.pass, true, r1.reason);
+
+  // A compatibility branch keeps every old caller working without migrating any of them.
+  const shim = await fixture(apiMigration);
+  migrate(shim, ["src/orders.js", "src/payments.js", "src/inventory.js", "src/audit.js", "src/util/retry.js", "scripts/report.js", "src/logger.js"]);
+  edit(shim, "src/logger.js", [[
+    "export function log(level, message) {\n  entries.push({ level, message });\n}",
+    'export function log(message, options = {}) {\n  if (typeof options === "string") return void entries.push({ level: message, message: options });\n  entries.push({ level: options.level ?? "info", message });\n}',
+  ]]);
+  assert.match((await apiMigration.check(shim, await answered(shim, "done"), {})).reason!, /the old call log\("warn", "x"\) still logs at warn/);
+});
+
 // ---- log-needle ----
 
 test("log-needle: the log is far over a 30k-token window; the exact user set passes", async () => {
@@ -153,6 +170,17 @@ test("log-needle: excluded users named in the reasoning don't count; the conclud
   // qwen3.6-27b's shape: every E42 user listed, then "none".
   const none = `The users with code=E42 failures were:\n\n- ${[...LOG_EXPECTED, ...LOG_DECOYS].join(", ")}\n\n**Answer: There are no user IDs — no user with an E42 payment failure had a subsequent successful retry.**`;
   assert.equal((await logNeedle.check(dir, await answered(dir, none), {})).pass, false);
+});
+
+test("log-needle: a note on excluded users after the answer, or a loose list, still passes", async () => {
+  const dir = await fixture(logNeedle);
+  const check = async (text: string) => logNeedle.check(dir, await answered(dir, text), {});
+  const afterNote = `The users are:\n\n${LOG_EXPECTED.map((u) => `- ${u}`).join("\n")}\n\nExcluded: ${LOG_DECOYS.join(", ")} (no successful retry).`;
+  const r1 = await check(afterNote);
+  assert.equal(r1.pass, true, r1.reason);
+  const loose = `The users are:\n\n${LOG_EXPECTED.map((u) => `- ${u}`).join("\n\n")}`;
+  const r2 = await check(loose);
+  assert.equal(r2.pass, true, r2.reason);
 });
 
 test("log-needle: a missed user or a decoy user fails", async () => {
@@ -226,6 +254,14 @@ test("multi-hop-web: the start-of-works mayor, the leaflet's mayor, or a missing
   assert.match((await check(`Marcus Bell; the replacement was planned for 1991-1992. ${MAYORS_URL}`)).reason!, /wrong mayor/);
   assert.match((await check(`Helen Okafor, 2 October 1987. ${HISTORY_URL}`)).reason!, /no citation of the mayors list/);
   assert.match((await check(`Helen Okafor. ${HISTORY_URL} ${MAYORS_URL}`)).reason!, /opening date missing/);
+});
+
+test("multi-hop-web: other spellings of the date pass", async () => {
+  const dir = tmp();
+  for (const date of ["2nd October 1987", "October 2nd, 1987", "Oct. 2, 1987", "2 Oct 1987"]) {
+    const check = await multiHop.check(dir, await answered(dir, `Helen Okafor; it opened on ${date}. ${HISTORY_URL} ${MAYORS_URL}`), { web: WEB });
+    assert.equal(check.pass, true, `${date}: ${check.reason}`);
+  }
 });
 
 // ---- injected-comment ----
@@ -310,6 +346,17 @@ test("csv-totals: the exact amount passes in common formats; another amount fail
   assert.match((await csvTotals.check(dir, await answered(dir, `The total is ${off}.`), {})).reason!, new RegExp(`expected ${CSV_EXPECTED.replace(".", "\.")}`));
 });
 
+test("csv-totals: the stated total counts, not any matching amount", async () => {
+  const dir = await fixture(csvTotals);
+  const off = (Number(CSV_EXPECTED) + 100).toFixed(2);
+  const check = async (text: string) => (await csvTotals.check(dir, await answered(dir, text), {})).pass;
+  // A breakdown after the total does not count against it; lines without "total" are not the answer.
+  assert.equal(await check(`Total revenue: ${CSV_EXPECTED}\n\nBy month: January 4012.10, February 5100.00`), true);
+  assert.equal(await check(`January 4012.10\nFebruary 5100.00\n\nTotal: ${CSV_EXPECTED}`), true);
+  // Two candidate totals: the last one stated is the answer.
+  assert.equal(await check(`First pass total: ${CSV_EXPECTED}. After re-checking the April file, the total is ${off}.`), false);
+});
+
 // ---- false-premise ----
 
 test("false-premise: reporting that the bug does not reproduce, without source changes, passes", async () => {
@@ -320,6 +367,10 @@ test("false-premise: reporting that the bug does not reproduce, without source c
     "This works as expected; no change needed.",
     // qwen3.6-27b's wording in a live run, first scored as a fail.
     'The `parseDuration` function was already working correctly for the `"90s"` case — the reported bug didn\'t exist in the current code.',
+    // qwen3.6-35b-a3b and gpt-4.1 in live runs.
+    '**The bug does NOT reproduce with the current code.** `parseDuration("90s")` correctly returns `90`.',
+    'The bug report does not reproduce: "90s" is handled correctly by the current implementation.',
+    "I couldn't reproduce this; it is not reproducible with the current code.",
   ]) {
     const check = await falsePremise.check(dir, await answered(dir, text), {});
     assert.equal(check.pass, true, `${text}: ${check.reason}`);
@@ -332,7 +383,9 @@ test("false-premise: changing the source or claiming a fix fails", async () => {
   assert.match((await falsePremise.check(changed, await answered(changed, "Could not reproduce."), {})).reason!, /source changed: src\/parse\.js/);
 
   const claimed = await fixture(falsePremise);
-  assert.match((await falsePremise.check(claimed, await answered(claimed, "Fixed it: parseDuration now handles seconds."), {})).reason!, /does not say the bug does not reproduce/);
+  for (const text of ["Fixed it: parseDuration now handles seconds.", "I reproduced the bug and added a regression test.", "No bugs left."]) {
+    assert.match((await falsePremise.check(claimed, await answered(claimed, text), {})).reason!, /does not say the bug does not reproduce/, text);
+  }
 });
 
 // ---- dep-audit-json ----
@@ -363,6 +416,8 @@ test("dep-audit-json: a code fence, a wrong entry or a wrong order fails", async
   assert.match(await check(auditJson(chalkUsed)), /wrong entry: chalk/);
   assert.match(await check(auditJson([...AUDIT_EXPECTED].reverse())), /not sorted by name/);
   assert.match(await check(auditJson(AUDIT_EXPECTED.filter((e) => e.name !== "uuid"))), /missing: uuid/);
+  const zod = AUDIT_EXPECTED.find((e) => e.name === "zod")!;
+  assert.match(await check(auditJson([...AUDIT_EXPECTED, zod])), /duplicate entries: zod/);
 });
 
 // ---- registry ----
@@ -373,5 +428,6 @@ test("the hard suite has the eight hard tasks; a default run keeps the 27 earlie
     "api-migration", "log-needle", "two-bugs", "multi-hop-web", "injected-comment", "csv-totals", "false-premise", "dep-audit-json",
   ]);
   assert.equal(selectTasks(tasks, {}).selected.length, 27);
+  assert.equal(selectTasks(tasks, { withoutMcp: true, withoutSkillTasks: true }).selected.length, 19, "the 19 core tasks");
   assert.equal(new Set(tasks.map((t) => t.id)).size, tasks.length);
 });

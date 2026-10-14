@@ -1,8 +1,7 @@
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { EvalTask } from "../types.js";
-import { fail, pass, read, write } from "../helpers.js";
+import { fail, nodeEval, nodeTest, pass, read, write } from "../helpers.js";
 
 // Hard suite: change a function's signature and every caller. The callers are spread over seven
 // files and use the function in different ways (an alias import, a namespace import, a call split
@@ -135,19 +134,27 @@ const PROBES: [string, string, { level: string; message: string }[]][] = [
   ["scripts/report.js", "m.report()", [{ level: "info", message: "report generated" }]],
 ];
 
+/** The entries a call logs, as { level, message } (key order and extra fields don't matter). */
+function logged(dir: string, mod: string, call: string): string {
+  const url = (rel: string) => JSON.stringify(pathToFileURL(path.join(dir, rel)).href);
+  const r = nodeEval(`const m = await import(${url(mod)});
+const { entries } = await import(${url("src/logger.js")});
+const before = entries.length;
+${call};
+console.log(JSON.stringify(entries.slice(before).map((e) => ({ level: e.level, message: e.message }))));`);
+  return r.ok ? r.lastLine : `error: ${r.stderr.split("\n")[0]}`;
+}
+
 /** Each probe in a fresh process; returns the probes whose entries differ (or that throw). */
 function wrongProbes(dir: string): string[] {
   const wrong: string[] = [];
   for (const [mod, call, want] of PROBES) {
-    const url = (rel: string) => JSON.stringify(pathToFileURL(path.join(dir, rel)).href);
-    const code = `const m = await import(${url(mod)});
-const { entries } = await import(${url("src/logger.js")});
-const before = entries.length;
-${call};
-console.log(JSON.stringify(entries.slice(before)));`;
-    const r = spawnSync(process.execPath, ["--input-type=module", "-e", code], { encoding: "utf8", timeout: 30_000 });
-    const got = r.status === 0 ? r.stdout.trim().split("\n").at(-1) : `error: ${r.stderr.trim().split("\n")[0]}`;
+    const got = logged(dir, mod, call);
     if (got !== JSON.stringify(want)) wrong.push(`${mod}: ${call} logged ${got}`);
+  }
+  // A compatibility branch for the old call would keep unmigrated callers working.
+  if (logged(dir, "src/logger.js", 'm.log("warn", "x")') === JSON.stringify([{ level: "warn", message: "x" }])) {
+    wrong.push('the old call log("warn", "x") still logs at warn');
   }
   return wrong;
 }
@@ -166,11 +173,11 @@ export const task: EvalTask = {
   check(dir) {
     const wrong = wrongProbes(dir);
     const problems = [...wrong];
-    const suite = spawnSync(process.execPath, ["--test"], { cwd: dir, encoding: "utf8", timeout: 60_000 });
-    if (suite.status !== 0) problems.push("npm test fails");
+    const suite = nodeTest(dir);
+    if (!suite.ok) problems.push("npm test fails");
     const docsMigrated = !(read(dir, "docs/logging.md") ?? "").includes('log("warn", "disk almost full")');
     if (!docsMigrated) problems.push("docs/logging.md still shows the old call");
-    const details = { wrongProbes: wrong.length, testsPass: suite.status === 0, docsMigrated };
+    const details = { wrongProbes: wrong.length, testsPass: suite.ok, docsMigrated };
     return problems.length ? { ...fail(problems.join("; ")), details } : { ...pass(), details };
   },
 };

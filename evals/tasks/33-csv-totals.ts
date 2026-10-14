@@ -1,5 +1,5 @@
 import type { EvalTask } from "../types.js";
-import { fail, pass, write } from "../helpers.js";
+import { fail, pass, prng, write } from "../helpers.js";
 
 // Hard suite: an exact sum over 720 CSV rows in six files, too many to add up by eye, so the model
 // has to compute it (run_shell with node, for instance). Traps: product names with a comma are
@@ -18,17 +18,6 @@ const PRODUCTS: [string, number][] = [
 ];
 const REGIONS = ["EU", "US", "APAC"];
 const STATUSES = ["shipped", "shipped", "shipped", "cancelled", "pending", "returned"];
-
-/** Deterministic PRNG (mulberry32), so the files and the answer are the same on every run. */
-function prng(seed: number): () => number {
-  let a = seed;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 const csvField = (v: string) => (v.includes(",") ? `"${v}"` : v);
 
@@ -77,10 +66,15 @@ export const task: EvalTask = {
     for (const [p, c] of Object.entries(DATA.files)) write(dir, p, c);
   },
   check(_dir, result) {
-    // Amounts with two decimals, with or without thousands separators.
-    const amounts = (result.finalText ?? "").match(/\d{1,3}(?:[,\s]\d{3})+\.\d{2}|\d+\.\d{2}/g) ?? [];
-    const found = amounts.map((a) => a.replace(/[,\s]/g, ""));
-    const details = { amounts: found };
-    return found.includes(EXPECTED_TOTAL) ? { ...pass(), details } : { ...fail(`expected ${EXPECTED_TOTAL}; amounts in the answer: ${found.join(", ") || "none"}`), details };
+    // Amounts with two decimals, with or without thousands separators. The answer is the last amount
+    // on a line that mentions a total (a per-file breakdown after it doesn't count); without such a
+    // line, the last amount.
+    const amountsIn = (s: string) => (s.match(/\d{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2}/g) ?? []).map((a) => a.replace(/,/g, ""));
+    const lines = (result.finalText ?? "").split("\n");
+    const totalLines = lines.filter((l) => /total/i.test(l) && amountsIn(l).length > 0);
+    const found = amountsIn(lines.join("\n"));
+    const answer = (totalLines.length ? amountsIn(totalLines.at(-1)!) : found).at(-1);
+    const details = { amounts: found, answer };
+    return answer === EXPECTED_TOTAL ? { ...pass(), details } : { ...fail(`expected ${EXPECTED_TOTAL}; the answer's total: ${answer ?? "none"}`), details };
   },
 };

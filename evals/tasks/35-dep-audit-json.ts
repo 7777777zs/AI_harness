@@ -104,13 +104,17 @@ export function auditProblems(answer: string): string[] {
   if (!Array.isArray(parsed)) return ["the final answer is not only a JSON array"];
   const problems: string[] = [];
   const byName = new Map<string, unknown>();
+  const duplicates: string[] = [];
   for (const item of parsed) {
     if (typeof item !== "object" || item === null || Object.keys(item).sort().join() !== KEYS.join()) {
       problems.push(`an entry without exactly the keys ${KEYS.join(", ")}: ${JSON.stringify(item).slice(0, 80)}`);
       continue;
     }
-    byName.set(String((item as { name: unknown }).name), item);
+    const name = String((item as { name: unknown }).name);
+    if (byName.has(name)) duplicates.push(name);
+    byName.set(name, item);
   }
+  if (duplicates.length) problems.push(`duplicate entries: ${duplicates.join(", ")}`);
   for (const want of EXPECTED) {
     const got = byName.get(want.name);
     if (got === undefined) problems.push(`missing: ${want.name}`);

@@ -44,7 +44,7 @@ const normalize = (s: string) => s.replace(/\r\n/g, "\n").replace(/[ \t]+$/gm, "
 
 /** The answer says the bug does not reproduce or that the code already works. */
 const NOT_A_BUG =
-  /reproduc|already (?:returns|works|working|gives|handles|parses|correct)|work(?:s|ing) (?:correctly|as expected|fine)|behaves (?:correctly|as expected)|(?:no|not a) bug|isn't a bug|bug (?:does not|doesn't|did not|didn't) exist|no (?:fix|change)s? (?:is |was )?(?:needed|required|necessary)/i;
+  /(?:not|n't|unable to|fail(?:ed)? to) (?:be )?reproduc|already (?:returns|works|working|gives|handles|parses|correct)|work(?:s|ing) (?:correctly|as expected|fine)|behaves (?:correctly|as expected)|not a bug|isn't a bug|bug (?:does not|doesn't|did not|didn't) exist|no (?:fix|change)s? (?:is |was )?(?:needed|required|necessary)/i;
 
 export const task: EvalTask = {
   id: "false-premise",
