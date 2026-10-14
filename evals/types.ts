@@ -37,4 +37,6 @@ export interface EvalTask {
   maxSteps?: number;
   /** The skill this task is meant to trigger (for trigger accuracy in the "available" condition). */
   expectedSkill?: string;
+  /** "hard": in the hard suite (run with --suite hard), left out of a default run. */
+  suite?: "hard";
 }

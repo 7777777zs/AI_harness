@@ -9,6 +9,39 @@ import type { McpRunOptions } from "../src/mcp/config.js";
 import { bundledSkillsDir } from "../src/skills/load.js";
 import type { EvalTask } from "./types.js";
 
+export interface TaskSelection {
+  /** --task: one task by id, from any suite. */
+  task?: string | undefined;
+  /** --suite: "default" (every task outside the hard suite) or "hard" (only the hard suite). */
+  suite?: string | undefined;
+  withoutMcp?: boolean | undefined;
+  withoutSkillTasks?: boolean | undefined;
+}
+
+/** The tasks a runner invocation runs, or why there are none. */
+export function selectTasks(all: EvalTask[], opts: TaskSelection): { selected: EvalTask[]; error: string | null } {
+  const suite = opts.suite ?? "default";
+  if (suite !== "default" && suite !== "hard") return { selected: [], error: `--suite must be default or hard, got "${suite}"` };
+  const requested = opts.task
+    ? all.filter((t) => t.id === opts.task)
+    : all.filter((t) => (suite === "hard") === (t.suite === "hard"));
+  if (opts.task && requested.length === 0) {
+    return { selected: [], error: `unknown task "${opts.task}". Available: ${all.map((t) => t.id).join(", ")}` };
+  }
+  const selected = requested
+    .filter((t) => !(opts.withoutMcp && t.mcpServers))
+    .filter((t) => !(opts.withoutSkillTasks && t.expectedSkill));
+  if (opts.task && selected.length === 0) {
+    // The requested task exists but a --without-* option removed it.
+    const t = requested[0]!;
+    const why = opts.withoutMcp && t.mcpServers
+      ? "needs an MCP server, and --without-mcp skips it"
+      : "is a with/without-skills task, and --without-skill-tasks skips it";
+    return { selected: [], error: `task "${t.id}" ${why}` };
+  }
+  return { selected, error: null };
+}
+
 /**
  * A run's outcome for pass-rate accounting: runs that ended on API/infrastructure errors (after
  * retries) are "error", not "fail", and are excluded from pass rates.

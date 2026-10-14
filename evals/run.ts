@@ -1,4 +1,4 @@
-// Eval runner: npm run eval -- [--task id] [--runs N] [--concurrency N] [--skills off|available|preloaded|routed] [--without-mcp] [--without-skill-tasks] [--keep] [--verbose]
+// Eval runner: npm run eval -- [--task id] [--suite default|hard] [--runs N] [--concurrency N] [--skills off|available|preloaded|routed] [--without-mcp] [--without-skill-tasks] [--keep] [--verbose]
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -9,7 +9,7 @@ import { loadEnv, parseNumber } from "../src/config.js";
 import { missingEnv, modelFromEnv } from "../src/llm/index.js";
 import { installShutdownHandlers, onInterrupt, registerCleanup } from "../src/process.js";
 import { tasks } from "./tasks/index.js";
-import { classifyOutcome, evalSettings } from "./options.js";
+import { classifyOutcome, evalSettings, selectTasks } from "./options.js";
 import { maxRequestTokens, removeDirs } from "./helpers.js";
 import type { CheckResult, EvalTask, WebContext } from "./types.js";
 import { CHROME_DEVTOOLS_MCP, prewarmChromeDevtools, serveSite, type SiteServer } from "./web.js";
@@ -87,7 +87,7 @@ const EVALS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const RESULTS_DIR = path.join(EVALS_DIR, "results");
 
 const USAGE =
-  "Usage: npm run eval -- [--task id] [--runs N] [--concurrency N] [--skills off|available|preloaded|routed] " +
+  "Usage: npm run eval -- [--task id] [--runs N] [--suite default|hard] [--concurrency N] [--skills off|available|preloaded|routed] " +
   "[--without-mcp] [--without-skill-tasks] [--compact-model M] [--context-limit N] [--prefinish-max N] [--results-dir DIR] [--keep] [--verbose]\n" +
   'Put -- after "npm run eval" so npm passes the options on, e.g. npm run eval -- --runs 3';
 
@@ -96,6 +96,8 @@ function parseRunnerArgs() {
     return parseArgs({
       options: {
         task: { type: "string" },
+        /** "default" (every task outside the hard suite) or "hard" (only the hard suite, tasks 28+). */
+        suite: { type: "string" },
         runs: { type: "string", default: "1" },
         concurrency: { type: "string", default: "1" },
         keep: { type: "boolean", default: false },
@@ -157,21 +159,14 @@ if (!["off", "available", "preloaded", "routed"].includes(args.skills!)) {
   process.exit(1);
 }
 const skillsCondition = args.skills as "off" | "available" | "preloaded" | "routed";
-const requested = args.task ? tasks.filter((t) => t.id === args.task) : tasks;
-if (requested.length === 0) {
-  console.error(`Error: unknown task "${args.task}". Available: ${tasks.map((t) => t.id).join(", ")}`);
-  process.exit(1);
-}
-const selected = requested
-  .filter((t) => !(args["without-mcp"] && t.mcpServers))
-  .filter((t) => !(args["without-skill-tasks"] && t.expectedSkill));
-if (selected.length === 0) {
-  // Only reachable with --task: the requested task exists but a --without-* option removed it.
-  const t = requested[0]!;
-  const why = args["without-mcp"] && t.mcpServers
-    ? "needs an MCP server, and --without-mcp skips it"
-    : "is a with/without-skills task, and --without-skill-tasks skips it";
-  console.error(`Error: task "${t.id}" ${why}`);
+const { selected, error: selectionError } = selectTasks(tasks, {
+  task: args.task,
+  suite: args.suite,
+  withoutMcp: args["without-mcp"],
+  withoutSkillTasks: args["without-skill-tasks"],
+});
+if (selectionError) {
+  console.error(`Error: ${selectionError}`);
   process.exit(1);
 }
 
