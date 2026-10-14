@@ -30,7 +30,7 @@ function isPathLike(line: string): boolean {
 /** Tools whose output is always a file listing (cwd-relative paths, "/" for directories). */
 const LISTING_TOOLS = new Set(["list_dir", "glob"]);
 /** list_dir size / link suffix, e.g. "src/app.ts (4.1 KB)" or "linked/ (link, not followed)". */
-const LIST_DIR_SUFFIX = / \((?:\d+ B|\d+(?:\.\d+)? [KM]B|link, not followed)\)$/;
+const LIST_DIR_SUFFIX = / \((?:\d+ B|\d+(?:\.\d+)? [KM]B|link, not followed|\d+\+? entr(?:y|ies) not shown)\)$/;
 /** Notes that are not paths: list_dir/glob footers, "(empty directory)", truncation markers. */
 const NOTE_LINE = /^(?:\[|\(empty directory\)|No files match\b)/;
 

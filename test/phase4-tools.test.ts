@@ -12,6 +12,7 @@ import { writeFile } from "../src/tools/writeFile.js";
 import { grep } from "../src/tools/grep.js";
 import { glob } from "../src/tools/glob.js";
 import { listDir } from "../src/tools/listDir.js";
+import { parseListing } from "../src/context/listing.js";
 
 const created: string[] = [];
 after(() => created.forEach((d) => fs.rmSync(d, { recursive: true, force: true })));
@@ -215,4 +216,17 @@ test("B3: grep over a generated repo of ~5,000 files completes within a few seco
   assert.equal([...out.matchAll(/^pkg\d+\/m42\.ts:\d+: /gm)].length, 50);
   // Generous: test files run in parallel; this guards against pathological slowness (under 1 s alone).
   assert.ok(ms < 20_000, `${ms} ms`);
+});
+
+test("I40: list_dir marks a directory at the depth limit with the number of entries not shown", async () => {
+  const dir = sandbox({ "src/a.js": "a\n", "src/util/retry.js": "r\n", "src/util/deep/x.js": "x\n", "src/empty/.gitkeep": "" });
+  const two = await listDir.execute({ path: "." }, ctx(dir));
+  assert.match(two, /^src\/util\/ \(2 entries not shown\)$/m);
+  assert.match(two, /^src\/empty\/ \(1 entry not shown\)$/m);
+  assert.match(two, /^src\/a\.js \(\d+ B\)$/m);
+  const three = await listDir.execute({ path: ".", depth: 3 }, ctx(dir));
+  assert.match(three, /^src\/util\/$/m, "expanded directories are not marked");
+  assert.match(three, /^src\/util\/deep\/ \(1 entry not shown\)$/m);
+  // The listing parser (coverage, compaction) still reads the marked line as a directory.
+  assert.deepEqual(parseListing(two).filter((p) => p.startsWith("src/util")), ["src/util/"]);
 });

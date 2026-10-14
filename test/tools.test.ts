@@ -94,11 +94,11 @@ test("list_dir: default depth is 2, directories end with '/', files show sizes",
   const dir = project();
   const lines = outLines(await listDir.execute({}, context(dir).ctx));
   assert.ok(lines.includes("src/"));
-  assert.ok(lines.includes("src/lib/"));
+  assert.ok(lines.some((l) => /^src\/lib\/ \(\d+ entr(?:y|ies) not shown\)$/.test(l)), "a directory at the depth limit says what it hides (I40)");
   assert.ok(lines.includes("src/app.ts (22 B)"));
   assert.ok(!lines.some((l) => l.startsWith("src/lib/util.ts")), "depth 3 not shown at default depth 2");
   const one = outLines(await listDir.execute({ depth: 1 }, context(dir).ctx));
-  assert.ok(one.includes("src/") && !one.some((l) => l.startsWith("src/app")), "depth 1 shows only direct children");
+  assert.ok(one.some((l) => l.startsWith("src/ (")) && !one.some((l) => l.startsWith("src/app")), "depth 1 shows only direct children");
   // depth is clamped to 5
   const deep = await listDir.execute({ depth: 99 }, context(dir).ctx);
   assert.match(deep, /^src\/lib\/deep\/deeper\/x\.ts/m);

@@ -5,6 +5,8 @@ import { formatSize, optInt, optString, resolveInCwd, toRel } from "./util.js";
 
 export const LIST_DIR_MAX_ENTRIES = 500;
 export const LIST_DIR_MAX_DEPTH = 5;
+/** Entries counted inside an unexpanded directory before the count shows as "N+". */
+export const NOT_SHOWN_COUNT_BUDGET = 1_000;
 
 /** One output line: "src/", "src/agent.ts (4.1 KB)", "linked/ (link, not followed)". */
 export function formatEntry(e: WalkEntry): string {
@@ -16,7 +18,8 @@ export function formatEntry(e: WalkEntry): string {
 export const listDir: Tool = {
   name: "list_dir",
   description:
-    "List files and directories recursively (read-only). Directories end with '/', files show their size. " +
+    "List files and directories recursively (read-only). Directories end with '/', files show their size; " +
+    "a directory at the depth limit shows how many entries it has that are not shown. " +
     "Paths in the output are relative to the working directory and use '/'. Skips .gitignore'd paths and " +
     ".git, node_modules, .venv, venv, __pycache__, dist, build. " +
     `Shows at most ${LIST_DIR_MAX_ENTRIES} entries. Prefer this over shell commands like dir/ls/find.`,
@@ -41,9 +44,18 @@ export const listDir: Tool = {
     const stats = newStats();
     const lines: string[] = [];
     let omitted = 0;
+    /** Directories at the depth limit: listed, but not expanded (I40: models took them as empty). */
+    const atLimit: { line: number; abs: string }[] = [];
     for await (const e of walk(ctx.cwd, dir, { maxDepth: depth, stats })) {
-      if (lines.length < LIST_DIR_MAX_ENTRIES) lines.push(formatEntry(e));
-      else omitted++;
+      if (lines.length < LIST_DIR_MAX_ENTRIES) {
+        lines.push(formatEntry(e));
+        if (e.kind === "dir" && e.depth >= depth) atLimit.push({ line: lines.length - 1, abs: e.abs });
+      } else omitted++;
+    }
+    for (const { line, abs } of atLimit) {
+      let n = 0;
+      for await (const _ of walk(ctx.cwd, abs, { maxDepth: 1, budget: NOT_SHOWN_COUNT_BUDGET })) n++;
+      if (n > 0) lines[line] += ` (${n}${n >= NOT_SHOWN_COUNT_BUDGET ? "+" : ""} ${n === 1 ? "entry" : "entries"} not shown)`;
     }
     if (lines.length === 0) lines.push("(empty directory)");
     if (omitted > 0) lines.push(`[${omitted} more entries omitted (limit ${LIST_DIR_MAX_ENTRIES}); list a subdirectory or lower depth]`);
