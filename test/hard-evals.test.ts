@@ -303,7 +303,12 @@ test("csv-totals: the exact amount passes in common formats; another amount fail
 test("false-premise: reporting that the bug does not reproduce, without source changes, passes", async () => {
   const dir = await fixture(falsePremise);
   fs.writeFileSync(path.join(dir, "test/regression.test.js"), 'import { test } from "node:test";\n');
-  for (const text of ['I could not reproduce it: parseDuration("90s") already returns 90.', "This works as expected; no change needed."]) {
+  for (const text of [
+    'I could not reproduce it: parseDuration("90s") already returns 90.',
+    "This works as expected; no change needed.",
+    // qwen3.6-27b's wording in a live run, first scored as a fail.
+    'The `parseDuration` function was already working correctly for the `"90s"` case — the reported bug didn\'t exist in the current code.',
+  ]) {
     const check = await falsePremise.check(dir, await answered(dir, text), {});
     assert.equal(check.pass, true, `${text}: ${check.reason}`);
   }
