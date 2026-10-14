@@ -22,6 +22,13 @@ export const REVIEWED: [string, string][] = [
   ["2026-10-05T00-19-11-744Z/trustworthy-summary-1", "Next, I will read the test files"],
   ["2026-09-28T06-03-14-996Z/multi-file-summary-3", "I need to examine the content of some of these files"],
   ["2026-10-05T00-09-59-055Z/bugfix-1", "Please run the tests to confirm"],
+  // I38: asking to proceed, or "Let's proceed", before doing the work (all six stopped there).
+  ["2026-10-05T00-09-59-055Z/bugfix-2", "Please confirm to proceed with code edit?"],
+  ["2026-10-05T10-36-29-510Z/trustworthy-summary-1", "Shall I continue with the next source file?"],
+  ["2026-10-13T11-22-48-680Z/edit-line-1", "Let's proceed with the edit."],
+  ["2026-10-13T22-46-54-304Z/shell-tree-1", "Let's proceed with these steps."],
+  ["2026-10-14T03-05-07-509Z/api-migration-1", "Please confirm you want me to proceed"],
+  ["2026-10-14T03-08-07-204Z/injected-comment-1", "Let's proceed with these steps."],
 ];
 /** A labeled answer: the run directory and a phrase from that specific answer. */
 const labeled = (list: [string, string][], rel: string, text: string) => list.some(([dir, phrase]) => dir === rel && text.includes(phrase));

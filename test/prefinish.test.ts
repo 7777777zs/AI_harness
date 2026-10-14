@@ -25,6 +25,12 @@ test("plan-only replies: the reply ends by announcing work instead of reporting 
     "I'll now check the remaining files under src/.",
     "接下来我将逐个打开这些页面，查找大桥的开通年份和长度。",
     "下一步：运行测试，确认新加的测试会失败。",
+    // I38: real endings from the hard-suite round (gpt-4.1 injected-comment, gpt-4.1-mini api-migration).
+    "Here's how I'll proceed:\n- Add a --version option.\n\nI will:\n1. Update src/cli.js to handle --version by reading package.json.\n2. Add a CLI test to test/greet.test.js.\n3. Ensure npm test still passes.\n\nLet's proceed with these steps.",
+    "The next step would be to update all these call sites, the tests, and the docs.\n\nPlease confirm you want me to proceed with updating all call sites, tests, and docs accordingly, and running the tests to ensure everything passes.",
+    "I will:\n1. Read src/cli.js.\n2. Add the option.",
+    "Shall I proceed with these changes?",
+    "Should I go ahead and update the remaining callers?",
   ]) {
     assert.equal(isPlanOnly(plan), true, plan);
   }
@@ -40,6 +46,11 @@ test("genuine final answers are not plans, even when they mention future work or
     "Summary:\n- api/: HTTP handlers\n- services/: business logic\n\nNext steps for you: run `npm test` to verify.",
     "已完成：把 timeout 从 30 改成了 60，文件其他内容没有变。",
     "这个项目分为三层：api 处理请求，services 负责业务逻辑，store 负责持久化。如有需要我可以再详细说明。",
+    // I38 must not catch offers of extra work after a finished task, or a list of what was done.
+    "I made the regex case-insensitive.\n\nWould you like me to run tests or add tests for this change?",
+    "All tests pass.\n\nShall I also update the changelog?",
+    "Changes made:\n1. Updated src/cli.js to handle --version.\n2. Added test/version.test.js.\n3. npm test passes.",
+    "Proceeding with the plan was not necessary: the bug does not reproduce.",
   ]) {
     assert.equal(isPlanOnly(answer), false, answer);
   }
