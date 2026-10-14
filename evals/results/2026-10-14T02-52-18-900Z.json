@@ -1,0 +1,195 @@
+{
+  "timestamp": "2026-10-14T02-52-18-900Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "onboarding",
+    "runs": 3,
+    "concurrency": 3,
+    "context-limit": "30000",
+    "prefinish-max": "6",
+    "skills": "routed",
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "onboarding",
+      "runs": 3,
+      "passes": 0,
+      "errors": 0,
+      "avgSteps": 7.333333333333333,
+      "avgTokens": 31230.666666666668,
+      "avgSeconds": 26.202,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 7,
+      "failures": [
+        "missing: flow handler → service → event → audit (got 0 of 4 in order)",
+        "missing: entry point main.ts; role of the api layer; role of the services layer; role of the store layer; flow handler → service → event → audit (got 0 of 4 in order); coverage note",
+        "missing: flow handler → service → event → audit (got 0 of 4 in order); coverage note"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "taskId": "onboarding",
+      "run": 1,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 6,
+      "inputTokens": 23944,
+      "outputTokens": 1252,
+      "durationMs": 50586,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 23684,
+      "mainOutputTokens": 1225,
+      "tokenRatio": 0.9427005583954855,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-14T02-52-18-900Z\\onboarding-1\\2026-10-14T02-52-18-944Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 15
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 5130,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "Task requests an overview of the project's structure and workings for onboarding.",
+      "trigger": "correct",
+      "reason": "missing: flow handler → service → event → audit (got 0 of 4 in order)",
+      "details": {
+        "outcome": false,
+        "process": true,
+        "missingOutcome": [
+          "flow handler → service → event → audit (got 0 of 4 in order)"
+        ],
+        "coverageNote": true,
+        "formatHeadings": 7
+      }
+    },
+    {
+      "taskId": "onboarding",
+      "run": 2,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 8,
+      "inputTokens": 32936,
+      "outputTokens": 1313,
+      "durationMs": 12444,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 3,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 32676,
+      "mainOutputTokens": 1276,
+      "tokenRatio": 0.947317810193593,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-14T02-52-18-900Z\\onboarding-2\\2026-10-14T02-52-18-946Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 15
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 6063,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The task is to explain the overall codebase structure and how it works, fitting the description of codebase onboarding.",
+      "trigger": "correct",
+      "reason": "missing: entry point main.ts; role of the api layer; role of the services layer; role of the store layer; flow handler → service → event → audit (got 0 of 4 in order); coverage note",
+      "details": {
+        "outcome": false,
+        "process": false,
+        "missingOutcome": [
+          "entry point main.ts",
+          "role of the api layer",
+          "role of the services layer",
+          "role of the store layer",
+          "flow handler → service → event → audit (got 0 of 4 in order)"
+        ],
+        "coverageNote": false,
+        "formatHeadings": 0
+      }
+    },
+    {
+      "taskId": "onboarding",
+      "run": 3,
+      "pass": false,
+      "outcome": "fail",
+      "stopReason": "done",
+      "steps": 8,
+      "inputTokens": 32613,
+      "outputTokens": 1634,
+      "durationMs": 15576,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 3,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 32353,
+      "mainOutputTokens": 1602,
+      "tokenRatio": 0.9455611884510938,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-14T02-52-18-900Z\\onboarding-3\\2026-10-14T02-52-18-947Z.jsonl",
+      "toolCalls": {
+        "list_dir": 1,
+        "read_file": 15
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 6045,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The task asks for an overview and explanation of the codebase structure and how it works.",
+      "trigger": "correct",
+      "reason": "missing: flow handler → service → event → audit (got 0 of 4 in order); coverage note",
+      "details": {
+        "outcome": false,
+        "process": false,
+        "missingOutcome": [
+          "flow handler → service → event → audit (got 0 of 4 in order)"
+        ],
+        "coverageNote": false,
+        "formatHeadings": 0
+      }
+    }
+  ]
+}

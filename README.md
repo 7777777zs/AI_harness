@@ -75,7 +75,7 @@ $env:OPENAI_REASONING_EFFORT = "none"        # optional: turns Qwen3's thinking 
 - **Context window.** Ollama answers a prompt longer than the model's window with HTTP 200 and cuts its start, the system prompt first. So `CONTEXT_LIMIT` must not exceed the window. Pin the window in a Modelfile (`FROM qwen3:14b` and `PARAMETER num_ctx 32768`, then `ollama create qwen3-14b-32k -f Modelfile`). At startup the harness reads `num_ctx` from Ollama's `/api/show`: a larger `CONTEXT_LIMIT` is a configuration error, and a model without `num_ctx` gets a warning (its window is Ollama's default, which depends on the version and GPU memory).
 - **Thinking.** Qwen3 thinks by default. `OPENAI_REASONING_EFFORT=none` is sent as `reasoning_effort` and is the only switch that works on Ollama's OpenAI-compatible endpoint. Allowed values: none, minimal, low, medium, high; anything else stops the harness at startup. It was about 20× faster in the core tasks measured. It is recorded in `run_start`, the `Config:` line and eval results.
 - **Evals.** The runner gives most tasks a 100,000-token limit; add `--context-limit 30000` so no task exceeds the model's window.
-- **Quality.** In the 19 core tasks (one run each), qwen3.6-27b passed 18 and qwen3.6-35b-a3b 17 with thinking on, against 16–18 for gpt-4.1-mini; qwen3-14b and qwen3-8b passed 10–13 (TEST_REPORT.md, "Local Qwen3 through Ollama" and "Qwen3.6").
+- **Quality.** In the 19 core tasks (one run each), qwen3.6-27b passed 18 and qwen3.6-35b-a3b 17 with thinking on, against 16–18 for gpt-4.1-mini; qwen3-14b and qwen3-8b passed 10–13 (TEST_REPORT.md, "Local Qwen3 through Ollama" and "Qwen3.6"). In the hard suite (3 runs each) qwen3.6-27b passed 16/24 and qwen3.6-35b-a3b 17/24, against 8/24 for gpt-4.1-mini (TEST_REPORT.md, "Hard suite and the Phase 5/6 tasks").
 - **Memory.** qwen3.6-35b-a3b (22 GB) fits a 24 GB GPU, but its runner also keeps a 22 GB private copy in system RAM; on a 16 GB machine that leaves almost no free memory (the first load crashed Ollama). qwen3.6-27b needs 17 GB of GPU memory.
 
 ## Usage
@@ -452,7 +452,8 @@ npm run eval -- --runs 3 --concurrency 3
 Each task runs in a fresh temp directory with `autoApprove: true`. It is then graded by deterministic code, which checks files on disk where possible.
 
 Options:
-- `--task <id>`: run one task.
+- `--task <id>`: run one task (from any suite).
+- `--suite default|hard`: `default` runs every task outside the hard suite; `hard` runs only the hard suite (tasks 28–35, below).
 - `--runs N`: repeat each task N times.
 - `--concurrency N`: run N jobs in parallel.
 - `--keep`: keep the temp directories.
@@ -482,6 +483,8 @@ Runs that end on an API or infrastructure error (after retries) are counted as `
 Ctrl+C stops the run at once: only runs completed before it are saved (as a partial results file), the MCP servers and browsers are shut down, and the temp directories are removed. Any directory that can't be removed is listed.
 
 The `long-context` task sets a context limit of 14,000 tokens, so compaction is triggered. It fails if no compaction happens.
+
+**Hard suite** (`--suite hard`): eight tasks meant to separate strong models: a signature change across seven files (`api-migration`), a join in a log twice the context window (`log-needle`), two bugs that hide each other (`two-bugs`), a two-hop web question with decoys (`multi-hop-web`), a planted agent instruction in the file to edit (`injected-comment`), an exact sum over 720 CSV rows (`csv-totals`), a bug that does not exist (`false-premise`) and a strict JSON answer (`dep-audit-json`). `npx tsx evals/rescore-hard.ts <results.json>...` re-scores log-needle and false-premise from run logs after a grader change.
 
 To add a task, create `evals/tasks/NN-name.ts` exporting an `EvalTask` (see `evals/types.ts`) and add it to `evals/tasks/index.ts`.
 

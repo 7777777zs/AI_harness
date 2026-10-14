@@ -1,0 +1,209 @@
+{
+  "timestamp": "2026-10-14T05-36-37-975Z",
+  "model": "qwen3.6-35b-a3b-32k",
+  "options": {
+    "task": "code-review",
+    "runs": 3,
+    "concurrency": 1,
+    "context-limit": "30000",
+    "prefinish-max": "6",
+    "skills": "routed",
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "code-review",
+      "runs": 3,
+      "passes": 3,
+      "errors": 0,
+      "avgSteps": 4,
+      "avgTokens": 20301.666666666668,
+      "avgSeconds": 36.914,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "code-review",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 5,
+      "inputTokens": 23251,
+      "outputTokens": 3267,
+      "durationMs": 45015,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 22994,
+      "mainOutputTokens": 3084,
+      "tokenRatio": 1.144059877239698,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-14T05-36-37-975Z\\code-review-1\\2026-10-14T05-36-38-212Z.jsonl",
+      "toolCalls": {
+        "run_shell": 3,
+        "read_skill_file": 1,
+        "read_file": 4,
+        "grep": 4,
+        "glob": 3
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 5318,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "code-review"
+      ],
+      "routedSkill": "code-review",
+      "routerReason": "The task explicitly asks for a review of uncommitted changes, which matches the code-review skill.",
+      "trigger": "correct",
+      "details": {
+        "found": [
+          "SQL injection",
+          "pagination off-by-one",
+          "leaked file handle / swallowed error"
+        ],
+        "outcome": true,
+        "severityGrouping": true,
+        "renameFlagged": false,
+        "otherFindings": 0,
+        "allThree": true,
+        "unchanged": true,
+        "writeAttempts": 0,
+        "readOnlyBlocked": 0
+      }
+    },
+    {
+      "taskId": "code-review",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 3,
+      "inputTokens": 12663,
+      "outputTokens": 2039,
+      "durationMs": 29448,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 12406,
+      "mainOutputTokens": 1837,
+      "tokenRatio": 1.0970578835091818,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-14T05-36-37-975Z\\code-review-2\\2026-10-14T05-37-23-422Z.jsonl",
+      "toolCalls": {
+        "run_shell": 2,
+        "read_skill_file": 1,
+        "read_file": 4
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 4858,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "code-review"
+      ],
+      "routedSkill": "code-review",
+      "routerReason": "The task explicitly asks to review uncommitted changes, which directly matches the code-review skill criteria.",
+      "trigger": "correct",
+      "details": {
+        "found": [
+          "SQL injection",
+          "pagination off-by-one",
+          "leaked file handle / swallowed error"
+        ],
+        "outcome": true,
+        "severityGrouping": true,
+        "renameFlagged": false,
+        "otherFindings": 0,
+        "allThree": true,
+        "unchanged": true,
+        "writeAttempts": 0,
+        "readOnlyBlocked": 0
+      }
+    },
+    {
+      "taskId": "code-review",
+      "run": 3,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 4,
+      "inputTokens": 17459,
+      "outputTokens": 2226,
+      "durationMs": 36279,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 17202,
+      "mainOutputTokens": 2120,
+      "tokenRatio": 1.1203212337517927,
+      "answerMerged": false,
+      "unreadAtEnd": 1,
+      "logFile": "evals\\results\\logs\\2026-10-14T05-36-37-975Z\\code-review-3\\2026-10-14T05-37-53-059Z.jsonl",
+      "toolCalls": {
+        "run_shell": 2,
+        "read_skill_file": 1,
+        "read_file": 4,
+        "grep": 1,
+        "list_dir": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 5251,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "code-review"
+      ],
+      "routedSkill": "code-review",
+      "routerReason": "The task explicitly asks to review uncommitted changes.",
+      "trigger": "correct",
+      "details": {
+        "found": [
+          "SQL injection",
+          "pagination off-by-one",
+          "leaked file handle / swallowed error"
+        ],
+        "outcome": true,
+        "severityGrouping": true,
+        "renameFlagged": false,
+        "otherFindings": 0,
+        "allThree": true,
+        "unchanged": true,
+        "writeAttempts": 0,
+        "readOnlyBlocked": 0
+      }
+    }
+  ]
+}

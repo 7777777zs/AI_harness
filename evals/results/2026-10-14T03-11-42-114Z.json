@@ -1,0 +1,182 @@
+{
+  "timestamp": "2026-10-14T03-11-42-114Z",
+  "model": "qwen3.6-27b-32k",
+  "options": {
+    "task": "onboarding",
+    "runs": 3,
+    "concurrency": 1,
+    "context-limit": "30000",
+    "prefinish-max": "6",
+    "skills": "routed",
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "onboarding",
+      "runs": 3,
+      "passes": 3,
+      "errors": 0,
+      "avgSteps": 7.333333333333333,
+      "avgTokens": 37249,
+      "avgSeconds": 61.75066666666667,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "onboarding",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 7,
+      "inputTokens": 31715,
+      "outputTokens": 2659,
+      "durationMs": 61190,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 31447,
+      "mainOutputTokens": 2514,
+      "tokenRatio": 1.1335762231869084,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-14T03-11-42-114Z\\onboarding-1\\2026-10-14T03-11-42-127Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "list_dir": 1,
+        "read_file": 15
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 6067,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The user is asking for an overview of the codebase structure and how it works to onboard to the team.",
+      "trigger": "correct",
+      "details": {
+        "outcome": true,
+        "process": true,
+        "missingOutcome": [],
+        "coverageNote": true,
+        "formatHeadings": 7
+      }
+    },
+    {
+      "taskId": "onboarding",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 8,
+      "inputTokens": 39439,
+      "outputTokens": 2663,
+      "durationMs": 61673,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 0,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 39171,
+      "mainOutputTokens": 2525,
+      "tokenRatio": 1.1508135756343765,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-14T03-11-42-114Z\\onboarding-2\\2026-10-14T03-12-43-337Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "list_dir": 2,
+        "read_file": 18
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 6609,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The user is asking for a structural overview and explanation of the codebase for onboarding purposes.",
+      "trigger": "correct",
+      "details": {
+        "outcome": true,
+        "process": true,
+        "missingOutcome": [],
+        "coverageNote": true,
+        "formatHeadings": 7
+      }
+    },
+    {
+      "taskId": "onboarding",
+      "run": 3,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 7,
+      "inputTokens": 32437,
+      "outputTokens": 2834,
+      "durationMs": 62389,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 1,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 32169,
+      "mainOutputTokens": 2695,
+      "tokenRatio": 1.1406818625242003,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-14T03-11-42-114Z\\onboarding-3\\2026-10-14T03-13-45-027Z.jsonl",
+      "toolCalls": {
+        "load_skill": 1,
+        "list_dir": 1,
+        "read_file": 18,
+        "glob": 1
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 6572,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "codebase-onboarding"
+      ],
+      "routedSkill": "codebase-onboarding",
+      "routerReason": "The user is asking for an explanation of the codebase structure and how it works, which aligns with the codebase-onboarding skill.",
+      "trigger": "correct",
+      "details": {
+        "outcome": true,
+        "process": true,
+        "missingOutcome": [],
+        "coverageNote": true,
+        "formatHeadings": 7
+      }
+    }
+  ]
+}

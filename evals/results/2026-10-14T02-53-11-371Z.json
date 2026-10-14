@@ -1,0 +1,207 @@
+{
+  "timestamp": "2026-10-14T02-53-11-371Z",
+  "model": "gpt-4.1-mini",
+  "options": {
+    "task": "bugfix",
+    "runs": 3,
+    "concurrency": 3,
+    "context-limit": "30000",
+    "prefinish-max": "6",
+    "skills": "routed",
+    "keep": false,
+    "verbose": false,
+    "without-mcp": false,
+    "without-skill-tasks": false
+  },
+  "summary": [
+    {
+      "taskId": "bugfix",
+      "runs": 3,
+      "passes": 3,
+      "errors": 0,
+      "avgSteps": 18,
+      "avgTokens": 93732.33333333333,
+      "avgSeconds": 31.662666666666667,
+      "avgCompactions": 0,
+      "avgRepeatedCalls": 3,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 17,
+      "failures": []
+    }
+  ],
+  "results": [
+    {
+      "taskId": "bugfix",
+      "run": 1,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 18,
+      "inputTokens": 77225,
+      "outputTokens": 2251,
+      "durationMs": 25876,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 2,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 5,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 76957,
+      "mainOutputTokens": 2220,
+      "tokenRatio": 1.0419692051438274,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-14T02-53-11-371Z\\bugfix-1\\2026-10-14T02-53-11-394Z.jsonl",
+      "toolCalls": {
+        "grep": 4,
+        "read_file": 3,
+        "glob": 1,
+        "write_file": 1,
+        "run_shell": 4,
+        "edit_file": 4
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 7085,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "bugfix-with-test"
+      ],
+      "routedSkill": "bugfix-with-test",
+      "routerReason": "The task clearly requests fixing a function's incorrect output, which is a bug fix.",
+      "trigger": "correct",
+      "details": {
+        "outcome": true,
+        "process": true,
+        "testsKept": true,
+        "testFirst": true,
+        "toolCalls": {
+          "grep": 4,
+          "read_file": 3,
+          "glob": 1,
+          "write_file": 1,
+          "run_shell": 4,
+          "edit_file": 4
+        }
+      }
+    },
+    {
+      "taskId": "bugfix",
+      "run": 2,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 16,
+      "inputTokens": 88908,
+      "outputTokens": 3209,
+      "durationMs": 31931,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 3,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 4,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 88640,
+      "mainOutputTokens": 3178,
+      "tokenRatio": 1.0843425838283405,
+      "answerMerged": false,
+      "unreadAtEnd": 0,
+      "logFile": "evals\\results\\logs\\2026-10-14T02-53-11-371Z\\bugfix-2\\2026-10-14T02-53-11-397Z.jsonl",
+      "toolCalls": {
+        "grep": 2,
+        "read_file": 3,
+        "edit_file": 5,
+        "run_shell": 5
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 9718,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "bugfix-with-test"
+      ],
+      "routedSkill": "bugfix-with-test",
+      "routerReason": "The task is to fix a bug in a function and provide a test for it.",
+      "trigger": "correct",
+      "details": {
+        "outcome": true,
+        "process": true,
+        "testsKept": true,
+        "testFirst": true,
+        "toolCalls": {
+          "grep": 2,
+          "read_file": 3,
+          "edit_file": 5,
+          "run_shell": 5
+        }
+      }
+    },
+    {
+      "taskId": "bugfix",
+      "run": 3,
+      "pass": true,
+      "outcome": "pass",
+      "stopReason": "done",
+      "steps": 20,
+      "inputTokens": 105774,
+      "outputTokens": 3830,
+      "durationMs": 37181,
+      "compactions": 0,
+      "level2Accepted": 0,
+      "level2Rejected": 0,
+      "repeatedCalls": 4,
+      "missingFileReads": 0,
+      "descriptionRejected": 0,
+      "nudges": 8,
+      "compactionInputTokens": 0,
+      "compactionOutputTokens": 0,
+      "mainInputTokens": 105506,
+      "mainOutputTokens": 3802,
+      "tokenRatio": 1.0657254051978098,
+      "answerMerged": false,
+      "unreadAtEnd": 5,
+      "logFile": "evals\\results\\logs\\2026-10-14T02-53-11-371Z\\bugfix-3\\2026-10-14T02-53-11-397Z.jsonl",
+      "toolCalls": {
+        "grep": 3,
+        "read_file": 4,
+        "list_dir": 1,
+        "write_file": 1,
+        "run_shell": 5,
+        "edit_file": 5
+      },
+      "mcpCalls": 0,
+      "guardFired": 0,
+      "maxRequestTokens": 9781,
+      "skillsCondition": "routed",
+      "skillsLoaded": [
+        "bugfix-with-test"
+      ],
+      "routedSkill": "bugfix-with-test",
+      "routerReason": "The task requests fixing a bug with a specific example in code output.",
+      "trigger": "correct",
+      "details": {
+        "outcome": true,
+        "process": true,
+        "testsKept": true,
+        "testFirst": true,
+        "toolCalls": {
+          "grep": 3,
+          "read_file": 4,
+          "list_dir": 1,
+          "write_file": 1,
+          "run_shell": 5,
+          "edit_file": 5
+        }
+      }
+    }
+  ]
+}
