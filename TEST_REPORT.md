@@ -1703,3 +1703,48 @@ About $0.21 for the gpt-4.1-mini check (459k input / 16k output tokens). The loc
 Results files: `2026-10-13T22-43-46-312Z` (gpt-4.1-mini), `2026-10-13T22-46-54-304Z` (14b off, budget 6), `2026-10-13T22-50-55-602Z` (8b off, budget 6), `2026-10-13T22-54-18-086Z` (14b on, budget 6), `2026-10-13T23-23-21-418Z` (8b on, budget 6).
 
 **Review fix (same branch):** the code review found that repeating plan nudges could use up the budget before the coverage check (the 14b project-overview run above: six plan nudges, no coverage check, 8 files unread). While a coverage or completion check may still be due, the repeating follow-ups now leave it one slot; a budget of 1 keeps the old rule. The runs above were made before this fix.
+
+## Qwen3.6-27B and Qwen3.6-35B-A3B (branch `feat/i36-empty-reply`, 2026-10-14)
+
+**Setup:** `qwen3.6:27b` (dense, 27.3B) and `qwen3.6:35b-a3b` (MoE, 35.5B, about 3B active), both Q4_K_M, with tools and thinking. Variants with `num_ctx 32768`. Thinking on, `--prefinish-max 6`, `--context-limit 30000`, the 19 core tasks once each. The harness included the I36 fix (`10afe6e`).
+
+### Fit and speed (RX 7900 XTX 24 GB, 16 GB RAM)
+| Model | GPU memory | Context on the GPU | Output speed | System RAM |
+|---|---|---|---|---|
+| qwen3.6-27b | 17 GB | 32k and 64k, 100% GPU | 25–29 tokens/s | no problem in practice |
+| qwen3.6-35b-a3b | 22 GB | 16k and 32k, 100% GPU | 54–65 tokens/s | the runner holds a 22 GB private copy in RAM (about 11 GB resident, the rest in the page file); 0.3–0.5 GB stays available |
+
+The first load of 35b-a3b, with about 2 GB of RAM free, crashed the Ollama server and left a stray `llama-server` process. With 11–12 GB available, it loaded at 16k and 32k. `use_mmap: true` did not reduce the private copy. The model is a 22 GB file, so the copy is the whole model.
+
+### Core suite
+| Task | qwen3.6-27b | qwen3.6-35b-a3b |
+|---|---|---|
+| create-file | ✓ | ✗ (wrote the sentence on two lines) |
+| summary-with-footer | ✗ (I37) | ✗ (I37) |
+| the other 17 | ✓ | ✓ |
+| **Total** | **18/19** | **17/19** |
+| Wall time | 849 s | 348 s |
+| Tokens (input / output) | 345k / 41k | 352k / 36k |
+
+- **Both summary-with-footer failures are I37:** the model listed `src/` and read all 12 known files (27b in one step, in parallel), so the harness correctly added no coverage footer, and the check requires one. Without that eval bug: 19/19 and 18/19.
+- **create-file:** the content to write is "Hello, harness! Line two stays here.", which itself suggests a second line; qwen3-14b and once gpt-4.1-mini split it the same way.
+- **The tasks that defeated qwen3** all passed on both:
+  - count-lines: the first pass by any model since 2026-10-13; both computed 137;
+  - rename-function, large-file-edit, find-call-sites, project-overview.
+- **Follow-ups:**
+  - 27b: coverage check 4×, after-notes 3×;
+  - 35b-a3b: coverage 4×, after-notes 4×;
+  - neither run fired a plan nudge or the I36 empty-reply follow-up.
+
+### Compared with the earlier runs
+| Model | Pass (19 core tasks, one run) |
+|---|---|
+| qwen3.6-27b, thinking on | 18 |
+| qwen3.6-35b-a3b, thinking on | 17 |
+| gpt-4.1-mini (2026-10-07 / 13 / 13) | 18 / 17 / 16 |
+| qwen3-8b, thinking on | 13 |
+| qwen3-14b, thinking on | 12 |
+
+With one run per task, qwen3.6 and gpt-4.1-mini cannot be ranked against each other. All three are well above qwen3: in this harness, the gap to qwen3 was the model, not the harness. API usage this round: none.
+
+Results files: `2026-10-14T00-19-42-587Z` (qwen3.6-27b), `2026-10-14T00-46-13-858Z` (qwen3.6-35b-a3b).

@@ -41,7 +41,6 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
 | I31 | [A shrunk untrusted result loses its reminder](#i31-a-shrunk-untrusted-result-loses-its-reminder) | Security | **Defer** |
 | I32 | [Session review leftovers](#i32-session-review-leftovers) | Sessions | **Defer** |
 | I35 | [Ollama review leftovers](#i35-ollama-review-leftovers) | Local models | **Defer** |
-| I36 | [A reasoning-only reply is accepted as an empty final answer](#i36-a-reasoning-only-reply-is-accepted-as-an-empty-final-answer) | Pre-finish check | **Defer** |
 | I37 | [summary-with-footer fails a run that read every file](#i37-summary-with-footer-fails-a-run-that-read-every-file) | Eval tooling | **Defer** |
 
 ---
@@ -223,12 +222,6 @@ Everything not yet fixed, collected from the earlier issues file and [TEST_REPOR
     - the 22-line context-window block in `runAgent` could be a helper;
     - `window` as a variable name.
 - **Decision (2026-10-13): Defer.** None changes a measured result. The smells go with I26 when `runAgent` is split.
-
-### I36: A reasoning-only reply is accepted as an empty final answer
-- **Source:** the core suite on qwen3-8b-32k with thinking on (TEST_REPORT.md, "Qwen3 with reasoning…"), 3 of 19 runs: count-lines, multi-file-summary, project-overview.
-- **Problem:** in step 1 the model returned 1,400–3,300 characters of reasoning, empty content and no tool call (`finish_reason: stop`). A reply without tool calls is the final answer, so the run ended with an empty answer.
-- **Candidate fixes:** treat an empty reply without tool calls as not final: retry the request once, or send a pre-finish follow-up ("Your reply was empty; continue the task") within `PREFINISH_MAX`.
-- **Decision (2026-10-13): Defer**, pending a decision on the fix. Upper bound of the effect: 8b with thinking on 13/19 → at most 16/19.
 
 ### I37: summary-with-footer fails a run that read every file
 - **Source:** the classification of the local failures (TEST_REPORT.md, "Qwen3 with reasoning…"): qwen3-14b-32k, thinking off and on.

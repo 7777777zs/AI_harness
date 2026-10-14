@@ -40,6 +40,7 @@ Issues that are fixed, or closed with a decision that needs no further work. Ope
 | N5: gave up after seeing only the blank tab | Unopened task URLs named in the `[Harness status]` message | branch `fix-url-refusal` |
 | I33: the note-taking reminder ended runs early on a local model | A text-only reply right after the reminder gets one "continue" follow-up (pre-finish) | branch `feat/ollama-qwen`, `a0d2e1f` |
 | I34: local models used up the pre-finish follow-ups | The plan and after-notes follow-ups repeat within `PREFINISH_MAX`; eval runner `--prefinish-max` (effect within noise) | branch `feat/prefinish-repeat`, `1eb81df`, `3678928` |
+| I36: a reasoning-only reply was accepted as an empty final answer | An empty reply without tool calls gets a "continue" follow-up (pre-finish) | branch `feat/i36-empty-reply`, `10afe6e` |
 | I8: harness hints after untrusted content made injections more likely to be followed | Reminder added per request after the latest untrusted result only; no repeat notice on untrusted results | `73939f4` |
 | I9: confirmation-required MCP tools ran unguarded under auto-approve after untrusted content | Guarded like `run_shell`/`write_file`/`edit_file` | `b320254` |
 | I17: nothing verified on Linux or macOS | CI runs the type check and tests on Linux, macOS and Windows | `725d7be` |
@@ -310,3 +311,10 @@ The data is in TEST_REPORT.md, "Issues round 2".
 - **Finding:** a larger budget alone could not help: each kind of follow-up fired at most once per run, and the eval runner passed the default budget explicitly.
 - **Fix (`1eb81df`, `3678928`):** the plan and after-notes follow-ups repeat while `PREFINISH_MAX` lasts (the coverage and completion checks still fire once); the eval runner sets the budget with `--prefinish-max`. The default stays 2. After the code review: while a coverage or completion check may still be due, the repeating follow-ups leave it one slot, so they cannot starve it.
 - **Result:** with budget 6 and thinking off, 14b 10 → 11 and 8b 12 → 11 of 19: no measurable effect at one run per task. gpt-4.1-mini (default budget) unaffected: no plan nudge fired in its run.
+
+### I36: A reasoning-only reply is accepted as an empty final answer
+- **Source:** the core suite on qwen3-8b-32k with thinking on (TEST_REPORT.md, "Qwen3 with reasoning…"), 3 of 19 runs: count-lines, multi-file-summary, project-overview.
+- **Problem:** in step 1 the model returned 1,400–3,300 characters of reasoning, empty content and no tool call (`finish_reason: stop`). A reply without tool calls is the final answer, so the run ended with an empty answer.
+- **Candidate fixes:** treat an empty reply without tool calls as not final: retry the request once, or send a pre-finish follow-up ("Your reply was empty; continue the task") within `PREFINISH_MAX`.
+- **Fix (`10afe6e`):** a reply with neither text nor tool calls gets a follow-up ("Your reply was empty … continue the task with tool calls now") through the pre-finish path: within `PREFINISH_MAX`, repeating like the plan nudge, leaving a slot for a due answer check, not kept as an answer. With `PREFINISH_MAX` 0 an empty reply still ends the run.
+- **Verified:** by unit tests. In the qwen3.6-27b and 35b-a3b core-suite runs (thinking on) no empty reply occurred, so it has not fired in a live run yet.
