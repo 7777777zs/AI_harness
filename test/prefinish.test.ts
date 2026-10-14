@@ -192,8 +192,8 @@ test("PREFINISH_MAX is validated and set explicitly by the eval settings", () =>
 
 test("totalNudges counts every kind of nudge, including the pre-finish ones (plan, completion)", () => {
   // Distinct powers of two: a missing or doubled kind changes the sum.
-  const stats: NudgeStats = { notes: 1, missingFile: 2, repeat: 4, coverage: 8, plan: 16, completion: 32, unopenedUrl: 64, afterNotes: 128 };
-  assert.equal(totalNudges(stats), 255);
+  const stats: NudgeStats = { notes: 1, missingFile: 2, repeat: 4, coverage: 8, plan: 16, completion: 32, unopenedUrl: 64, afterNotes: 128, emptyReply: 256 };
+  assert.equal(totalNudges(stats), 511);
 });
 
 test("requiredSections match heading lines only (Markdown headings or bold-only lines), not body text", () => {
@@ -299,4 +299,24 @@ test("without a pending answer check, repeated plan nudges may use the whole bud
   const result = await runAgent({ task: "Find the facts.", cwd: fourFiles(), client: s.client, quiet: true, coverageCheck: true, prefinishMax: 3 });
   assert.equal(result.nudges.plan, 3);
   assert.equal(result.finalText, "The facts are: fact a.");
+});
+
+// ---- I36: a reply with no content and no tool calls (reasoning only) is not a final answer ----
+
+test("an empty reply without tool calls gets a 'continue' follow-up and is not kept as an answer (I36)", async () => {
+  const s = scripted(["", read("a"), "The fact is: fact a."]);
+  const result = await runAgent({ task: "Find the fact.", cwd: fourFiles(), client: s.client, quiet: true, coverageCheck: false });
+  assert.equal(result.finalText, "The fact is: fact a.");
+  assert.deepEqual(result.answerHistory, ["The fact is: fact a."]);
+  assert.equal(s.followUps().length, 1);
+  assert.match(s.followUps()[0]!, /^Your reply was empty/);
+  assert.equal(result.nudges.emptyReply, 1);
+  assert.ok(logOf(result.logFile).some((l) => l.type === "nudge" && l.kind === "empty_reply"));
+});
+
+test("with PREFINISH_MAX 0 an empty reply still ends the run (I36)", async () => {
+  const s = scripted([""]);
+  const result = await runAgent({ task: "Find the fact.", cwd: fourFiles(), client: s.client, quiet: true, coverageCheck: false, prefinishMax: 0 });
+  assert.equal(s.requests.length, 1);
+  assert.equal(result.nudges.emptyReply, 0);
 });

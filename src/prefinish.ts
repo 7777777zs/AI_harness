@@ -13,6 +13,14 @@ export const PLAN_NUDGE =
  * Sent once when the reply right after the note-taking reminder has no tool calls: it is the notes
  * the reminder asked for, not an answer (I33: local models stopped there, mid-task).
  */
+/**
+ * Sent when a reply has neither content nor tool calls, e.g. a reasoning model that only thought
+ * (I36: qwen3 with thinking on ended runs with an empty answer in step 1).
+ */
+export const EMPTY_REPLY_NUDGE =
+  "Your reply was empty: no text and no tool calls. A reply without tool calls ends the run, so continue the task " +
+  "with tool calls now. Reply without tool calls only when the task is complete; that reply is your final answer.";
+
 export const AFTER_NOTES_NUDGE =
   "Noted. A reply without tool calls ends the run, so continue the task with tool calls now. " +
   "Reply without tool calls only when the task is complete; that reply is your final answer.";

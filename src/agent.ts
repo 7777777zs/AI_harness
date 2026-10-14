@@ -32,7 +32,7 @@ import { PAGE_CHARS, ResultPages, type PageLimits } from "./mcp/resultPages.js";
 import { discoverSkills, type Discovery } from "./skills/load.js";
 import { readOnlyViolation, SkillRegistry, SKILLS_CAP_FRACTION } from "./skills/registry.js";
 import { routeSkill } from "./skills/router.js";
-import { AFTER_NOTES_NUDGE, completionGaps, completionMessage, isPlanOnly, PLAN_NUDGE } from "./prefinish.js";
+import { AFTER_NOTES_NUDGE, completionGaps, EMPTY_REPLY_NUDGE, completionMessage, isPlanOnly, PLAN_NUDGE } from "./prefinish.js";
 import { mentionsUrl, taskUrls, withUnopenedUrls } from "./taskUrls.js";
 import {
   findLatestSession,
@@ -262,6 +262,8 @@ export interface NudgeStats {
   unopenedUrl: number;
   /** "Continue" after a reply without tool calls right after the note-taking reminder (repeats while PREFINISH_MAX lasts). */
   afterNotes: number;
+  /** "Continue" after a reply with neither content nor tool calls (repeats while PREFINISH_MAX lasts). */
+  emptyReply: number;
 }
 
 /** All nudges of a run, of every kind (new kinds are counted without changes here). */
@@ -431,7 +433,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     describeFailures: 0,
     descriptionRejected: 0,
   };
-  const nudges: NudgeStats = { notes: 0, missingFile: 0, repeat: 0, coverage: 0, plan: 0, completion: 0, unopenedUrl: 0, afterNotes: 0 };
+  const nudges: NudgeStats = { notes: 0, missingFile: 0, repeat: 0, coverage: 0, plan: 0, completion: 0, unopenedUrl: 0, afterNotes: 0, emptyReply: 0 };
   // N5: task URLs no MCP call has been given yet (named in the status message until one is).
   const urls = taskUrls(opts.task);
   const unopenedUrls = new Set(urls.map(String));
@@ -940,6 +942,15 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
           (config.coverageCheck && !coverageChecked && isWholeProjectTask(opts.task)) ||
           (!completionChecked && Boolean(skills?.loaded.some((s) => s.completion)));
         const canNudge = prefinishUsed < config.prefinishMax - (answerCheckDue && config.prefinishMax > 1 ? 1 : 0);
+        // A reply with neither content nor tool calls (only reasoning) is not an answer either.
+        if (canNudge && text.trim() === "") {
+          prefinishUsed++;
+          nudges.emptyReply++;
+          out(c.yellow("  ⚑ the reply was empty; asking the model to continue"));
+          log({ type: "nudge", kind: "empty_reply", step });
+          messages.push({ role: "user", content: EMPTY_REPLY_NUDGE });
+          continue;
+        }
         // A reply that only announces work would end the run; it is not an answer (A1 never sees it).
         if (canNudge && isPlanOnly(text)) {
           prefinishUsed++;
