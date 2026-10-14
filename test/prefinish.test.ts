@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runAgent, totalNudges, type NudgeStats } from "../src/agent.js";
+import { ANSWER_MERGE_SEPARATOR, runAgent, totalNudges, type NudgeStats } from "../src/agent.js";
 import { resolveConfig } from "../src/config.js";
 import type { LLMClient, Message } from "../src/llm/types.js";
 import { completionGaps, isPlanOnly } from "../src/prefinish.js";
@@ -227,14 +227,16 @@ const fourFiles = () => {
 };
 const read = (f: string) => ({ tool: "read_file", args: { path: `${f}.txt` } });
 
-test("a text-only reply right after the note-taking reminder gets one 'continue' follow-up and is not kept as an answer (I33)", async () => {
+test("a text-only reply right after the note-taking reminder gets one 'continue' follow-up; a later full answer replaces it (I33, I39)", async () => {
   const dir = fourFiles();
   // Three silent tool steps trigger the reminder; the model then only writes notes.
-  const s = scripted([read("a"), read("b"), read("c"), "Key findings so far: a, b and c hold facts.", read("d"), "Done: facts a, b, c and d."]);
+  const s = scripted([read("a"), read("b"), read("c"), "Key findings so far: a, b and c hold facts.", read("d"), "Done: the facts are a, b, c and d, one per file."]);
   const result = await runAgent({ task: "Collect the facts.", cwd: dir, client: s.client, quiet: true, coverageCheck: false });
   assert.equal(result.stopReason, "done");
-  assert.equal(result.finalText, "Done: facts a, b, c and d.");
-  assert.deepEqual(result.answerHistory, ["Done: facts a, b, c and d."], "the notes are not an answer");
+  assert.equal(result.finalText, "Done: the facts are a, b, c and d, one per file.");
+  // The notes are kept as an answer candidate (I39), so a much shorter final reply would be merged with them.
+  assert.deepEqual(result.answerHistory, ["Key findings so far: a, b and c hold facts.", "Done: the facts are a, b, c and d, one per file."]);
+  assert.ok(!result.finalText!.includes(ANSWER_MERGE_SEPARATOR));
   assert.equal(s.followUps().length, 1);
   assert.match(s.followUps()[0]!, /^Noted\. A reply without tool calls ends the run/);
   assert.equal(result.nudges.afterNotes, 1);
@@ -254,6 +256,16 @@ test("a text-only reply without the reminder before it ends the run as usual (I3
   assert.equal(result.finalText, "The fact is: fact a.");
   assert.equal(s.followUps().length, 0);
   assert.equal(result.nudges.afterNotes, 0);
+});
+
+test("a complete answer right after the reminder is not lost when the reply after the follow-up is short (I39)", async () => {
+  // gpt-4.1-mini on onboarding: the full answer came right after the reminder; after "continue" it wrote one line.
+  const full = "## Purpose\nFacts a, b and c come from a.txt, b.txt and c.txt.\n\n## Details\n" + "Each file holds one fact. ".repeat(10);
+  const s = scripted([read("a"), read("b"), read("c"), full, "I have completed the overview. If you have questions, please ask."]);
+  const result = await runAgent({ task: "Collect the facts.", cwd: fourFiles(), client: s.client, quiet: true, coverageCheck: false });
+  assert.equal(result.nudges.afterNotes, 1);
+  assert.ok(result.finalText!.startsWith(full), "the complete answer is kept");
+  assert.ok(result.finalText!.includes(ANSWER_MERGE_SEPARATOR));
 });
 
 // ---- I34: the plan nudge and the after-notes follow-up repeat while the budget lasts ----

@@ -962,6 +962,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         }
         // Right after the note-taking reminder, a reply without tool calls is the requested notes.
         if (canNudge && lastNoteNudge === step - 1) {
+          // It may also be the complete answer: keep it as a candidate, so A1 merges it back if the
+          // final reply is much shorter (I39: "I have completed the overview" replaced a full answer).
+          answerHistory.push(text);
           prefinishUsed++;
           nudges.afterNotes++;
           out(c.yellow("  ⚑ the reply after the note-taking reminder has no tool calls; asking the model to continue"));
