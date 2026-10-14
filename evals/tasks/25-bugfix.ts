@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { EvalTask } from "../types.js";
-import { fail, pass, read, write } from "../helpers.js";
+import { fail, keepsAllLines, nodeTest, pass, read, write } from "../helpers.js";
 
 // formatDuration drops a trailing "0s" with a regex that also eats the 0 of "30s":
 // formatDuration(90) gives "1m 3". The naive fix (removing the regex) breaks the existing
@@ -72,24 +72,6 @@ const HIDDEN: [number, string][] = [
   [3661, "1h 1m 1s"],
   [0, "0s"],
 ];
-
-const lf = (s: string) => s.replace(/\r\n/g, "\n");
-/** True if every line of `original` still appears in `now`, in order (tests may be added, not changed). */
-function keepsAllLines(original: string, now: string): boolean {
-  const have = lf(now).split("\n");
-  let i = 0;
-  for (const line of lf(original).split("\n")) {
-    while (i < have.length && have[i] !== line) i++;
-    if (i === have.length) return false;
-    i++;
-  }
-  return true;
-}
-
-function nodeTest(cwd: string): { ok: boolean; output: string } {
-  const r = spawnSync(process.execPath, ["--test"], { cwd, encoding: "utf8", timeout: 60_000 });
-  return { ok: r.status === 0, output: `${r.stdout}\n${r.stderr}` };
-}
 
 function copyDir(from: string, to: string): void {
   fs.cpSync(from, to, { recursive: true, filter: (src) => !src.includes(`${path.sep}node_modules`) });

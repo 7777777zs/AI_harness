@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -33,6 +34,25 @@ export function randomCode(prefix: string): string {
 /** Normalize line endings so Windows/Unix differences don't fail checks. */
 export function lines(s: string): string[] {
   return s.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
+}
+
+const lf = (s: string) => s.replace(/\r\n/g, "\n");
+/** True if every line of `original` still appears in `now`, in order (tests may be added, not changed). */
+export function keepsAllLines(original: string, now: string): boolean {
+  const have = lf(now).split("\n");
+  let i = 0;
+  for (const line of lf(original).split("\n")) {
+    while (i < have.length && have[i] !== line) i++;
+    if (i === have.length) return false;
+    i++;
+  }
+  return true;
+}
+
+/** Run `node --test` in `cwd`. */
+export function nodeTest(cwd: string): { ok: boolean; output: string } {
+  const r = spawnSync(process.execPath, ["--test"], { cwd, encoding: "utf8", timeout: 60_000 });
+  return { ok: r.status === 0, output: `${r.stdout}\n${r.stderr}` };
 }
 
 export const pass = (): CheckResult => ({ pass: true });

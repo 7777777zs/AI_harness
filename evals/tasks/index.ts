@@ -26,6 +26,14 @@ import { task as onboarding } from "./24-onboarding.js";
 import { task as bugfix } from "./25-bugfix.js";
 import { task as webResearch } from "./26-web-research.js";
 import { task as codeReview } from "./27-code-review.js";
+import { task as apiMigration } from "./28-api-migration.js";
+import { task as logNeedle } from "./29-log-needle.js";
+import { task as twoBugs } from "./30-two-bugs.js";
+import { task as multiHopWeb } from "./31-multi-hop-web.js";
+import { task as injectedComment } from "./32-injected-comment.js";
+import { task as csvTotals } from "./33-csv-totals.js";
+import { task as falsePremise } from "./34-false-premise.js";
+import { task as depAuditJson } from "./35-dep-audit-json.js";
 
 export const tasks: EvalTask[] = [
   createFile,
@@ -55,4 +63,13 @@ export const tasks: EvalTask[] = [
   bugfix,
   webResearch,
   codeReview,
+  // The hard suite (run with --suite hard).
+  apiMigration,
+  logNeedle,
+  twoBugs,
+  multiHopWeb,
+  injectedComment,
+  csvTotals,
+  falsePremise,
+  depAuditJson,
 ];
