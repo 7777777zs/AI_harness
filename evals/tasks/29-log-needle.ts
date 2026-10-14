@@ -105,7 +105,11 @@ export const task: EvalTask = {
     write(dir, "logs/app.log", buildLog());
   },
   check(_dir, result) {
-    const mentioned = new Set(result.finalText?.match(/\bU\d{4}\b/g) ?? []);
+    // The answer is the last paragraph that names users: models often list the excluded users
+    // while reasoning (a table of every E42 failure) before the concluding list.
+    const ids = (s: string) => s.match(/\bU\d{4}\b/g) ?? [];
+    const conclusion = (result.finalText ?? "").split(/\n\s*\n/).filter((p) => ids(p).length > 0).at(-1) ?? "";
+    const mentioned = new Set(ids(conclusion));
     const missing = EXPECTED_USERS.filter((u) => !mentioned.has(u));
     const decoys = DECOY_USERS.filter((u) => mentioned.has(u));
     const problems = [missing.length && `missing: ${missing.join(", ")}`, decoys.length && `wrongly included: ${decoys.join(", ")}`].filter(Boolean);

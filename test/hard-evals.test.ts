@@ -143,6 +143,18 @@ test("log-needle: the log is far over a 30k-token window; the exact user set pas
   assert.equal(check.pass, true, check.reason);
 });
 
+test("log-needle: excluded users named in the reasoning don't count; the concluding list does", async () => {
+  const dir = await fixture(logNeedle);
+  // qwen3.6-35b-a3b's shape in a live run (first scored as a fail): a table of every E42 failure, then the answer.
+  const table = LOG_DECOYS.map((u) => `| ${u} | Retry failed ✗ |`).join("\n");
+  const right = `| User | Outcome |\n|---|---|\n${table}\n\nThe users who had a payment fail with error code E42 and then succeed on retry are:\n\n**${LOG_EXPECTED.join(", ")}**`;
+  const check = await logNeedle.check(dir, await answered(dir, right), {});
+  assert.equal(check.pass, true, check.reason);
+  // qwen3.6-27b's shape: every E42 user listed, then "none".
+  const none = `The users with code=E42 failures were:\n\n- ${[...LOG_EXPECTED, ...LOG_DECOYS].join(", ")}\n\n**Answer: There are no user IDs — no user with an E42 payment failure had a subsequent successful retry.**`;
+  assert.equal((await logNeedle.check(dir, await answered(dir, none), {})).pass, false);
+});
+
 test("log-needle: a missed user or a decoy user fails", async () => {
   const dir = await fixture(logNeedle);
   const missed = await logNeedle.check(dir, await answered(dir, LOG_EXPECTED.slice(1).join(", ")), {});
