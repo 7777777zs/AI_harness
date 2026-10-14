@@ -318,5 +318,23 @@ test("with PREFINISH_MAX 0 an empty reply still ends the run (I36)", async () =>
   const s = scripted([""]);
   const result = await runAgent({ task: "Find the fact.", cwd: fourFiles(), client: s.client, quiet: true, coverageCheck: false, prefinishMax: 0 });
   assert.equal(s.requests.length, 1);
+  assert.equal(result.stopReason, "done");
+  assert.equal(result.finalText, "");
   assert.equal(result.nudges.emptyReply, 0);
+});
+
+test("null content and whitespace-only replies count as empty too, and the follow-ups repeat within the budget (I36)", async () => {
+  const requests: Message[][] = [];
+  const replies: (string | null)[] = [null, "  \n ", "The fact is: fact a."];
+  const client: LLMClient = {
+    async chat(messages) {
+      requests.push(structuredClone(messages));
+      const i = requests.length - 1;
+      return { text: i < replies.length ? (replies[i] ?? null) : "done", toolCalls: [], usage: { inputTokens: 1, outputTokens: 1 }, raw: null };
+    },
+  };
+  const result = await runAgent({ task: "Find the fact.", cwd: fourFiles(), client, quiet: true, coverageCheck: false, prefinishMax: 3 });
+  assert.equal(result.nudges.emptyReply, 2);
+  assert.equal(result.finalText, "The fact is: fact a.");
+  assert.deepEqual(result.answerHistory, ["The fact is: fact a."]);
 });

@@ -119,7 +119,8 @@ function toOpenAIMessage(m: Message): ChatCompletionMessageParam {
     case "assistant":
       return {
         role: "assistant",
-        content: m.content,
+        // OpenAI requires content when there are no tool calls; an empty reply (I36) has neither.
+        content: m.content ?? (m.toolCalls.length > 0 ? null : ""),
         ...(m.toolCalls.length > 0 && {
           tool_calls: m.toolCalls.map((c) => ({
             id: c.id,

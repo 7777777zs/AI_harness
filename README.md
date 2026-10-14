@@ -76,7 +76,7 @@ $env:OPENAI_REASONING_EFFORT = "none"        # optional: turns Qwen3's thinking 
 - **Thinking.** Qwen3 thinks by default. `OPENAI_REASONING_EFFORT=none` is sent as `reasoning_effort` and is the only switch that works on Ollama's OpenAI-compatible endpoint. Allowed values: none, minimal, low, medium, high; anything else stops the harness at startup. It was about 20× faster in the core tasks measured. It is recorded in `run_start`, the `Config:` line and eval results.
 - **Evals.** The runner gives most tasks a 100,000-token limit; add `--context-limit 30000` so no task exceeds the model's window.
 - **Quality.** In the 19 core tasks (one run each), qwen3.6-27b passed 18 and qwen3.6-35b-a3b 17 with thinking on, against 16–18 for gpt-4.1-mini; qwen3-14b and qwen3-8b passed 10–13 (TEST_REPORT.md, "Local Qwen3 through Ollama" and "Qwen3.6").
-- **Memory.** qwen3.6-35b-a3b (22 GB) fits a 24 GB GPU, but its runner also keeps a 22 GB private copy in system RAM; on a 16 GB machine that leaves almost no free memory (the first load crashed Ollama). qwen3.6-27b needs 17 GB of GPU memory and its 32k–64k context adds little.
+- **Memory.** qwen3.6-35b-a3b (22 GB) fits a 24 GB GPU, but its runner also keeps a 22 GB private copy in system RAM; on a 16 GB machine that leaves almost no free memory (the first load crashed Ollama). qwen3.6-27b needs 17 GB of GPU memory.
 
 ## Usage
 

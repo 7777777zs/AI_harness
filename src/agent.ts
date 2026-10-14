@@ -32,7 +32,7 @@ import { PAGE_CHARS, ResultPages, type PageLimits } from "./mcp/resultPages.js";
 import { discoverSkills, type Discovery } from "./skills/load.js";
 import { readOnlyViolation, SkillRegistry, SKILLS_CAP_FRACTION } from "./skills/registry.js";
 import { routeSkill } from "./skills/router.js";
-import { AFTER_NOTES_NUDGE, completionGaps, EMPTY_REPLY_NUDGE, completionMessage, isPlanOnly, PLAN_NUDGE } from "./prefinish.js";
+import { AFTER_NOTES_NUDGE, completionGaps, completionMessage, EMPTY_REPLY_NUDGE, isPlanOnly, PLAN_NUDGE } from "./prefinish.js";
 import { mentionsUrl, taskUrls, withUnopenedUrls } from "./taskUrls.js";
 import {
   findLatestSession,

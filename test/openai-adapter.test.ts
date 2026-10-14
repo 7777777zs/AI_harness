@@ -161,3 +161,12 @@ test("an unknown OPENAI_REASONING_EFFORT stops the harness at startup with a cle
     }
   }
 });
+
+test("adapter: an assistant message without content or tool calls is sent with empty content, not null (I36)", async () => {
+  stubFetch(200, completion({ content: "ok" }));
+  const history: Message[] = [...messages, { role: "assistant", content: null, toolCalls: [] }, { role: "user", content: "Your reply was empty." }];
+  await new OpenAIClient("sk-test", "test-model").chat(history, []);
+  const sent = requests[0].messages.find((m: { role: string }) => m.role === "assistant");
+  assert.equal(sent.content, "");
+  assert.ok(!("tool_calls" in sent));
+});

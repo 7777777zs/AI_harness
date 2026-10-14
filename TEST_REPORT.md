@@ -1723,10 +1723,10 @@ The first load of 35b-a3b, with about 2 GB of RAM free, crashed the Ollama serve
 | summary-with-footer | ✗ (I37) | ✗ (I37) |
 | the other 17 | ✓ | ✓ |
 | **Total** | **18/19** | **17/19** |
-| Wall time | 849 s | 348 s |
+| Wall time (runner, end to end) | 849 s | 348 s |
 | Tokens (input / output) | 345k / 41k | 352k / 36k |
 
-- **Both summary-with-footer failures are I37:** the model listed `src/` and read all 12 known files (27b in one step, in parallel), so the harness correctly added no coverage footer, and the check requires one. Without that eval bug: 19/19 and 18/19.
+- **Both summary-with-footer failures are I37:** the model listed `src/` and read all 12 known files (both in one step, in parallel), so the harness correctly added no coverage footer, and the check requires one. Without that eval bug: 19/19 and 18/19.
 - **create-file:** the content to write is "Hello, harness! Line two stays here.", which itself suggests a second line; qwen3-14b and once gpt-4.1-mini split it the same way.
 - **The tasks that defeated qwen3** all passed on both:
   - count-lines: the first pass by any model since 2026-10-13; both computed 137;
@@ -1745,6 +1745,6 @@ The first load of 35b-a3b, with about 2 GB of RAM free, crashed the Ollama serve
 | qwen3-8b, thinking on | 13 |
 | qwen3-14b, thinking on | 12 |
 
-With one run per task, qwen3.6 and gpt-4.1-mini cannot be ranked against each other. All three are well above qwen3: in this harness, the gap to qwen3 was the model, not the harness. API usage this round: none.
+With one run per task, qwen3.6 and gpt-4.1-mini cannot be ranked against each other. All three are well above qwen3 in the same harness, which points to the model rather than the harness as the main cause of qwen3's gap (one run per task, so not a measured split). API usage this round: none.
 
 Results files: `2026-10-14T00-19-42-587Z` (qwen3.6-27b), `2026-10-14T00-46-13-858Z` (qwen3.6-35b-a3b).
