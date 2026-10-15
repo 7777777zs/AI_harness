@@ -41,6 +41,9 @@ Issues that are fixed, or closed with a decision that needs no further work. Ope
 | I33: the note-taking reminder ended runs early on a local model | A text-only reply right after the reminder gets one "continue" follow-up (pre-finish) | branch `feat/ollama-qwen`, `a0d2e1f` |
 | I34: local models used up the pre-finish follow-ups | The plan and after-notes follow-ups repeat within `PREFINISH_MAX`; eval runner `--prefinish-max` (effect within noise) | branch `feat/prefinish-repeat`, `1eb81df`, `3678928` |
 | I36: a reasoning-only reply was accepted as an empty final answer | An empty reply without tool calls gets a "continue" follow-up (pre-finish) | branch `feat/i36-empty-reply`, `10afe6e` |
+| I38: the plan check missed numbered plans and requests to proceed | "Let's proceed", "Please confirm … proceed", "Shall I go ahead" and "I will:" with a numbered list count as plans | branch `fix/i38-i41`, `a799b2f` |
+| I39: the after-notes follow-up dropped a complete answer | The reply after the reminder is kept as an answer candidate, so the A1 merge brings it back | branch `fix/i38-i41`, `d661606` |
+| I40: `list_dir` showed an unexpanded directory like an empty one | A directory at the depth limit says how many entries are not shown | branch `fix/i38-i41`, `a3261f9` |
 | I8: harness hints after untrusted content made injections more likely to be followed | Reminder added per request after the latest untrusted result only; no repeat notice on untrusted results | `73939f4` |
 | I9: confirmation-required MCP tools ran unguarded under auto-approve after untrusted content | Guarded like `run_shell`/`write_file`/`edit_file` | `b320254` |
 | I17: nothing verified on Linux or macOS | CI runs the type check and tests on Linux, macOS and Windows | `725d7be` |
@@ -318,3 +321,30 @@ The data is in TEST_REPORT.md, "Issues round 2".
 - **Candidate fixes:** treat an empty reply without tool calls as not final: retry the request once, or send a pre-finish follow-up ("Your reply was empty; continue the task") within `PREFINISH_MAX`.
 - **Fix (`10afe6e`):** a reply with neither text nor tool calls gets a follow-up ("Your reply was empty … continue the task with tool calls now") through the pre-finish path: within `PREFINISH_MAX`, repeating like the plan nudge, leaving a slot for a due answer check, not kept as an answer. With `PREFINISH_MAX` 0 an empty reply still ends the run.
 - **Verified:** by unit tests. In the qwen3.6-27b and 35b-a3b core-suite runs (thinking on) no empty reply occurred, so it has not fired in a live run yet.
+
+### I38: the plan check misses numbered plans and requests for confirmation
+- **Source:** the hard-suite round (TEST_REPORT.md, "Hard suite and the Phase 5/6 tasks").
+- **Problem:** `isPlanOnly` looks only at the last paragraph for "I will read…" and similar phrases. Two kinds of reply slip through and end the run as final answers:
+  - gpt-4.1 on injected-comment, 3 steps: "I will:\n1. Update src/cli.js …\n2. Add a CLI test …\n\nLet's proceed with these steps.";
+  - gpt-4.1-mini on the api-migration pilot: "Please confirm you want me to proceed with updating all call sites…".
+- **Candidate fix:** treat "Let's proceed", "Shall I / Please confirm … proceed" and a last paragraph that is a numbered list of future actions after "I will:" as plan-only, with the existing follow-up and budget.
+- **Fix (`a799b2f`):** `isPlanOnly` also catches "Let's / Let me proceed", "Please confirm / Shall I / Should I / Do you want me to … proceed / go ahead / continue / start" and "I will:" followed by a numbered list. Offers of extra work after a finished task ("Would you like me to add tests?", "Shall I also update the changelog?") still pass as answers.
+- **Verified:** offline over the 1,156 logged final answers (`evals/plan-detect-eval.ts`): six new hits, all runs that stopped before doing the work, now reviewed positives. Reviewed precision 33% → 52%, recall 100%, no new false positives. In the end-to-end check below no plan nudge fired.
+
+### I39: the after-notes follow-up fires on a complete answer, and the next reply replaces it
+- **Source:** the hard-suite round: gpt-4.1-mini onboarding, runs 2 and 3.
+- **Problem:** a reply without tool calls right after the note-taking reminder gets the I33 follow-up ("Noted. … continue the task"). Here that reply was the complete onboarding answer (about 4,100 characters). The model's next reply became the final answer:
+  - run 2: "I have completed the overview … If you have specific questions, please ask.";
+  - run 3: a shortened version.
+
+  Both runs failed on content the first answer had.
+- **Candidate fix:** keep the reply as an answer candidate when it looks like an answer (headings, or long and not plan-only), and merge or prefer it if the next reply is much shorter. Or send the after-notes follow-up only when the reply restates notes. Needs a replay check on the logged state.
+- **Fix (`d661606`):** the reply that gets the after-notes follow-up goes into `answerHistory` as a candidate. If the final reply is shorter than 60% of it, the existing A1 rule keeps both.
+- **Verified:** by unit tests, and offline on the logged runs: re-merging gpt-4.1-mini's onboarding answers turns run 3 into a pass. Run 2 still fails: its full answer also lacked the data flow, so that run was a model failure as well. In the end-to-end check below the follow-up did not fire.
+
+### I40: `list_dir` shows a directory at the depth limit without saying it was not expanded
+- **Source:** the hard-suite round: qwen3.6-27b api-migration ×3, 35b-a3b ×1.
+- **Problem:** `list_dir` with the default depth lists `src/util/` and nothing under it. Nothing marks it as unexpanded, so it looks like an empty directory. The models took the listing as complete and missed `src/util/retry.js`. They also never grepped for callers, which is the main cause.
+- **Candidate fix:** mark directories at the depth limit (for example `src/util/ (not expanded; 1 file)`).
+- **Fix (`a3261f9`):** `list_dir` marks a directory at the depth limit, for example `src/util/ (1 entry not shown)` (counted with the same ignore rules, up to 1,000). The listing parser used by coverage and compaction reads the marked line as a directory.
+- **Verified:** api-migration with qwen3.6-27b went from 0/3 to 3/3; every run saw the marker and migrated `src/util/retry.js`.

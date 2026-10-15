@@ -5,7 +5,7 @@ A minimal CLI agent. You give it a task. It calls an OpenAI model that can use l
 | Tool | What it does | Confirmation |
 |---|---|---|
 | `read_file` | Read a file; optional `offset`/`limit` for a numbered line range | no |
-| `list_dir` | Directory tree (`depth` 1–5) with sizes | no |
+| `list_dir` | Directory tree (`depth` 1–5) with sizes; a directory at the depth limit shows how many entries are not shown | no |
 | `glob` | Find files by pattern, e.g. `**/*.py` | no |
 | `grep` | Regex search, `path:line: text`, optional `glob` filter and context lines | no |
 | `edit_file` | Exact, unique `old_str` → `new_str` replacement (or `replace_all`), shows a diff | yes |
@@ -405,8 +405,8 @@ Before each model call, the harness estimates the context size. The starting poi
 - **Pre-finish check:** a reply without tool calls is the final answer. Before accepting it, the harness may send a follow-up instead.
   - **The budget:** at most `PREFINISH_MAX` follow-ups per run (default 2). The plan and after-notes follow-ups may repeat; the coverage and completion checks fire at most once. While such a check may still be due, the repeating follow-ups leave it one slot. With a budget of 1, a plan nudge would use it up and the real answer would go unchecked.
   - **Empty reply:** a reply with neither text nor tool calls (e.g. a reasoning model that only thought) gets a follow-up to continue instead of ending the run with an empty answer (RESOLVED.md, I36).
-  - **Plan only:** if the reply only announces work ("I will read each page…", "接下来我将…"), the model is told to do it now. Such a reply is not kept as an answer.
-  - **Notes after the reminder:** a reply without tool calls in the step right after the note-taking reminder is the notes the reminder asked for, so the model is told to continue. Such a reply is not kept as an answer. Local models stopped mid-task there (RESOLVED.md, I33).
+  - **Plan only:** if the reply only announces work ("I will read each page…", "Let's proceed with these steps.", "Please confirm you want me to proceed…", "接下来我将…"), the model is told to do it now. Such a reply is not kept as an answer (RESOLVED.md, I38).
+  - **Notes after the reminder:** a reply without tool calls in the step right after the note-taking reminder is the notes the reminder asked for, so the model is told to continue. Local models stopped mid-task there (RESOLVED.md, I33). The reply is kept as an answer candidate: if it was in fact the complete answer and the next reply is much shorter, the answer-merge safety net keeps both (I39).
   - **Coverage check:** if the model tries to finish a whole-project task while listed files are unread, it is asked to read them or say what it skipped. Set `COVERAGE_CHECK=off` to disable.
   - **Completion criteria** of loaded skills: see [Skills](#completion-criteria).
   - **One message:** when coverage and completion both fail on the same answer, they are sent together.
