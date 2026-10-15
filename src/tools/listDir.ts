@@ -5,8 +5,10 @@ import { formatSize, optInt, optString, resolveInCwd, toRel } from "./util.js";
 
 export const LIST_DIR_MAX_ENTRIES = 500;
 export const LIST_DIR_MAX_DEPTH = 5;
-/** Entries counted inside an unexpanded directory before the count shows as "N+". */
+/** Entries examined inside one unexpanded directory before its count shows as "N+". */
 export const NOT_SHOWN_COUNT_BUDGET = 1_000;
+/** Entries examined for all unexpanded directories of one listing; later ones say "(not expanded)". */
+export const NOT_SHOWN_TOTAL_BUDGET = 5_000;
 
 /** One output line: "src/", "src/agent.ts (4.1 KB)", "linked/ (link, not followed)". */
 export function formatEntry(e: WalkEntry): string {
@@ -52,10 +54,19 @@ export const listDir: Tool = {
         if (e.kind === "dir" && e.depth >= depth) atLimit.push({ line: lines.length - 1, abs: e.abs });
       } else omitted++;
     }
+    let spent = 0;
     for (const { line, abs } of atLimit) {
+      if (spent >= NOT_SHOWN_TOTAL_BUDGET) {
+        lines[line] += " (not expanded)";
+        continue;
+      }
+      const counted = newStats();
       let n = 0;
-      for await (const _ of walk(ctx.cwd, abs, { maxDepth: 1, budget: NOT_SHOWN_COUNT_BUDGET })) n++;
-      if (n > 0) lines[line] += ` (${n}${n >= NOT_SHOWN_COUNT_BUDGET ? "+" : ""} ${n === 1 ? "entry" : "entries"} not shown)`;
+      for await (const _ of walk(ctx.cwd, abs, { maxDepth: 1, stats: counted, budget: NOT_SHOWN_COUNT_BUDGET })) n++;
+      spent += counted.visited;
+      // The walk budget also counts ignored entries, so a count cut short is a lower bound.
+      if (counted.budgetHit) lines[line] += n > 0 ? ` (${n}+ entries not shown)` : " (not expanded)";
+      else if (n > 0) lines[line] += ` (${n} ${n === 1 ? "entry" : "entries"} not shown)`;
     }
     if (lines.length === 0) lines.push("(empty directory)");
     if (omitted > 0) lines.push(`[${omitted} more entries omitted (limit ${LIST_DIR_MAX_ENTRIES}); list a subdirectory or lower depth]`);

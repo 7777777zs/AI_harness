@@ -230,3 +230,19 @@ test("I40: list_dir marks a directory at the depth limit with the number of entr
   // The listing parser (coverage, compaction) still reads the marked line as a directory.
   assert.deepEqual(parseListing(two).filter((p) => p.startsWith("src/util")), ["src/util/"]);
 });
+
+test("I40: unexpanded-directory counts stop at a per-directory and a per-listing budget", async () => {
+  const dir = sandbox({ ".gitignore": "*.log\n" });
+  // 1,500 entries, 600 of them ignored: the walk budget counts ignored entries too, so the count is a lower bound.
+  fs.mkdirSync(path.join(dir, "big"));
+  for (let i = 0; i < 1_500; i++) fs.writeFileSync(path.join(dir, "big", `f${i}.${i < 600 ? "log" : "txt"}`), "");
+  // Six more directories of 1,000 entries exhaust the listing's counting budget (5,000).
+  for (let d = 0; d < 6; d++) {
+    fs.mkdirSync(path.join(dir, `pkg${d}`));
+    for (let i = 0; i < 1_000; i++) fs.writeFileSync(path.join(dir, `pkg${d}`, `m${i}.ts`), "");
+  }
+  const out = await listDir.execute({ path: ".", depth: 1 }, ctx(dir));
+  assert.match(out, /^big\/ \(\d+\+ entries not shown\)$/m);
+  assert.match(out, /^pkg5\/ \(not expanded\)$/m);
+  assert.deepEqual(parseListing(out).filter((p) => p.startsWith("pkg5")), ["pkg5/"]);
+});

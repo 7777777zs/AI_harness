@@ -37,12 +37,13 @@ const EN_NEXT_STEP = new RegExp(`^\\s*next step:\\s*(?:${ACTION})\\b`, "i");
 /** 我将/接下来/下一步… followed closely by an action verb. */
 const ZH_ANNOUNCE = /(?:我将|我会|我要|我先|让我|接下来|下一步)[^。！？\n]{0,6}?(?:读取|打开|查看|检查|阅读|访问|搜索|运行|分析|继续|开始|列出|修复|编写|逐个)/;
 
-/**
- * "Let's proceed with these steps.", "Please confirm you want me to proceed…", "Shall I go ahead…?"
- * (I38). Offers of extra work after a finished task ("Would you like me to add tests?") don't match.
- */
-const EN_PROCEED =
-  /\b(?:let'?s|let me) (?:now )?proceed\b|\b(?:please confirm|shall I|should I|do you want me to)\b[^.?!\n]{0,60}\b(?:proceed|go ahead|continue|start)\b/i;
+/** "Let's proceed with these steps." (I38) */
+const EN_LETS_PROCEED = /\b(?:let['’]?s|let me) (?:now )?proceed\b/i;
+/** "Please confirm you want me to proceed…", "Shall I go ahead…?", "Shall I continue with the next file?" (I38) */
+const EN_ASK_PROCEED =
+  /\bplease confirm\b[^.?!\n]{0,40}\b(?:you want me to|to) (?:proceed|go ahead|continue)\b|\b(?:shall|should) I\b[^.?!\n]{0,40}\b(?:proceed|go ahead|continue)\b/i;
+/** Offers of extra work after a finished task ("Should I continue with the other modules as well?") are answers. */
+const EXTRA_WORK = /\b(?:also|too|as well|other|additional|more|else)\b/i;
 /** "I will:" followed by a numbered list of steps (I38). */
 const EN_NUMBERED_PLAN = /(?:^|\n)\s*(?:I will|I'll|I am going to|I'm going to)\s*:\s*\n\s*1[.)]\s/i;
 
@@ -55,7 +56,10 @@ export function isPlanOnly(text: string): boolean {
   const paragraphs = text.trim().split(/\n\s*\n/);
   const last = paragraphs.at(-1) ?? "";
   const lastTwo = paragraphs.slice(-2).join("\n");
-  return EN_ANNOUNCE.test(last) || EN_NEXT_STEP.test(last) || ZH_ANNOUNCE.test(last) || EN_PROCEED.test(last) || EN_NUMBERED_PLAN.test(lastTwo);
+  const asksToProceed = EN_ASK_PROCEED.test(last) && !EXTRA_WORK.test(last);
+  return (
+    EN_ANNOUNCE.test(last) || EN_NEXT_STEP.test(last) || ZH_ANNOUNCE.test(last) || EN_LETS_PROCEED.test(last) || asksToProceed || EN_NUMBERED_PLAN.test(lastTwo)
+  );
 }
 
 /** What a loaded skill's completion criteria found missing in an answer. */

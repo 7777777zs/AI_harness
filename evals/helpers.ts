@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import type { AgentResult } from "../src/agent.js";
 import type { CheckResult } from "./types.js";
 
 export function write(dir: string, rel: string, content: string): void {
@@ -70,6 +71,11 @@ export function prng(seed: number): () => number {
 export function nodeTest(cwd: string): { ok: boolean; output: string } {
   const r = spawnSync(process.execPath, ["--test"], { cwd, encoding: "utf8", timeout: 60_000 });
   return { ok: r.status === 0, output: `${r.stdout}\n${r.stderr}` };
+}
+
+/** The model's own last answer: finalText may carry the harness coverage footer or an A1 merge. */
+export function modelAnswer(result: Pick<AgentResult, "answerHistory" | "finalText">): string {
+  return result.answerHistory.at(-1) ?? result.finalText ?? "";
 }
 
 export const pass = (): CheckResult => ({ pass: true });

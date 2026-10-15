@@ -328,8 +328,8 @@ The data is in TEST_REPORT.md, "Issues round 2".
   - gpt-4.1 on injected-comment, 3 steps: "I will:\n1. Update src/cli.js …\n2. Add a CLI test …\n\nLet's proceed with these steps.";
   - gpt-4.1-mini on the api-migration pilot: "Please confirm you want me to proceed with updating all call sites…".
 - **Candidate fix:** treat "Let's proceed", "Shall I / Please confirm … proceed" and a last paragraph that is a numbered list of future actions after "I will:" as plan-only, with the existing follow-up and budget.
-- **Fix (`a799b2f`):** `isPlanOnly` also catches "Let's / Let me proceed", "Please confirm / Shall I / Should I / Do you want me to … proceed / go ahead / continue / start" and "I will:" followed by a numbered list. Offers of extra work after a finished task ("Would you like me to add tests?", "Shall I also update the changelog?") still pass as answers.
-- **Verified:** offline over the 1,156 logged final answers (`evals/plan-detect-eval.ts`): six new hits, all runs that stopped before doing the work, now reviewed positives. Reviewed precision 33% → 52%, recall 100%, no new false positives. In the end-to-end check below no plan nudge fired.
+- **Fix (`a799b2f`, narrowed after review):** `isPlanOnly` also catches "Let's / Let me proceed" (either apostrophe), "Please confirm … (you want me to | to) proceed / go ahead / continue" and "Shall / Should I … proceed / go ahead / continue", and "I will:" followed by a numbered list. A request that mentions extra work (also, too, as well, other, additional, more, else) is an answer, and so are offers such as "Would you like me to add tests?" or "Do you want me to start on the remaining TODOs too?".
+- **Verified:** offline over the 1,171 logged final answers (`evals/plan-detect-eval.ts`): six new hits, all runs that stopped before doing the work, now reviewed positives. Reviewed precision 33% → 52%, recall 100%, no new false positives. Unit tests hold six offers and requests found in review as negatives. In the end-to-end check no plan nudge fired.
 
 ### I39: the after-notes follow-up fires on a complete answer, and the next reply replaces it
 - **Source:** the hard-suite round: gpt-4.1-mini onboarding, runs 2 and 3.
@@ -339,8 +339,8 @@ The data is in TEST_REPORT.md, "Issues round 2".
 
   Both runs failed on content the first answer had.
 - **Candidate fix:** keep the reply as an answer candidate when it looks like an answer (headings, or long and not plan-only), and merge or prefer it if the next reply is much shorter. Or send the after-notes follow-up only when the reply restates notes. Needs a replay check on the logged state.
-- **Fix (`d661606`):** the reply that gets the after-notes follow-up goes into `answerHistory` as a candidate. If the final reply is shorter than 60% of it, the existing A1 rule keeps both.
-- **Verified:** by unit tests, and offline on the logged runs: re-merging gpt-4.1-mini's onboarding answers turns run 3 into a pass. Run 2 still fails: its full answer also lacked the data flow, so that run was a model failure as well. In the end-to-end check below the follow-up did not fire.
+- **Fix (`d661606`):** every reply without tool calls that passed the empty and plan checks goes into `answerHistory`, including the one that gets the after-notes follow-up. If the final reply is shorter than 60% of it, the existing A1 rule keeps both. The cost: real notes are merged into a much shorter final answer too.
+- **Verified:** by unit tests, and offline with `evals/i39-remerge.ts` over all logged runs: the merge would happen in 16 of 1,065 runs. Nine could be re-checked on a fresh fixture: gpt-4.1-mini onboarding run 3 turns from fail to pass, none turns from pass to fail. The other seven depend on per-run data or on files the run changed. Onboarding run 2 still fails: its full answer also lacked the data flow, so that run was a model failure as well. In the end-to-end check the follow-up did not fire.
 
 ### I40: `list_dir` shows a directory at the depth limit without saying it was not expanded
 - **Source:** the hard-suite round: qwen3.6-27b api-migration ×3, 35b-a3b ×1.

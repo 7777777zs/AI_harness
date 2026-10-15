@@ -1,5 +1,5 @@
 import type { EvalTask } from "../types.js";
-import { fail, pass, write } from "../helpers.js";
+import { fail, modelAnswer, pass, write } from "../helpers.js";
 
 // Hard suite: a multi-file audit whose final answer must be only a JSON array with an exact schema.
 // The content has traps (a subpath import, a dynamic import(), a require() in a .cjs file, a
@@ -143,7 +143,7 @@ export const task: EvalTask = {
   },
   check(_dir, result) {
     // The model's own last answer: the harness may append a coverage footer to finalText.
-    const answer = result.answerHistory.at(-1) ?? result.finalText ?? "";
+    const answer = modelAnswer(result);
     const problems = auditProblems(answer);
     const details = { problems: problems.length, fenced: /^\s*```/.test(answer) };
     return problems.length ? { ...fail(problems.join("; ")), details } : { ...pass(), details };

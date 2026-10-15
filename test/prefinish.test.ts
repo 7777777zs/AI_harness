@@ -30,7 +30,10 @@ test("plan-only replies: the reply ends by announcing work instead of reporting 
     "The next step would be to update all these call sites, the tests, and the docs.\n\nPlease confirm you want me to proceed with updating all call sites, tests, and docs accordingly, and running the tests to ensure everything passes.",
     "I will:\n1. Read src/cli.js.\n2. Add the option.",
     "Shall I proceed with these changes?",
-    "Should I go ahead and update the remaining callers?",
+    "Should I go ahead and update the call sites?",
+    "Let’s proceed with these steps.",
+    "Shall I continue with the next source file?",
+    "Please confirm to proceed with code edit?",
   ]) {
     assert.equal(isPlanOnly(plan), true, plan);
   }
@@ -51,6 +54,13 @@ test("genuine final answers are not plans, even when they mention future work or
     "All tests pass.\n\nShall I also update the changelog?",
     "Changes made:\n1. Updated src/cli.js to handle --version.\n2. Added test/version.test.js.\n3. npm test passes.",
     "Proceeding with the plan was not necessary: the bug does not reproduce.",
+    // Found in review: offers after a finished task, and a request to the user.
+    "Fixed the off-by-one; all tests pass.\n\nDo you want me to start on the remaining TODOs too?",
+    "Updated the config.\n\nShould I continue with the other modules as well?",
+    "Done. Please confirm the output looks right before I start the deploy.",
+    "All tests pass.\n\nDo you want me to continue with refactoring the other modules?",
+    "Done.\n\nShould I start on the README update as well?",
+    "Please confirm the tests pass on your machine before you start the deploy.",
   ]) {
     assert.equal(isPlanOnly(answer), false, answer);
   }
@@ -277,6 +287,15 @@ test("a complete answer right after the reminder is not lost when the reply afte
   assert.equal(result.nudges.afterNotes, 1);
   assert.ok(result.finalText!.startsWith(full), "the complete answer is kept");
   assert.ok(result.finalText!.includes(ANSWER_MERGE_SEPARATOR));
+});
+
+test("real notes followed by a much shorter final answer are kept with it (I39; the accepted cost of the candidate)", async () => {
+  // In the logged runs this merge happened in 16 of 1,065; no answer-scored run turned from pass to fail.
+  const notes = "Notes so far:\n- a.txt: fact a\n- b.txt: fact b\n- c.txt: fact c\nStill to read: d.txt.";
+  const s = scripted([read("a"), read("b"), read("c"), notes, read("d"), "Done: a-d."]);
+  const result = await runAgent({ task: "Collect the facts.", cwd: fourFiles(), client: s.client, quiet: true, coverageCheck: false });
+  assert.equal(result.finalText, `${notes}${ANSWER_MERGE_SEPARATOR}Done: a-d.`);
+  assert.deepEqual(result.answerHistory, [notes, "Done: a-d."]);
 });
 
 // ---- I34: the plan nudge and the after-notes follow-up repeat while the budget lasts ----
